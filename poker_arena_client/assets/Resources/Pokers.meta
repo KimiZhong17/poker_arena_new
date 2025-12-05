@@ -5,5 +5,8 @@
   "uuid": "5a7f4a7e-8a49-498d-8adf-79a42d9353d3",
   "files": [],
   "subMetas": {},
-  "userData": {}
+  "userData": {
+    "isBundle": true,
+    "bundleName": "Pokers"
+  }
 }
