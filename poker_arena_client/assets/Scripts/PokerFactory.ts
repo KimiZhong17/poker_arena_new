@@ -30,7 +30,7 @@ export class PokerFactory extends Component {
 
         var pokerCtrl = poker.addComponent(Poker);
         var pokerBack = this._pokerSprites.get("PokerBack");
-        var pokerFront = this._pokerSprites.get("JokerBig");
+        var pokerFront = this._pokerSprites.get("Spade_A");
 
         console.log(`创建扑克牌: ${suit}_${pokerValue}`);
 
