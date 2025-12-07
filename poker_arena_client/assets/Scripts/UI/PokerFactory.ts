@@ -1,5 +1,7 @@
 import { _decorator, Component, instantiate, Node, Prefab, Sprite, SpriteAtlas, SpriteFrame } from 'cc';
 import { Poker } from './Poker';
+import { CardUtils } from '../Card/CardUtils';
+import { CardSuit, CardPoint } from '../Card/CardConst';
 const { ccclass, property } = _decorator;
 
 @ccclass('PokerFactory')
@@ -29,20 +31,37 @@ export class PokerFactory extends Component {
         this.node.getChildByName("PokerRoot")?.addChild(poker);
 
         var pokerCtrl = poker.addComponent(Poker);
-        var pokerBack = this._pokerSprites.get("PokerBack");
-        var pokerFront = this._pokerSprites.get("Spade_A");
+        var pokerBack = this._pokerSprites.get("CardBack3");
+        var pokerFront = this._pokerSprites.get(`${suit}_${pokerValue}`);
 
-        console.log(`创建扑克牌: ${suit}_${pokerValue}`);
-
-        if (!pokerFront) {
-            console.error(`找不到扑克牌图片: ${suit}_${pokerValue}`);
-            return;
-        }
+        if (!pokerFront) return;
 
         pokerCtrl.init(pokerValue, pokerBack, pokerFront);
-        pokerCtrl.showFront();
+        pokerCtrl.showBack();
     }
 
+    public static getCardSpriteName(card: number): string {
+        const suit = CardUtils.getSuit(card);
+        const point = CardUtils.getPoint(card);
+
+        // Jokers
+        if (suit === CardSuit.JOKER) {
+            return point === CardPoint.RED_JOKER ? "Joker_Red" : "Joker_Black";
+        }
+
+        // Normal cards
+        let suitStr = "";
+        switch (suit) {
+            case CardSuit.SPADE: suitStr = "Spade"; break;
+            case CardSuit.HEART: suitStr = "Heart"; break;
+            case CardSuit.DIAMOND: suitStr = "Diamond"; break;
+            case CardSuit.CLUB: suitStr = "Club"; break;
+        }
+        let pointStr = point.toString();
+        if (point === 15) pointStr = "2";
+
+        return `${suitStr}_${pointStr}`;    
+    }
 }
 
 

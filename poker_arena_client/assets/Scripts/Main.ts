@@ -1,5 +1,5 @@
 import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteAtlas, SpriteFrame } from 'cc';
-import { PokerFactory } from './PokerFactory';
+import { PokerFactory } from './UI/PokerFactory';
 const { ccclass, property } = _decorator;
 
 @ccclass('Main')

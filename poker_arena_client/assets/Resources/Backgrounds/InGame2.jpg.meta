@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d",
+  "uuid": "6f083515-6a05-459b-9dd8-9178d87c91f1",
   "files": [
     ".jpg",
     ".json"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d@6c48a",
-      "displayName": "PokerBack",
+      "uuid": "6f083515-6a05-459b-9dd8-9178d87c91f1@6c48a",
+      "displayName": "InGame2",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d",
+        "imageUuidOrDatabaseUri": "6f083515-6a05-459b-9dd8-9178d87c91f1",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,8 +34,8 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d@f9941",
-      "displayName": "PokerBack",
+      "uuid": "6f083515-6a05-459b-9dd8-9178d87c91f1@f9941",
+      "displayName": "InGame2",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
@@ -45,10 +45,10 @@
         "offsetY": 0,
         "trimX": 0,
         "trimY": 0,
-        "width": 848,
-        "height": 1264,
-        "rawWidth": 848,
-        "rawHeight": 1264,
+        "width": 1376,
+        "height": 768,
+        "rawWidth": 1376,
+        "rawHeight": 768,
         "borderTop": 0,
         "borderBottom": 0,
         "borderLeft": 0,
@@ -60,17 +60,17 @@
         "meshType": 0,
         "vertices": {
           "rawPosition": [
-            -424,
-            -632,
+            -688,
+            -384,
             0,
-            424,
-            -632,
+            688,
+            -384,
             0,
-            -424,
-            632,
+            -688,
+            384,
             0,
-            424,
-            632,
+            688,
+            384,
             0
           ],
           "indexes": [
@@ -83,12 +83,12 @@
           ],
           "uv": [
             0,
-            1264,
-            848,
-            1264,
+            768,
+            1376,
+            768,
             0,
             0,
-            848,
+            1376,
             0
           ],
           "nuv": [
@@ -102,18 +102,18 @@
             1
           ],
           "minPos": [
-            -424,
-            -632,
+            -688,
+            -384,
             0
           ],
           "maxPos": [
-            424,
-            632,
+            688,
+            384,
             0
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d@6c48a",
+        "imageUuidOrDatabaseUri": "6f083515-6a05-459b-9dd8-9178d87c91f1@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": false,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "e1b6f1d7-37bf-4af6-a645-5d4d142ef64d@6c48a"
+    "redirect": "6f083515-6a05-459b-9dd8-9178d87c91f1@6c48a"
   }
 }
