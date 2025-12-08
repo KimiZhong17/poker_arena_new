@@ -43,38 +43,42 @@ export class Dealer {
     }
 
     /**
-     * Deal cards
+     * Deal cards (round-robin style)
      * @param deck Shuffled deck
      * @param playerCount Number of players
-     * @returns Array of players' hands
+     * @param cardsPerPlayer Number of cards each player should receive
+     * @returns Object containing players' hands and remaining cards
      */
-    public static deal(deck: number[], playerCount: number): number[][] {
+    public static deal(deck: number[], playerCount: number, cardsPerPlayer: number): { hands: number[][], remaining: number[] } {
         if (playerCount <= 0) {
             throw new Error("Player count must be greater than 0");
         }
 
-        if (deck.length < playerCount) {
-            throw new Error("Not enough cards for the number of players");
+        if (deck.length < playerCount * cardsPerPlayer) {
+            throw new Error("Not enough cards in deck");
         }
 
         const playersHands: number[][] = [];
-        const cardsPerPlayer = Math.floor(deck.length / playerCount);
 
         // Initialize arrays for each player
         for (let i = 0; i < playerCount; i++) {
             playersHands.push([]);
         }
 
-        // Deal cards evenly (remaining cards stay in the deck)
-        for (let i = 0; i < playerCount; i++) {
-            const start = i * cardsPerPlayer;
-            const end = start + cardsPerPlayer;
-            playersHands[i] = deck.slice(start, end);
-
-            // After dealing, it is usually recommended to immediately sort the hands for easier client display
-            // SortHelper.sort(playersHands[i], currentLevel);
+        // Deal cards in round-robin fashion: one card to each player in turn
+        let cardIndex = 0;
+        for (let round = 0; round < cardsPerPlayer; round++) {
+            for (let player = 0; player < playerCount; player++) {
+                playersHands[player].push(deck[cardIndex++]);
+            }
         }
 
-        return playersHands;
+        // Remaining cards stay undealt
+        const remaining = deck.slice(cardIndex);
+
+        return {
+            hands: playersHands,
+            remaining: remaining
+        };
     }
 }

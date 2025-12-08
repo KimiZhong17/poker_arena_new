@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "c89eaf9a-3280-407e-b6da-9afa389aca05",
+  "uuid": "568da7ce-2820-4314-a53a-61fe25cf25cf",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "c89eaf9a-3280-407e-b6da-9afa389aca05@6c48a",
-      "displayName": "Heart_K",
+      "uuid": "568da7ce-2820-4314-a53a-61fe25cf25cf@6c48a",
+      "displayName": "Spade_11",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "c89eaf9a-3280-407e-b6da-9afa389aca05",
+        "imageUuidOrDatabaseUri": "568da7ce-2820-4314-a53a-61fe25cf25cf",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,8 +34,8 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "c89eaf9a-3280-407e-b6da-9afa389aca05@f9941",
-      "displayName": "Heart_K",
+      "uuid": "568da7ce-2820-4314-a53a-61fe25cf25cf@f9941",
+      "displayName": "Spade_11",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "c89eaf9a-3280-407e-b6da-9afa389aca05@6c48a",
+        "imageUuidOrDatabaseUri": "568da7ce-2820-4314-a53a-61fe25cf25cf@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "c89eaf9a-3280-407e-b6da-9afa389aca05@6c48a"
+    "redirect": "568da7ce-2820-4314-a53a-61fe25cf25cf@6c48a"
   }
 }

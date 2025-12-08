@@ -21,8 +21,8 @@ export enum GameState {
  */
 export enum GamePhase {
     WAITING = 0,        // Waiting for players
-    DETERMINE_DEALER = 1,   // Determining dealer
-    DEALING = 2,        // Dealing cards
+    DEALING = 1,        // Dealing cards
+    BOSS_COLLECT = 2,   // Boss collecting remaining cards
     PLAYING = 3,        // Playing phase
     SETTLING = 4        // Settling/Scoring
 }
@@ -31,9 +31,10 @@ export enum GamePhase {
  * Game configuration
  */
 export interface GameConfig {
-    playerCount: number;    // Number of players (default 4)
-    deckCount: number;      // Number of decks (default 2)
-    levelRank: number;      // Current level rank (3-A)
+    playerCount: number;    // Number of players (default 5)
+    deckCount: number;      // Number of decks (default 3, calculated as ceil(playerCount/2))
+    cardsPerPlayer: number; // Cards per player (default 31)
+    levelRank: number;      // Current level rank (2-A)
 }
 
 /**
@@ -56,13 +57,18 @@ export class GameController extends Component {
 
     // Game config
     private _config: GameConfig = {
-        playerCount: 4,
-        deckCount: 2,
-        levelRank: 3  // Start from 3
+        playerCount: 5,
+        deckCount: 3,           // ceil(5/2) = 3
+        cardsPerPlayer: 31,
+        levelRank: 2            // Start from 2
     };
 
     // Current round data
     private _deck: number[] = [];
+    private _remainingCards: number[] = [];  // Remaining cards after dealing
+    private _bossCollectedCards: number[] = [];  // Cards boss collected
+    private _burnedCards: number[] = [];  // Cards removed from game (shown to all)
+    private _bossPlayerIndex: number = 0;  // Index of the boss player (default: 0 for main player)
     private _lastPlayedCards: number[] = [];
     private _lastPlayedHand: HandResult | null = null;
     private _lastPlayerIndex: number = -1;
@@ -124,15 +130,24 @@ export class GameController extends Component {
         this._deck = Dealer.createDeck(this._config.deckCount);
         Dealer.shuffle(this._deck);
 
-        // Deal cards
+        // Phase 1: Deal cards
         this._gameState = GameState.DEALING;
         this._gamePhase = GamePhase.DEALING;
         this.dealCards();
 
-        // Start playing phase
-        this._gameState = GameState.PLAYING;
-        this._gamePhase = GamePhase.PLAYING;
-        this._currentPlayerIndex = 0; // First player starts
+        // Phase 2: Enter Boss collect phase
+        this._gamePhase = GamePhase.BOSS_COLLECT;
+        console.log("Entering BOSS_COLLECT phase. Call bossCollectCards() to continue.");
+
+        // Note: The game will move to PLAYING phase after bossCollectCards() is called
+        // At that point, we'll initialize the playing state
+    }
+
+    /**
+     * Initialize playing phase (called after boss collects cards)
+     */
+    private initPlayingPhase(): void {
+        this._currentPlayerIndex = this._bossPlayerIndex; // Boss starts first
         this._lastPlayerIndex = -1;
         this._lastPlayedCards = [];
         this._lastPlayedHand = null;
@@ -140,20 +155,81 @@ export class GameController extends Component {
 
         this._players[this._currentPlayerIndex].state = PlayerState.THINKING;
 
-        console.log("Game started! Current player:", this._players[this._currentPlayerIndex].name);
+        console.log("Playing phase started! Boss starts first:", this._players[this._currentPlayerIndex].name);
     }
 
     /**
      * Deal cards to all players
      */
     private dealCards(): void {
-        const hands = Dealer.deal(this._deck, this._players.length);
+        const dealResult = Dealer.deal(
+            this._deck,
+            this._players.length,
+            this._config.cardsPerPlayer
+        );
 
+        // Assign hands to players
         for (let i = 0; i < this._players.length; i++) {
-            this._players[i].setHandCards(hands[i]);
+            this._players[i].setHandCards(dealResult.hands[i]);
             this._players[i].sortCards(this._config.levelRank);
-            console.log(`Dealt ${hands[i].length} cards to ${this._players[i].name}`);
+            console.log(`Dealt ${dealResult.hands[i].length} cards to ${this._players[i].name}`);
         }
+
+        // Store remaining cards
+        this._remainingCards = dealResult.remaining;
+        console.log(`Remaining cards: ${this._remainingCards.length}`);
+
+        // Validate remaining cards count
+        if (this._remainingCards.length < this._players.length) {
+            console.error(`Not enough remaining cards! Need at least ${this._players.length}, got ${this._remainingCards.length}`);
+        }
+    }
+
+    /**
+     * Boss collects cards from remaining cards (pseudo-random selection)
+     * Boss receives playerCount cards, the rest are burned (shown to all players)
+     */
+    public bossCollectCards(): void {
+        if (this._gamePhase !== GamePhase.BOSS_COLLECT) {
+            console.error("Cannot collect cards - not in BOSS_COLLECT phase");
+            return;
+        }
+
+        if (this._remainingCards.length < this._players.length) {
+            console.error("Not enough remaining cards for boss to collect");
+            return;
+        }
+
+        const playerCount = this._players.length;
+
+        // Shuffle remaining cards for pseudo-random selection
+        const shuffledRemaining = [...this._remainingCards];
+        Dealer.shuffle(shuffledRemaining);
+
+        // Boss takes first playerCount cards
+        this._bossCollectedCards = shuffledRemaining.slice(0, playerCount);
+
+        // Remaining cards are burned (shown to all)
+        this._burnedCards = shuffledRemaining.slice(playerCount);
+
+        // Add collected cards to boss's hand
+        const boss = this._players[this._bossPlayerIndex];
+        boss.addCards(this._bossCollectedCards);
+        boss.sortCards(this._config.levelRank);
+
+        console.log(`Boss (${boss.name}) collected ${this._bossCollectedCards.length} cards`);
+        console.log(`Burned cards (shown to all): ${this._burnedCards.length} cards`);
+        console.log(`Boss now has ${boss.handCards.length} cards total`);
+
+        // Clear remaining cards as they've been distributed
+        this._remainingCards = [];
+
+        // Move to playing phase
+        this._gamePhase = GamePhase.PLAYING;
+        this._gameState = GameState.PLAYING;
+
+        // Initialize playing phase
+        this.initPlayingPhase();
     }
 
     // ========== Game flow ==========
@@ -331,5 +407,21 @@ export class GameController extends Component {
 
     public get lastPlayedHand(): HandResult | null {
         return this._lastPlayedHand;
+    }
+
+    public get bossPlayerIndex(): number {
+        return this._bossPlayerIndex;
+    }
+
+    public get bossPlayer(): Player {
+        return this._players[this._bossPlayerIndex];
+    }
+
+    public get burnedCards(): number[] {
+        return this._burnedCards;
+    }
+
+    public get remainingCards(): number[] {
+        return this._remainingCards;
     }
 }

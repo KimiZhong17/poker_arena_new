@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "b575e754-49c3-49a6-bd84-a7e651db1524",
+  "uuid": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "b575e754-49c3-49a6-bd84-a7e651db1524@6c48a",
+      "uuid": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04@6c48a",
       "displayName": "Diamond_7",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "b575e754-49c3-49a6-bd84-a7e651db1524",
+        "imageUuidOrDatabaseUri": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "b575e754-49c3-49a6-bd84-a7e651db1524@f9941",
+      "uuid": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04@f9941",
       "displayName": "Diamond_7",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "b575e754-49c3-49a6-bd84-a7e651db1524@6c48a",
+        "imageUuidOrDatabaseUri": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "b575e754-49c3-49a6-bd84-a7e651db1524@6c48a"
+    "redirect": "d573afb7-6bd0-47ba-b119-16b9d1b9ca04@6c48a"
   }
 }
