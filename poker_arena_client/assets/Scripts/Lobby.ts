@@ -6,7 +6,7 @@ export class Lobby extends Component {
     public onCreateRoomButtonClicked(): void {
         console.log("Create room button clicked.");
         
-        director.loadScene("Game", (err, scene) => {
+        director.loadScene("GameRoom", (err, scene) => {
             if (err) {
                 console.error("Failed to load game scene:", err);
                 return;
