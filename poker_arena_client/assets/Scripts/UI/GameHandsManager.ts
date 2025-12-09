@@ -99,7 +99,8 @@ export class GameHandsManager extends Component {
 
             const handDisplay = container.addComponent(PlayerHandDisplay);
             handDisplay.handContainer = container;
-            handDisplay.init(player, displayMode, this._pokerSprites, this._pokerPrefab);
+            const levelRank = this._gameController.config?.levelRank || 0;
+            handDisplay.init(player, displayMode, this._pokerSprites, this._pokerPrefab, levelRank);
 
             this._handDisplays.push(handDisplay);
         }

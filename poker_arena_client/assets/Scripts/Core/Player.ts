@@ -121,12 +121,35 @@ export class Player {
     }
 
     /**
-     * Sort hand cards by point value
+     * Sort hand cards by point value first, then by suit
+     * Jokers are sorted to the end (rightmost)
      */
     public sortCards(levelRank: number = 0): void {
-        // Simple sort by card value
-        // Can be enhanced with CardUtils.getLogicWeight for better sorting
-        this._handCards.sort((a, b) => a - b);
+        this._handCards.sort((a, b) => {
+            const suitA = a & 0xF0;
+            const suitB = b & 0xF0;
+            const pointA = a & 0x0F;
+            const pointB = b & 0x0F;
+
+            // Jokers (suit 0x40) always go to the end
+            const isJokerA = suitA === 0x40;
+            const isJokerB = suitB === 0x40;
+
+            if (isJokerA && !isJokerB) return 1;  // A is joker, B is not -> A goes after B
+            if (!isJokerA && isJokerB) return -1; // B is joker, A is not -> A goes before B
+
+            // Both are jokers: sort by point (Black Joker 0x01 < Red Joker 0x02)
+            if (isJokerA && isJokerB) {
+                return pointA - pointB;
+            }
+
+            // Neither are jokers: sort by point first, then by suit
+            if (pointA !== pointB) {
+                return pointA - pointB;
+            }
+
+            return suitA - suitB;
+        });
     }
 
     /**

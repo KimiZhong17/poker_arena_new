@@ -110,38 +110,37 @@ export class Main extends Component {
      * Create hands manager node structure automatically
      */
     private createHandsManagerStructure(): Node {
-        // Try to use existing PokerRoot if available
-        let canvas = this.node.parent;
-        if (!canvas) {
-            console.error("Cannot find Canvas!");
-            return new Node("HandsManager");
+        // Find existing PokerRoot - it should be under the Main node (this.node)
+        let pokerRoot = this.node.getChildByName("PokerRoot");
+
+        if (!pokerRoot) {
+            console.warn("PokerRoot not found under Main node, creating new one");
+            pokerRoot = new Node("PokerRoot");
+            this.node.addChild(pokerRoot);
         }
 
-        // Find existing PokerRoot
-        let pokerRoot = this.node.getChildByName("PokerRoot");
-        if (!pokerRoot) {
-            pokerRoot = canvas.getChildByName("PokerRoot");
-        }
+        console.log("PokerRoot found, current sibling index:", pokerRoot.getSiblingIndex());
+        console.log("PokerRoot parent:", pokerRoot.parent?.name);
+        console.log("PokerRoot siblings:", pokerRoot.parent?.children.map(c => c.name));
 
         // Create HandsManager node
         const handsManagerNode = new Node("HandsManager");
+        pokerRoot.addChild(handsManagerNode);
 
-        // Add to PokerRoot if it exists, otherwise add to canvas
-        if (pokerRoot) {
-            pokerRoot.addChild(handsManagerNode);
-            console.log("HandsManager added to existing PokerRoot");
-        } else {
-            canvas.addChild(handsManagerNode);
-            console.log("HandsManager added to Canvas");
-        }
+        console.log("HandsManager added to PokerRoot");
+
+        // Make sure PokerRoot is the last child of Main (rendered on top)
+        const siblingCount = this.node.children.length;
+        pokerRoot.setSiblingIndex(siblingCount - 1);
+        console.log("PokerRoot moved to index:", pokerRoot.getSiblingIndex(), "out of", siblingCount);
 
         // Create hand container nodes with positions
         const handNodes = [
-            { name: "BottomHand", x: 0, y: -400 },      // Main player
-            { name: "LeftHand", x: -600, y: 0 },        // Left player
-            { name: "TopLeftHand", x: -300, y: 400 },   // Top left
-            { name: "TopRightHand", x: 300, y: 400 },   // Top right
-            { name: "RightHand", x: 600, y: 0 }         // Right player
+            { name: "BottomHand", x: 0, y: -280 },      // Main player
+            { name: "LeftHand", x: -550, y: 50 },        // Left player
+            { name: "TopLeftHand", x: -300, y: 280 },   // Top left
+            { name: "TopRightHand", x: 300, y: 280 },   // Top right
+            { name: "RightHand", x: 550, y: 50 }         // Right player
         ];
 
         handNodes.forEach(config => {
@@ -170,7 +169,7 @@ export class Main extends Component {
             playerCount: 5,
             deckCount: 3,
             cardsPerPlayer: 31,
-            levelRank: 2
+            levelRank: 15  // 15 represents card "2" (P_2 = 15 in CardPoint enum)
         });
 
         // Step 2: Create players

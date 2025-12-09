@@ -27,21 +27,24 @@ export class PlayerHandDisplay extends Component {
     private _pokerSprites: Map<string, any> = new Map();
     private _pokerPrefab: Prefab = null!;
 
+    private _levelRank: number = 0;
+
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
+        this._levelRank = levelRank;
 
         // If handContainer not set, use current node
         if (!this.handContainer) {
             this.handContainer = this.node;
         }
 
-        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}`);
+        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}`);
     }
 
     /**
@@ -66,24 +69,118 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Display cards spread out horizontally (for main player)
+     * Cards with the same point value are stacked vertically
+     * Heart level cards (wild cards) are displayed separately on the right
      */
     private displaySpread(cards: number[]): void {
         const cardCount = cards.length;
         const cardWidth = 140;  // Adjust based on your card sprite size
-        const cardSpacing = 35; // Spacing between cards
-        const totalWidth = (cardCount - 1) * cardSpacing + cardWidth;
-        const startX = -totalWidth / 2 + cardWidth / 2;
+        const cardSpacing = 50; // Spacing between card groups
+        const verticalOffset = 30; // Vertical offset for stacked cards
+        const wildCardGap = 10; // Extra gap before wild cards (red heart level cards)
 
-        for (let i = 0; i < cardCount; i++) {
-            const cardNode = this.createCardNode(cards[i], true);
+        // Separate wild cards (Heart level cards) from normal cards
+        const normalCards: number[] = [];
+        const wildCards: number[] = [];
 
-            // Position card
-            const x = startX + i * cardSpacing;
-            cardNode.setPosition(x, 0, 0);
+        for (const card of cards) {
+            const suit = card & 0xF0;
+            const point = card & 0x0F;
 
-            this.handContainer.addChild(cardNode);
-            this._pokerNodes.push(cardNode);
+            // Check if it's a Heart level card (wild card)
+            if (suit === 0x20 && point === this._levelRank) {
+                wildCards.push(card);
+            } else {
+                normalCards.push(card);
+            }
         }
+
+        // Group normal cards by point value
+        const cardGroups: number[][] = [];
+        let currentGroup: number[] = [];
+        let lastPoint = -1;
+
+        for (let i = 0; i < normalCards.length; i++) {
+            const point = normalCards[i] & 0x0F;
+
+            if (point !== lastPoint) {
+                if (currentGroup.length > 0) {
+                    cardGroups.push(currentGroup);
+                }
+                currentGroup = [normalCards[i]];
+                lastPoint = point;
+            } else {
+                currentGroup.push(normalCards[i]);
+            }
+        }
+        if (currentGroup.length > 0) {
+            cardGroups.push(currentGroup);
+        }
+
+        // Calculate width for normal cards only
+        const normalGroupCount = cardGroups.length;
+        const hasWildCards = wildCards.length > 0;
+
+        let normalCardsWidth = 0;
+        if (normalGroupCount > 0) {
+            normalCardsWidth = (normalGroupCount - 1) * cardSpacing + cardWidth;
+        }
+
+        // Normal cards are centered independently
+        let normalStartX = -normalCardsWidth / 2 + cardWidth / 2;
+
+        const totalGroupCount = normalGroupCount + (hasWildCards ? 1 : 0);
+        console.log(`Display spread: ${cardCount} cards (${normalCards.length} normal, ${wildCards.length} wild) in ${totalGroupCount} groups`);
+        console.log(`Normal cards width: ${normalCardsWidth}, centered at 0`);
+
+        // Display normal card groups (centered)
+        let groupIndex = 0;
+        for (const group of cardGroups) {
+            const x = normalStartX + groupIndex * cardSpacing;
+
+            // Stack cards in this group vertically
+            // Reverse order so top cards are added last (rendered on top)
+            for (let i = group.length - 1; i >= 0; i--) {
+                const cardNode = this.createCardNode(group[i], true);
+
+                // Position: same x for all cards in group, offset y for stacking
+                const y = i * verticalOffset;
+                cardNode.setPosition(x, y, 0);
+
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+
+                // Log first card details
+                if (groupIndex === 0 && i === group.length - 1) {
+                    console.log(`First normal card position: (${x}, ${y})`);
+                }
+            }
+
+            groupIndex++;
+        }
+
+        // Display wild cards (Heart level cards) separately on the right
+        // Position them to the right of the centered normal cards
+        if (hasWildCards) {
+            const normalRightEdge = normalCardsWidth / 2;
+            const wildX = normalRightEdge + wildCardGap + cardWidth / 2;
+
+            for (let i = wildCards.length - 1; i >= 0; i--) {
+                const cardNode = this.createCardNode(wildCards[i], true);
+
+                const y = i * verticalOffset;
+                cardNode.setPosition(wildX, y, 0);
+
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+
+                if (i === wildCards.length - 1) {
+                    console.log(`First wild card position: (${wildX}, ${y})`);
+                }
+            }
+        }
+
+        console.log(`Added ${this._pokerNodes.length} card nodes to container`);
     }
 
     /**
@@ -92,7 +189,7 @@ export class PlayerHandDisplay extends Component {
     private displayStack(cardCount: number): void {
         // Show a few stacked cards to indicate card count
         const maxStackDisplay = Math.min(5, cardCount); // Show max 5 cards in stack
-        const stackOffset = 1; // Pixel offset for stacking effect
+        const stackOffset = 3; // Pixel offset for stacking effect
 
         for (let i = 0; i < maxStackDisplay; i++) {
             const cardNode = this.createCardNode(0, false); // 0 = back only
