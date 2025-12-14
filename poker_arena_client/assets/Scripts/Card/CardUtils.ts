@@ -1,4 +1,5 @@
 import { CardSuit, CardPoint } from "./CardConst";
+import { GameConfig } from "./GameConfig";
 
 export class CardUtils {
     /**
@@ -26,36 +27,44 @@ export class CardUtils {
         const suit = this.getSuit(card);
         const point = this.getPoint(card);
 
-        // 1. Handle jokers (Red for 1000 and Black for 900)
+        // 1. Handle jokers (Black Joker has higher weight than Red Joker)
         if (suit === CardSuit.JOKER) {
             return point === CardPoint.BLACK_JOKER ? 1000 : 900;
         }
 
         // 2. Handle level cards (current level rank)
         if (point === levelRank) {
-            // If it's a Heart level card -> Wild card (weight just below Black Joker, or give a special mark)
-            // For sorting convenience, set to 800
-            if (suit === CardSuit.HEART) {
-                return 800; 
+            // If LEVEL_CARDS_HIGHEST is enabled, level cards become the highest
+            if (GameConfig.LEVEL_CARDS_HIGHEST) {
+                // Heart level card (wild card) is highest
+                if (suit === CardSuit.HEART) {
+                    return 800;
+                }
+                // Normal level cards are second highest
+                return 700;
+            } else {
+                // Current rule: level cards don't change ranking
+                // Only Heart level card becomes wild card (high weight for special handling)
+                if (suit === CardSuit.HEART) {
+                    return 800; // Wild card marker
+                }
+                // Non-Heart level cards use normal weight
+                // Fall through to normal card handling
             }
-            // Normal level card -> weight 700
-            return 700;
         }
 
         // 3. Handle normal cards
-        // Guandan rules: 2 < 3 ... < A
-        // If your physical value P_2 is already 15, just return the point
-        // Remember to multiply by a factor to avoid conflicts with the special cards above, or directly return point + base offset
-        
-        // Suppose physical value P_2 = 15, P_A = 14
-        // If the rule is 2 is the smallest (in Guandan if not playing 2, 2 is the smallest)
-        // We need to map P_2(15) back to the position of 2
-        
-        let logicPoint = point;
-        if (point === 15) logicPoint = 2; // Adjust weight for 2
-        if (point === 14) logicPoint = 14; // A
+        // Card ranking: 3 < 4 < 5 ... < K < A < 2 (2 is the highest normal card)
+        // Physical values: P_3=3, P_4=4, ..., P_K=13, P_A=14, P_2=15
+        // Weight mapping:
+        // 3(point=3) -> 30
+        // 4(point=4) -> 40
+        // ...
+        // K(point=13) -> 130
+        // A(point=14) -> 140
+        // 2(point=15) -> 150 (highest normal card)
 
-        return logicPoint * 10; // *10 is to leave space for future suit sorting expansion
+        return point * 10; // Direct mapping since physical order already matches ranking
     }
 
     /**

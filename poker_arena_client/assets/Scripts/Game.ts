@@ -4,8 +4,8 @@ import { GameController } from './Core/GameController';
 import { GameHandsManager } from './UI/GameHandsManager';
 const { ccclass, property } = _decorator;
 
-@ccclass('Main')
-export class Main extends Component {
+@ccclass('Game')
+export class Game extends Component {
 
     @property(Node)
     public gameControllerNode: Node = null!;

@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.SceneAsset",
-    "_name": "HomePage",
+    "_name": "Login",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -11,7 +11,7 @@
   },
   {
     "__type__": "cc.Scene",
-    "_name": "HomePage",
+    "_name": "Login",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -515,7 +515,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "btn_login_traveler",
+    "_name": "btn_login_guest",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -781,6 +781,13 @@
     },
     "_enabled": true,
     "__prefab": null,
+    "guestButton": {
+      "__id__": 16
+    },
+    "wechatButton": {
+      "__id__": 11
+    },
+    "errorLabel": null,
     "_id": "53A0lOZgNLwatVr/+/R8iN"
   },
   {
