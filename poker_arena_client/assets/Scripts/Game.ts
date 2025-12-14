@@ -1,7 +1,11 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteAtlas, SpriteFrame } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { GameHandsManager } from './UI/GameHandsManager';
+import { SceneManager } from './Manager/SceneManager';
+import { GameModeFactory } from './Core/GameMode/GameModeFactory';
+import { GameModeBase } from './Core/GameMode/GameModeBase';
+import { TheDecreeMode } from './Core/GameMode/TheDecreeMode';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -19,8 +23,27 @@ export class Game extends Component {
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
     private _pokerPrefab: Prefab = null!;
 
+    // Game configuration from scene transition
+    private _gameMode: string = '';
+    private _roomId: string = '';
+
+    // The Decree mode instance (only used when playing The Decree)
+    private _theDecreeMode: TheDecreeMode | null = null;
+
     public onLoad(): void {
         console.log("Main onLoad");
+
+        // Get game configuration from scene transition
+        const sceneManager = SceneManager.getInstance();
+        const transitionData = sceneManager.getTransitionData<{
+            roomId: string;
+            gameMode: string;
+        }>();
+
+        this._gameMode = transitionData.gameMode || 'guandan';
+        this._roomId = transitionData.roomId || 'default_room';
+
+        console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}`);
 
         // Initialize GameController
         if (this.gameControllerNode) {
@@ -159,27 +182,84 @@ export class Game extends Component {
     }
 
     /**
-     * Start game flow: Initialize -> Deal -> Boss Collect -> Play
+     * Start game flow: Initialize -> Deal -> Play
+     * Routes to different game modes based on configuration
      */
     private startGameFlow(): void {
         console.log("=== Starting Game Flow ===");
+        console.log(`Game Mode: ${this._gameMode}`);
 
-        // Step 1: Initialize game
-        this._gameController.init({
-            playerCount: 5,
-            deckCount: 3,
-            cardsPerPlayer: 31,
-            levelRank: 15  // 15 represents card "2" (P_2 = 15 in CardPoint enum)
-        });
+        // Route to appropriate game mode
+        if (this._gameMode === 'the_decree') {
+            this.startTheDecreeFlow();
+        } else {
+            this.startGuandanFlow();
+        }
+    }
 
-        // Step 2: Create players
+    /**
+     * Start The Decree game flow
+     */
+    private startTheDecreeFlow(): void {
+        console.log("=== Starting The Decree Flow ===");
+
+        // Hide 5th player position for The Decree (4 players max)
+        this.setupTheDecreeUI();
+
+        // Create The Decree mode instance
+        this._theDecreeMode = new TheDecreeMode();
+
+        // Initialize with 4 players
+        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
+        this._theDecreeMode.initGame(playerIds);
+
+        // Deal cards
+        this._theDecreeMode.dealCards();
+
+        console.log('[The Decree] Game initialized');
+        console.log('[The Decree] Community Cards:', this._theDecreeMode.getCommunityCards());
+        console.log('[The Decree] Deck Size:', this._theDecreeMode.getDeckSize());
+
+        // TODO: Display The Decree UI
+        // - Show 4 community cards
+        // - Show player hands (5 cards each)
+        // - Show dealer selection UI
+        console.log('[The Decree] TODO: Implement UI display');
+    }
+
+    /**
+     * Start Guandan game flow (existing implementation)
+     */
+    private startGuandanFlow(): void {
+        console.log("=== Starting Guandan Flow ===");
+
+        // Ensure all player positions are visible
+        this.setupGuandanUI();
+
+        // Guandan configuration: 5 players
+        const playerCount = 5;
+        const deckCount = 3;
+        const cardsPerPlayer = 31;
+        const levelRank = 15; // Card "2"
         const playerNames = [
-            'You (Boss)',  // Player 0 is the main player (Boss)
+            'You (Boss)',
             'Player 2',
             'Player 3',
             'Player 4',
             'Player 5'
         ];
+
+        console.log('[Game] Initializing Guandan mode');
+
+        // Step 1: Initialize game
+        this._gameController.init({
+            playerCount: playerCount,
+            deckCount: deckCount,
+            cardsPerPlayer: cardsPerPlayer,
+            levelRank: levelRank
+        });
+
+        // Step 2: Create players
         this._gameController.createPlayers(playerNames);
 
         // Step 3: Start game (deals cards automatically)
@@ -201,6 +281,44 @@ export class Game extends Component {
         this.scheduleOnce(() => {
             this.bossCollectCards();
         }, 2);
+    }
+
+    /**
+     * Setup UI for The Decree (hide 5th player, show community cards area)
+     */
+    private setupTheDecreeUI(): void {
+        console.log('[UI] Setting up The Decree UI');
+
+        // Hide the 5th player position (RightHand)
+        if (this.handsManagerNode) {
+            const rightHandNode = this.handsManagerNode.getChildByName('RightHand');
+            if (rightHandNode) {
+                rightHandNode.active = false;
+                console.log('[UI] Hidden RightHand position');
+            }
+        }
+
+        // TODO: Show community cards display area
+        // TODO: Show dealer indicator
+    }
+
+    /**
+     * Setup UI for Guandan (show all 5 players)
+     */
+    private setupGuandanUI(): void {
+        console.log('[UI] Setting up Guandan UI');
+
+        // Ensure the 5th player position is visible
+        if (this.handsManagerNode) {
+            const rightHandNode = this.handsManagerNode.getChildByName('RightHand');
+            if (rightHandNode) {
+                rightHandNode.active = true;
+                console.log('[UI] Showing RightHand position');
+            }
+        }
+
+        // TODO: Hide community cards display area
+        // TODO: Show boss indicator
     }
 
     /**
