@@ -1,0 +1,155 @@
+# 牌点击交互架构图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          Game.ts                                 │
+│  (游戏主控制器 - 提供统一接口)                                    │
+│                                                                   │
+│  + handsManager: GameHandsManager                                │
+│  + playerSelectCards(playerId, cardIndices): boolean             │
+│  + playerPass(playerId): boolean                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    GameHandsManager.ts                           │
+│  (管理所有玩家的手牌显示)                                         │
+│                                                                   │
+│  + enableCardSelection(playerIndex, callback)                    │
+│  + disableCardSelection(playerIndex)                             │
+│  + getSelectedIndices(playerIndex): number[]                     │
+│  + clearSelection(playerIndex)                                   │
+│  + getPlayerHandDisplay(playerIndex): PlayerHandDisplay          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ 管理多个
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   PlayerHandDisplay.ts                           │
+│  (单个玩家的手牌显示和选择管理)                                   │
+│                                                                   │
+│  - _pokerComponents: Poker[]           (持有所有牌组件)          │
+│  - _selectedIndices: Set<number>       (选中的牌索引)            │
+│  - _selectionChangedCallback           (回调函数)                │
+│                                                                   │
+│  + enableCardSelection(callback)                                 │
+│  + disableCardSelection()                                        │
+│  + getSelectedIndices(): number[]                                │
+│  + clearSelection()                                              │
+│  + selectCards(indices: number[])                                │
+│  - onCardClicked(card, value, index)   (处理点击事件)            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ 包含多个
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Poker.ts                                 │
+│  (单张牌组件 - 处理点击和视觉状态)                                │
+│                                                                   │
+│  - _isSelected: boolean                (选中状态)                │
+│  - _isInteractive: boolean             (是否可交互)              │
+│  - _clickCallback: CardClickCallback   (点击回调)                │
+│  - _cardIndex: number                  (牌索引)                  │
+│  - _originalY: number                  (原始Y坐标)               │
+│                                                                   │
+│  + enableClick(index, callback)                                  │
+│  + disableClick()                                                │
+│  + setSelected(selected: boolean)      (设置选中状态+视觉效果)   │
+│  + isSelected(): boolean                                         │
+│  - onCardTouched(event)                (处理触摸事件)            │
+└─────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+数据流向：
+
+1. 用户点击事件流
+   ┌─────────┐
+   │ 玩家点击牌 │
+   └─────┬───┘
+         │
+         ▼
+   ┌──────────────────┐
+   │ Poker.onCardTouched │  (Node.EventType.TOUCH_END)
+   └─────┬────────────┘
+         │ 1. Toggle selection state
+         │ 2. Update visual (lift up/down)
+         │ 3. Call callback
+         ▼
+   ┌──────────────────────────┐
+   │ PlayerHandDisplay.onCardClicked │
+   └─────┬────────────────────┘
+         │ 1. Update _selectedIndices
+         │ 2. Call _selectionChangedCallback
+         ▼
+   ┌──────────────────────┐
+   │ Your Game UI Component │
+   └─────┬────────────────┘
+         │ 1. Update UI (enable/disable buttons)
+         │ 2. Show selected count
+         ▼
+   ┌──────────────────┐
+   │ Player sees feedback │
+   └──────────────────┘
+
+
+2. 出牌流程
+   ┌─────────────────┐
+   │ Player clicks "Play" │
+   └─────┬───────────┘
+         │
+         ▼
+   ┌───────────────────────────┐
+   │ Get selected indices        │
+   │ game.handsManager.getSelectedIndices(0) │
+   └─────┬─────────────────────┘
+         │
+         ▼
+   ┌───────────────────────────┐
+   │ Call universal interface    │
+   │ game.playerSelectCards('0', indices) │
+   └─────┬─────────────────────┘
+         │
+         ├─── Guandan mode ──────►  GameController.playCards()
+         │
+         └─── The Decree mode ───►  TheDecreeMode.playCards()
+
+         ▼
+   ┌───────────────────────────┐
+   │ Update hand display         │
+   │ Clear selection             │
+   └───────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+关键特性：
+
+✅ 层次清晰：Game → GameHandsManager → PlayerHandDisplay → Poker
+✅ 职责分离：每个层级只负责自己的职责
+✅ 回调机制：事件从底层向上传递
+✅ 统一接口：Game.ts 提供统一的游戏操作接口
+✅ 自动管理：选择状态、视觉效果自动处理
+
+═══════════════════════════════════════════════════════════════════
+
+使用示例：
+
+// 1. 启用选择
+game.handsManager.enableCardSelection(0, (selectedIndices) => {
+    console.log('Selected:', selectedIndices);
+    updatePlayButton(selectedIndices.length > 0);
+});
+
+// 2. 玩家点击牌
+// → 牌自动弹起/放下
+// → 回调被触发
+// → UI 更新
+
+// 3. 出牌
+const indices = game.handsManager.getSelectedIndices(0);
+game.playerSelectCards('0', indices);
+game.handsManager.clearSelection(0);
+
+═══════════════════════════════════════════════════════════════════

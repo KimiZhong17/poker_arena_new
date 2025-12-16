@@ -1,8 +1,14 @@
 import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3 } from 'cc';
-import { Poker } from './Poker';
+import { Poker, CardClickCallback } from './Poker';
 import { PokerFactory } from './PokerFactory';
 import { Player } from '../Core/Player';
 const { ccclass, property } = _decorator;
+
+/**
+ * Callback for selected cards changed
+ * @param selectedIndices Array of selected card indices
+ */
+export type SelectionChangedCallback = (selectedIndices: number[]) => void;
 
 /**
  * Display mode for player hands
@@ -24,10 +30,16 @@ export class PlayerHandDisplay extends Component {
     private _player: Player = null!;
     private _displayMode: HandDisplayMode = HandDisplayMode.STACK;
     private _pokerNodes: Node[] = [];
+    private _pokerComponents: Poker[] = [];
     private _pokerSprites: Map<string, any> = new Map();
     private _pokerPrefab: Prefab = null!;
 
     private _levelRank: number = 0;
+
+    // Click handling
+    private _isInteractive: boolean = false;
+    private _selectedIndices: Set<number> = new Set();
+    private _selectionChangedCallback: SelectionChangedCallback | null = null;
 
     /**
      * Initialize the hand display
@@ -64,6 +76,11 @@ export class PlayerHandDisplay extends Component {
         } else {
             console.log(`Displaying ${cards.length} cards in STACK mode`);
             this.displayStack(cards.length);
+        }
+
+        // Re-enable click if was interactive
+        if (this._isInteractive && this._displayMode === HandDisplayMode.SPREAD) {
+            this.enableCardSelection(this._selectionChangedCallback);
         }
     }
 
@@ -235,6 +252,9 @@ export class PlayerHandDisplay extends Component {
             pokerCtrl.showBack();
         }
 
+        // Store poker component reference
+        this._pokerComponents.push(pokerCtrl);
+
         return pokerNode;
     }
 
@@ -242,8 +262,118 @@ export class PlayerHandDisplay extends Component {
      * Clear all displayed cards
      */
     private clearCards(): void {
+        // Disable click on all cards before destroying
+        this._pokerComponents.forEach(poker => poker.disableClick());
+
         this._pokerNodes.forEach(node => node.destroy());
         this._pokerNodes = [];
+        this._pokerComponents = [];
+        this._selectedIndices.clear();
+    }
+
+    // ==================== Card Selection (Click Handling) ====================
+
+    /**
+     * Enable card selection (for player interaction)
+     * @param callback Callback when selection changes
+     */
+    public enableCardSelection(callback: SelectionChangedCallback | null = null): void {
+        if (this._displayMode !== HandDisplayMode.SPREAD) {
+            console.warn('Card selection only available in SPREAD mode');
+            return;
+        }
+
+        this._isInteractive = true;
+        this._selectionChangedCallback = callback;
+
+        // Enable click on all cards
+        this._pokerComponents.forEach((poker, index) => {
+            poker.enableClick(index, this.onCardClicked.bind(this));
+        });
+
+        console.log(`Card selection enabled for ${this._player.name}`);
+    }
+
+    /**
+     * Disable card selection
+     */
+    public disableCardSelection(): void {
+        this._isInteractive = false;
+
+        // Disable click on all cards
+        this._pokerComponents.forEach(poker => poker.disableClick());
+
+        this._selectedIndices.clear();
+        console.log(`Card selection disabled for ${this._player.name}`);
+    }
+
+    /**
+     * Handle card click event
+     */
+    private onCardClicked(card: Poker, cardValue: number, cardIndex: number): void {
+        console.log(`Card clicked: index=${cardIndex}, value=${cardValue}, selected=${card.isSelected()}`);
+
+        // Update selected indices
+        if (card.isSelected()) {
+            this._selectedIndices.add(cardIndex);
+        } else {
+            this._selectedIndices.delete(cardIndex);
+        }
+
+        // Call callback if set
+        if (this._selectionChangedCallback) {
+            const selectedArray = Array.from(this._selectedIndices).sort((a, b) => a - b);
+            this._selectionChangedCallback(selectedArray);
+        }
+
+        console.log(`Selected cards: [${Array.from(this._selectedIndices).join(', ')}]`);
+    }
+
+    /**
+     * Get currently selected card indices
+     */
+    public getSelectedIndices(): number[] {
+        return Array.from(this._selectedIndices).sort((a, b) => a - b);
+    }
+
+    /**
+     * Clear all card selections
+     */
+    public clearSelection(): void {
+        this._pokerComponents.forEach(poker => {
+            if (poker.isSelected()) {
+                poker.setSelected(false);
+            }
+        });
+        this._selectedIndices.clear();
+
+        // Notify callback
+        if (this._selectionChangedCallback) {
+            this._selectionChangedCallback([]);
+        }
+    }
+
+    /**
+     * Programmatically select cards by indices
+     * @param indices Array of card indices to select
+     */
+    public selectCards(indices: number[]): void {
+        // Clear existing selection
+        this.clearSelection();
+
+        // Select specified cards
+        indices.forEach(index => {
+            if (index >= 0 && index < this._pokerComponents.length) {
+                const poker = this._pokerComponents[index];
+                poker.setSelected(true);
+                this._selectedIndices.add(index);
+            }
+        });
+
+        // Notify callback
+        if (this._selectionChangedCallback) {
+            this._selectionChangedCallback(this.getSelectedIndices());
+        }
     }
 
     /**

@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, instantiate, Vec3, Button } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { GameHandsManager } from './UI/GameHandsManager';
@@ -6,6 +6,9 @@ import { SceneManager } from './Manager/SceneManager';
 import { GameModeFactory } from './Core/GameMode/GameModeFactory';
 import { GameModeBase } from './Core/GameMode/GameModeBase';
 import { TheDecreeMode } from './Core/GameMode/TheDecreeMode';
+import { Player } from './Core/Player';
+import { Poker } from './UI/Poker';
+import { GameStage } from './Core/GameStage';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -24,12 +27,18 @@ export class Game extends Component {
     @property(Node)
     public objectsTheDecreeNode: Node = null!;
 
+    @property(Node)
+    public nodeReadyStage: Node = null!;
+
+    @property(Button)
+    public btnStart: Button = null!;
+
     // Specific UI/Gameplay nodes (optional - can access via children)
     @property(Node)
     public communityCardsNode: Node = null!;
 
-    @property(Node)
-    public dealerCallPanelNode: Node = null!;
+    // @property(Node)
+    // public dealerCallPanelNode: Node = null!;
 
     private _gameController: GameController = null!;
     private _handsManager: GameHandsManager = null!;
@@ -40,6 +49,7 @@ export class Game extends Component {
     // Game configuration from scene transition
     private _gameMode: string = '';
     private _roomId: string = '';
+    private _currentStage: GameStage = GameStage.READY;
 
     // The Decree mode instance (only used when playing The Decree)
     private _theDecreeMode: TheDecreeMode | null = null;
@@ -83,14 +93,6 @@ export class Game extends Component {
         });
     }
 
-    start() {
-
-    }
-
-    update(deltaTime: number) {
-
-    }
-
     private _onLoadPokerAtlas(): void {
         this._pokerBundle.loadDir("", SpriteFrame, (err, sprites) => {
             if (err) {
@@ -128,6 +130,9 @@ export class Game extends Component {
         console.log("Entering game...");
         this.node.addComponent(PokerFactory).init(this._pokerSprites, this._pokerPrefab);
 
+        // Auto-find nodes if not manually assigned
+        this.autoFindNodes();
+
         // Initialize hands manager - create if not exists
         if (!this.handsManagerNode) {
             // Create HandsManager node structure automatically
@@ -139,8 +144,171 @@ export class Game extends Component {
             this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
         }
 
-        // Start the game flow
+        // Setup button events
+        this.setupButtonEvents();
+
+        // Enter ready stage (don't start game yet)
+        this.enterReadyStage();
+    }
+
+    // ==================== Stage Management ====================
+
+    /**
+     * Enter Ready Stage
+     */
+    private enterReadyStage(): void {
+        console.log("=== Entering Ready Stage ===");
+        this._currentStage = GameStage.READY;
+
+        // Show ready stage UI
+        if (this.nodeReadyStage) {
+            this.nodeReadyStage.active = true;
+        }
+
+        // Hide game mode specific UI
+        if (this.objectsGuandanNode) {
+            this.objectsGuandanNode.active = false;
+        }
+        if (this.objectsTheDecreeNode) {
+            this.objectsTheDecreeNode.active = false;
+        }
+
+        console.log("[Ready Stage] Waiting for players to ready up...");
+    }
+
+    /**
+     * Enter Playing Stage
+     */
+    private enterPlayingStage(): void {
+        console.log("=== Entering Playing Stage ===");
+        this._currentStage = GameStage.PLAYING;
+
+        // Hide ready stage UI
+        if (this.nodeReadyStage) {
+            this.nodeReadyStage.active = false;
+        }
+
+        // Start the actual game
         this.startGameFlow();
+    }
+
+    /**
+     * Enter End Stage
+     */
+    private enterEndStage(): void {
+        console.log("=== Entering End Stage ===");
+        this._currentStage = GameStage.END;
+
+        // Show end game UI
+        // TODO: Add end game UI logic here
+
+        console.log("[End Stage] Game finished!");
+    }
+
+    /**
+     * Get current stage
+     */
+    public getCurrentStage(): GameStage {
+        return this._currentStage;
+    }
+
+    // ==================== Button Event Handlers ====================
+
+    /**
+     * Setup button events
+     */
+    private setupButtonEvents(): void {
+        // Auto-find start button if not assigned
+        if (!this.btnStart && this.nodeReadyStage) {
+            const btnNode = this.nodeReadyStage.getChildByName('btn_start');
+            if (btnNode) {
+                this.btnStart = btnNode.getComponent(Button);
+            }
+        }
+
+        // Register start button click event
+        if (this.btnStart) {
+            this.btnStart.node.on(Button.EventType.CLICK, this.onStartButtonClicked, this);
+            console.log('[Game] Start button registered');
+        } else {
+            console.warn('[Game] Start button not found!');
+        }
+    }
+
+    /**
+     * Handle start button clicked
+     * TODO: Add multiplayer ready logic when implementing networking
+     */
+    private onStartButtonClicked(): void {
+        console.log('[Game] Start button clicked');
+
+        if (this._currentStage !== GameStage.READY) {
+            console.warn('[Game] Cannot start - not in ready stage');
+            return;
+        }
+
+        // TODO: In multiplayer, check if all players are ready
+        // For now, just start the game immediately
+        this.enterPlayingStage();
+    }
+
+    // ==================== Node Finding ====================
+
+    /**
+     * Auto-find nodes by name if not manually assigned
+     */
+    private autoFindNodes(): void {
+        // Auto-find ReadyStageNode
+        if (!this.nodeReadyStage) {
+            this.nodeReadyStage = this.findNodeByName(this.node, 'Node_ReadyStage');
+        }
+
+        // Auto-find CommunityCardsNode (may be nested deep)
+        if (!this.communityCardsNode) {
+            this.communityCardsNode = this.findNodeByName(this.node, 'CommunityCardsNode');
+            if (this.communityCardsNode) {
+                console.log('[Game] Auto-found CommunityCardsNode');
+            }
+        }
+
+        // Auto-find ObjectTheDecreeNode
+        if (!this.objectsTheDecreeNode) {
+            this.objectsTheDecreeNode = this.findNodeByName(this.node, 'ObjectTheDecreeNode');
+            if (this.objectsTheDecreeNode) {
+                console.log('[Game] Auto-found ObjectTheDecreeNode');
+            }
+        }
+
+        // Auto-find ObjectGuandanNode
+        if (!this.objectsGuandanNode) {
+            this.objectsGuandanNode = this.findNodeByName(this.node, 'ObjectGuandanNode');
+            if (this.objectsGuandanNode) {
+                console.log('[Game] Auto-found ObjectGuandanNode');
+            }
+        }
+    }
+
+    /**
+     * Recursively find a node by name in the entire tree
+     * @param root Root node to start searching from
+     * @param name Node name to find
+     * @returns Found node or null
+     */
+    private findNodeByName(root: Node, name: string): Node | null {
+        // Check current node
+        if (root.name === name) {
+            return root;
+        }
+
+        // Search in children
+        for (const child of root.children) {
+            const found = this.findNodeByName(child, name);
+            if (found) {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -242,11 +410,19 @@ export class Game extends Component {
             console.log(`${playerId}: ${hand.length} cards`);
         }
 
-        // Auto-play a test round after 2 seconds
-        console.log('\n[The Decree] Will auto-play test round in 2 seconds...');
+        // Initialize and display hands using adapter
+        this.initializeTheDecreeHandsDisplay();
+
+        // Display community cards
+        this.displayCommunityCards();
+
+        // Enable card selection for player 0 after a short delay
         this.scheduleOnce(() => {
-            this.autoPlayTestRound();
-        }, 2);
+            console.log('[The Decree] Enabling card selection for player 0');
+            this._handsManager.enableCardSelection(0, (selectedIndices) => {
+                console.log(`[The Decree] Player 0 selected cards: [${selectedIndices.join(', ')}]`);
+            });
+        }, 1);
     }
 
     /**
@@ -443,6 +619,13 @@ export class Game extends Component {
         return this._gameController;
     }
 
+    /**
+     * Get hands manager (for external access)
+     */
+    public get handsManager(): GameHandsManager {
+        return this._handsManager;
+    }
+
     // ==================== The Decree Game Interfaces ====================
 
     /**
@@ -558,12 +741,30 @@ export class Game extends Component {
     }
 
     /**
-     * Phase 3: Player selects cards to play
-     * @param playerId Player ID
+     * Universal interface: Player selects cards to play
+     * Routes to appropriate game mode implementation
+     * @param playerId Player ID (for The Decree) or player index as string (for Guandan)
      * @param cardIndices Indices of cards in player's hand (e.g., [0, 2] for 1st and 3rd card)
      * @returns Success status
      */
     public playerSelectCards(playerId: string, cardIndices: number[]): boolean {
+        if (this._gameMode === 'the_decree') {
+            return this._playerSelectCardsTheDecree(playerId, cardIndices);
+        } else if (this._gameMode === 'guandan') {
+            return this._playerSelectCardsGuandan(playerId, cardIndices);
+        } else {
+            console.error(`[Game] Unknown game mode: ${this._gameMode}`);
+            return false;
+        }
+    }
+
+    /**
+     * The Decree mode: Player selects cards to play
+     * @param playerId Player ID (e.g., 'player_0')
+     * @param cardIndices Indices of cards in player's hand
+     * @returns Success status
+     */
+    private _playerSelectCardsTheDecree(playerId: string, cardIndices: number[]): boolean {
         if (!this._theDecreeMode) {
             console.error('[The Decree] Game not initialized');
             return false;
@@ -582,6 +783,9 @@ export class Game extends Component {
         if (success) {
             console.log(`[The Decree] Player ${playerId} played ${cards.length} cards`);
 
+            // Update hands display
+            this.updateTheDecreeHandsDisplay();
+
             // Check if round is over (all players played)
             const currentRound = this._theDecreeMode.getCurrentRound();
             if (currentRound && currentRound.roundWinnerId) {
@@ -591,6 +795,111 @@ export class Game extends Component {
             }
         } else {
             console.error('[The Decree] Failed to play cards');
+        }
+
+        return success;
+    }
+
+    /**
+     * Guandan mode: Player selects cards to play
+     * @param playerId Player index as string (e.g., '0', '1', '2')
+     * @param cardIndices Indices of cards in player's hand
+     * @returns Success status
+     */
+    private _playerSelectCardsGuandan(playerId: string, cardIndices: number[]): boolean {
+        if (!this._gameController) {
+            console.error('[Guandan] Game controller not initialized');
+            return false;
+        }
+
+        // Convert playerId string to player index
+        const playerIndex = parseInt(playerId, 10);
+        if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
+            console.error(`[Guandan] Invalid player index: ${playerId}`);
+            return false;
+        }
+
+        const player = this._gameController.players[playerIndex];
+        if (!player) {
+            console.error(`[Guandan] Player ${playerIndex} not found`);
+            return false;
+        }
+
+        // Convert indices to actual cards
+        const cards = cardIndices.map(index => player.handCards[index]).filter(c => c !== undefined);
+
+        if (cards.length === 0) {
+            console.error(`[Guandan] No valid cards selected`);
+            return false;
+        }
+
+        // Call game controller to play cards
+        const success = this._gameController.playCards(playerIndex, cards);
+        if (success) {
+            console.log(`[Guandan] Player ${player.name} (${playerIndex}) played ${cards.length} cards`);
+
+            // Update hand display
+            this._handsManager.updatePlayerHand(playerIndex);
+
+            // Check if player finished
+            if (player.isFinished()) {
+                console.log(`[Guandan] Player ${player.name} finished!`);
+            }
+        } else {
+            console.error(`[Guandan] Failed to play cards for player ${playerIndex}`);
+        }
+
+        return success;
+    }
+
+    /**
+     * Universal interface: Player passes their turn
+     * Routes to appropriate game mode implementation (Guandan only, The Decree doesn't support passing)
+     * @param playerId Player ID or player index as string
+     * @returns Success status
+     */
+    public playerPass(playerId: string): boolean {
+        if (this._gameMode === 'the_decree') {
+            console.error('[The Decree] Pass is not supported in The Decree mode');
+            return false;
+        } else if (this._gameMode === 'guandan') {
+            return this._playerPassGuandan(playerId);
+        } else {
+            console.error(`[Game] Unknown game mode: ${this._gameMode}`);
+            return false;
+        }
+    }
+
+    /**
+     * Guandan mode: Player passes their turn
+     * @param playerId Player index as string (e.g., '0', '1', '2')
+     * @returns Success status
+     */
+    private _playerPassGuandan(playerId: string): boolean {
+        if (!this._gameController) {
+            console.error('[Guandan] Game controller not initialized');
+            return false;
+        }
+
+        // Convert playerId string to player index
+        const playerIndex = parseInt(playerId, 10);
+        if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
+            console.error(`[Guandan] Invalid player index: ${playerId}`);
+            return false;
+        }
+
+        const player = this._gameController.players[playerIndex];
+        if (!player) {
+            console.error(`[Guandan] Player ${playerIndex} not found`);
+            return false;
+        }
+
+        // Call game controller to pass
+        const success = this._gameController.pass(playerIndex);
+        if (success) {
+            console.log(`[Guandan] Player ${player.name} (${playerIndex}) passed`);
+        } else {
+            console.error(`[Guandan] Failed to pass for player ${playerIndex}`);
         }
 
         return success;
@@ -745,4 +1054,161 @@ export class Game extends Component {
         }, 2);
     }
 
+    // ==================== The Decree Helper Methods ====================
+
+    /**
+     * Initialize hands display for The Decree mode
+     * Creates adapter Player objects from TheDecreeMode PlayerState
+     */
+    private initializeTheDecreeHandsDisplay(): void {
+        if (!this._theDecreeMode) {
+            console.error('[The Decree] Cannot initialize hands - game not ready');
+            return;
+        }
+
+        console.log('[The Decree] Initializing hands display...');
+
+        // Create temporary GameController for hands manager
+        if (!this._gameController) {
+            if (this.gameControllerNode) {
+                this._gameController = this.gameControllerNode.getComponent(GameController);
+                if (!this._gameController) {
+                    this._gameController = this.gameControllerNode.addComponent(GameController);
+                }
+            } else {
+                this._gameController = this.node.addComponent(GameController);
+            }
+        }
+
+        // Create adapter Player objects from The Decree player states
+        const adapterPlayers: Player[] = [];
+        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
+
+        for (let i = 0; i < playerIds.length; i++) {
+            const playerId = playerIds[i];
+            const playerState = this._theDecreeMode.getPlayerState(playerId);
+
+            if (playerState) {
+                // Create adapter player
+                const player = new Player(i, playerId, i);
+                player.setHandCards(playerState.hand);
+                adapterPlayers.push(player);
+            }
+        }
+
+        // Temporarily set adapter players in game controller
+        // @ts-ignore - accessing private property for adapter
+        this._gameController['_players'] = adapterPlayers;
+
+        // Initialize hands manager if not already done
+        if (!this._handsManager) {
+            if (!this.handsManagerNode) {
+                this.handsManagerNode = this.createHandsManagerStructure();
+            }
+
+            this._handsManager = this.handsManagerNode.getComponent(GameHandsManager);
+            if (!this._handsManager) {
+                this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
+            }
+
+            this._handsManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
+        }
+
+        // Update all hand displays
+        this._handsManager.updateAllHands();
+
+        console.log('[The Decree] Hands display initialized');
+    }
+
+    /**
+     * Display community cards for The Decree mode
+     * Directly creates card nodes under communityCardsNode
+     */
+    private displayCommunityCards(): void {
+        if (!this._theDecreeMode) {
+            console.error('[The Decree] Cannot display community cards - game not ready');
+            return;
+        }
+
+        if (!this.communityCardsNode) {
+            console.warn('[The Decree] Community cards node not found');
+            return;
+        }
+
+        const communityCards = this._theDecreeMode.getCommunityCards();
+        console.log(`[The Decree] Displaying ${communityCards.length} community cards:`, communityCards);
+
+        // Simple layout: 4 cards in a horizontal row
+        const cardWidth = 140;
+        const cardSpacing = 20;
+        const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
+        const startX = -totalWidth / 2 + cardWidth / 2;
+
+        const pokerBack = this._pokerSprites.get("CardBack3");
+
+        // Create card nodes directly
+        communityCards.forEach((cardValue, index) => {
+            const cardNode = instantiate(this._pokerPrefab);
+            const poker = cardNode.getComponent(Poker);
+
+            if (poker) {
+                // Get the sprite for this card
+                const spriteName = PokerFactory.getCardSpriteName(cardValue);
+                const pokerFront = this._pokerSprites.get(spriteName);
+
+                if (pokerFront) {
+                    poker.init(cardValue, pokerBack, pokerFront);
+                    poker.showFront();
+
+                    const x = startX + (cardWidth + cardSpacing) * index;
+                    cardNode.setPosition(new Vec3(x, 0, 0));
+                    this.communityCardsNode.addChild(cardNode);
+                } else {
+                    console.error(`[The Decree] Sprite not found: ${spriteName}`);
+                    cardNode.destroy();
+                }
+            } else {
+                console.error('[The Decree] Poker component not found on prefab');
+                cardNode.destroy();
+            }
+        });
+
+        console.log('[The Decree] Community cards displayed successfully');
+    }
+
+    /**
+     * Update The Decree hands display after cards are played
+     * Call this after playerSelectCards succeeds
+     */
+    private updateTheDecreeHandsDisplay(): void {
+        if (!this._theDecreeMode || !this._handsManager) {
+            return;
+        }
+
+        // Update adapter players with latest hand data
+        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
+
+        for (let i = 0; i < playerIds.length; i++) {
+            const playerId = playerIds[i];
+            const playerState = this._theDecreeMode.getPlayerState(playerId);
+
+            if (playerState && this._gameController) {
+                // Update adapter player's hand
+                const player = this._gameController.players[i];
+                if (player) {
+                    player.setHandCards(playerState.hand);
+                    this._handsManager.updatePlayerHand(i);
+                }
+            }
+        }
+    }
+
+    /**
+     * Cleanup - unregister events
+     */
+    onDestroy(): void {
+        if (this.btnStart) {
+            this.btnStart.node.off(Button.EventType.CLICK, this.onStartButtonClicked, this);
+        }
+    }
 }

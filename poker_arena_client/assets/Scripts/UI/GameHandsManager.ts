@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, Prefab, SpriteFrame } from 'cc';
-import { PlayerHandDisplay, HandDisplayMode } from './PlayerHandDisplay';
+import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
 import { GameController } from '../Core/GameController';
 const { ccclass, property } = _decorator;
 
@@ -124,5 +124,60 @@ export class GameHandsManager extends Component {
         if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
             this._handDisplays[playerIndex].updateDisplay();
         }
+    }
+
+    // ==================== Card Selection (Click Handling) ====================
+
+    /**
+     * Enable card selection for a player
+     * @param playerIndex Player index (usually 0 for main player)
+     * @param callback Callback when selection changes
+     */
+    public enableCardSelection(playerIndex: number, callback: SelectionChangedCallback | null = null): void {
+        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
+            this._handDisplays[playerIndex].enableCardSelection(callback);
+        }
+    }
+
+    /**
+     * Disable card selection for a player
+     * @param playerIndex Player index
+     */
+    public disableCardSelection(playerIndex: number): void {
+        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
+            this._handDisplays[playerIndex].disableCardSelection();
+        }
+    }
+
+    /**
+     * Get selected card indices for a player
+     * @param playerIndex Player index
+     */
+    public getSelectedIndices(playerIndex: number): number[] {
+        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
+            return this._handDisplays[playerIndex].getSelectedIndices();
+        }
+        return [];
+    }
+
+    /**
+     * Clear selection for a player
+     * @param playerIndex Player index
+     */
+    public clearSelection(playerIndex: number): void {
+        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
+            this._handDisplays[playerIndex].clearSelection();
+        }
+    }
+
+    /**
+     * Get player hand display component
+     * @param playerIndex Player index
+     */
+    public getPlayerHandDisplay(playerIndex: number): PlayerHandDisplay | null {
+        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
+            return this._handDisplays[playerIndex];
+        }
+        return null;
     }
 }

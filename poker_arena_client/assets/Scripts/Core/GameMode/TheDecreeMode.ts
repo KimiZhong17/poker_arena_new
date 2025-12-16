@@ -1,6 +1,7 @@
-import { GameModeBase } from "./GameModeBase";
+import { GameModeBase, GameModeConfig } from "./GameModeBase";
 import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from "./TexasHoldEmEvaluator";
 import { CardSuit, CardPoint } from "../../Card/CardConst";
+import { Game } from "../../Game";
 
 /**
  * Player state in The Decree
@@ -41,6 +42,15 @@ enum GameState {
 
 /**
  * The Decree game mode implementation
+ *
+ * 天命之战游戏模式 - 德州扑克风格的4人游戏
+ *
+ * 规则：
+ * - 4名玩家
+ * - 每人初始5张手牌，桌面4张公共牌
+ * - 每轮：庄家宣布出牌数量(1-3张) → 所有玩家选牌 → 比大小
+ * - 计分基于牌型强度，最大牌型玩家额外+1分
+ * - 每轮结束后补牌至5张，输家成为下一轮庄家
  */
 export class TheDecreeMode extends GameModeBase {
     // Game state
@@ -51,17 +61,166 @@ export class TheDecreeMode extends GameModeBase {
     private deck: number[] = [];  // Remaining deck
     private currentRound: RoundState | null = null;
 
-    constructor() {
-        super({
+    constructor(game: Game, config?: GameModeConfig) {
+        // 使用提供的config或默认config
+        const defaultConfig: GameModeConfig = {
             id: "the_decree",
             name: "TheDecree",
-            displayName: "The Decree",
-            minPlayers: 2,
+            displayName: "天命之战",
+            minPlayers: 4,
             maxPlayers: 4,
             deckCount: 1,
             initialHandSize: 5,
             description: "Dealer sets the number, you set the winner."
-        });
+        };
+
+        super(game, config || defaultConfig);
+    }
+
+    // ==================== 生命周期方法（覆盖基类）====================
+
+    /**
+     * 进入游戏模式
+     * 覆盖基类方法以添加游戏初始化逻辑
+     */
+    public onEnter(): void {
+        console.log('[TheDecree] Entering game mode');
+        this.isActive = true;
+
+        // 1. 调整玩家布局
+        this.adjustPlayerLayout();
+
+        // 2. 显示UI
+        this.showUI();
+
+        // 3. 初始化游戏
+        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
+        this.initGame(playerIds);
+
+        // 4. 发牌
+        this.dealCards();
+
+        console.log('[TheDecree] Game initialized and cards dealt');
+    }
+
+    /**
+     * 离开游戏模式
+     */
+    public onExit(): void {
+        console.log('[TheDecree] Exiting game mode');
+        this.isActive = false;
+
+        // 隐藏UI
+        this.hideUI();
+
+        // 清理游戏状态
+        this.state = GameState.SETUP;
+    }
+
+    /**
+     * 清理资源
+     */
+    public cleanup(): void {
+        console.log('[TheDecree] Cleaning up');
+        super.cleanup();
+
+        this.players.clear();
+        this.playerOrder = [];
+        this.communityCards = [];
+        this.deck = [];
+        this.currentRound = null;
+    }
+
+    // ==================== UI 控制接口实现 ====================
+
+    /**
+     * 显示TheDecree相关UI
+     * - 显示ObjectTheDecreeNode（游戏模式特定UI）
+     * - 显示公共牌区域
+     * - 显示TheDecreeUIController控制的按钮
+     */
+    public showUI(): void {
+        console.log('[TheDecree] Showing UI');
+
+        // 显示TheDecree模式的UI容器
+        if (this.game.objectsTheDecreeNode) {
+            this.game.objectsTheDecreeNode.active = true;
+        }
+
+        // 显示公共牌区域
+        if (this.game.communityCardsNode) {
+            this.game.communityCardsNode.active = true;
+        }
+
+        // 隐藏其他游戏模式的UI
+        if (this.game.objectsGuandanNode) {
+            this.game.objectsGuandanNode.active = false;
+        }
+
+        console.log('[TheDecree] UI shown');
+    }
+
+    /**
+     * 隐藏TheDecree相关UI
+     */
+    public hideUI(): void {
+        console.log('[TheDecree] Hiding UI');
+
+        if (this.game.objectsTheDecreeNode) {
+            this.game.objectsTheDecreeNode.active = false;
+        }
+
+        if (this.game.communityCardsNode) {
+            this.game.communityCardsNode.active = false;
+        }
+
+        console.log('[TheDecree] UI hidden');
+    }
+
+    /**
+     * 调整玩家位置布局
+     * TheDecree是4人游戏，使用菱形布局：
+     * - Player 0: 底部（玩家）
+     * - Player 1: 左侧
+     * - Player 2: 顶部
+     * - Player 3: 右侧
+     * - Player 4 (RightHand): 隐藏
+     */
+    public adjustPlayerLayout(): void {
+        console.log('[TheDecree] Adjusting player layout (4 players)');
+
+        const handsManager = this.game.handsManager;
+        if (!handsManager) {
+            console.warn('[TheDecree] HandsManager not found');
+            return;
+        }
+
+        const handsManagerNode = this.game.handsManagerNode;
+        if (!handsManagerNode) {
+            console.warn('[TheDecree] HandsManagerNode not found');
+            return;
+        }
+
+        // TheDecree: 4人菱形布局
+        const positions: Array<{ name: string; x: number; y: number; active: boolean }> = [
+            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
+            { name: 'LeftHand', x: -450, y: 0, active: true },        // Player 1 (Left)
+            { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 2 (Top) - centered
+            { name: 'TopRightHand', x: 450, y: 0, active: true },     // Player 3 (Right)
+            { name: 'RightHand', x: 550, y: 50, active: false }       // Hidden for TheDecree
+        ];
+
+        for (const config of positions) {
+            const handNode = handsManagerNode.getChildByName(config.name);
+            if (handNode) {
+                handNode.active = config.active;
+                if (config.active) {
+                    handNode.setPosition(config.x, config.y, 0);
+                }
+            }
+        }
+
+        console.log('[TheDecree] Player layout adjusted (4 players in diamond formation)');
     }
 
     // ========== Public API ==========
