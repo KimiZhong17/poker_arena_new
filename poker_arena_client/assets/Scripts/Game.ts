@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, instantiate, Vec3, Button } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, instantiate, Vec3 } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { GameHandsManager } from './UI/GameHandsManager';
@@ -9,6 +9,10 @@ import { TheDecreeMode } from './Core/GameMode/TheDecreeMode';
 import { Player } from './Core/Player';
 import { Poker } from './UI/Poker';
 import { GameStage } from './Core/GameStage';
+import { StageManager } from './Core/Stage/StageManager';
+import { ReadyStage } from './Core/Stage/ReadyStage';
+import { PlayingStage } from './Core/Stage/PlayingStage';
+import { EndStage } from './Core/Stage/EndStage';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -30,8 +34,11 @@ export class Game extends Component {
     @property(Node)
     public nodeReadyStage: Node = null!;
 
-    @property(Button)
-    public btnStart: Button = null!;
+    @property(Node)
+    public nodePlayingStage: Node = null!;
+
+    @property(Node)
+    public nodeEndStage: Node = null!;
 
     // Specific UI/Gameplay nodes (optional - can access via children)
     @property(Node)
@@ -40,8 +47,12 @@ export class Game extends Component {
     // @property(Node)
     // public dealerCallPanelNode: Node = null!;
 
+    // Managers
+    public stageManager: StageManager = null!;
     private _gameController: GameController = null!;
     private _handsManager: GameHandsManager = null!;
+
+    // Resources
     private _pokerBundle: AssetManager.Bundle = null;
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
     private _pokerPrefab: Prefab = null!;
@@ -49,10 +60,6 @@ export class Game extends Component {
     // Game configuration from scene transition
     private _gameMode: string = '';
     private _roomId: string = '';
-    private _currentStage: GameStage = GameStage.READY;
-
-    // The Decree mode instance (only used when playing The Decree)
-    private _theDecreeMode: TheDecreeMode | null = null;
 
     public onLoad(): void {
         console.log("Main onLoad");
@@ -127,15 +134,30 @@ export class Game extends Component {
     }
 
     private _enterGame(): void {
-        console.log("Entering game...");
+        console.log("[Game] Entering game - initializing systems...");
+
+        // 1. Initialize PokerFactory (global singleton)
         this.node.addComponent(PokerFactory).init(this._pokerSprites, this._pokerPrefab);
 
-        // Auto-find nodes if not manually assigned
+        // 2. Auto-find nodes if not manually assigned
         this.autoFindNodes();
 
-        // Initialize hands manager - create if not exists
+        // 3. Initialize hands manager (will be used by GameModes)
+        this.initializeHandsManager();
+
+        // 4. Create and setup Stage Manager
+        this.createStageManager();
+
+        // 5. Enter Ready Stage
+        console.log("[Game] All systems initialized, entering Ready stage");
+        this.stageManager.switchToStage(GameStage.READY);
+    }
+
+    /**
+     * Initialize hands manager
+     */
+    private initializeHandsManager(): void {
         if (!this.handsManagerNode) {
-            // Create HandsManager node structure automatically
             this.handsManagerNode = this.createHandsManagerStructure();
         }
 
@@ -144,115 +166,51 @@ export class Game extends Component {
             this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
         }
 
-        // Setup button events
-        this.setupButtonEvents();
-
-        // Enter ready stage (don't start game yet)
-        this.enterReadyStage();
-    }
-
-    // ==================== Stage Management ====================
-
-    /**
-     * Enter Ready Stage
-     */
-    private enterReadyStage(): void {
-        console.log("=== Entering Ready Stage ===");
-        this._currentStage = GameStage.READY;
-
-        // Show ready stage UI
-        if (this.nodeReadyStage) {
-            this.nodeReadyStage.active = true;
-        }
-
-        // Hide game mode specific UI
-        if (this.objectsGuandanNode) {
-            this.objectsGuandanNode.active = false;
-        }
-        if (this.objectsTheDecreeNode) {
-            this.objectsTheDecreeNode.active = false;
-        }
-
-        console.log("[Ready Stage] Waiting for players to ready up...");
+        console.log("[Game] HandsManager initialized");
     }
 
     /**
-     * Enter Playing Stage
+     * Create and register all game stages
      */
-    private enterPlayingStage(): void {
-        console.log("=== Entering Playing Stage ===");
-        this._currentStage = GameStage.PLAYING;
+    private createStageManager(): void {
+        console.log("[Game] Creating Stage Manager...");
 
-        // Hide ready stage UI
-        if (this.nodeReadyStage) {
-            this.nodeReadyStage.active = false;
-        }
+        this.stageManager = new StageManager();
 
-        // Start the actual game
-        this.startGameFlow();
+        // Create and register Ready Stage
+        const readyStage = new ReadyStage(this, this.nodeReadyStage);
+        this.stageManager.registerStage(GameStage.READY, readyStage);
+
+        // Create and register Playing Stage
+        const playingStage = new PlayingStage(this, this.nodePlayingStage, this._gameMode);
+        this.stageManager.registerStage(GameStage.PLAYING, playingStage);
+
+        // Create and register End Stage
+        const endStage = new EndStage(this, this.nodeEndStage);
+        this.stageManager.registerStage(GameStage.END, endStage);
+
+        console.log("[Game] Stage Manager created with 3 stages");
     }
 
     /**
-     * Enter End Stage
+     * Update is called every frame
      */
-    private enterEndStage(): void {
-        console.log("=== Entering End Stage ===");
-        this._currentStage = GameStage.END;
-
-        // Show end game UI
-        // TODO: Add end game UI logic here
-
-        console.log("[End Stage] Game finished!");
-    }
-
-    /**
-     * Get current stage
-     */
-    public getCurrentStage(): GameStage {
-        return this._currentStage;
-    }
-
-    // ==================== Button Event Handlers ====================
-
-    /**
-     * Setup button events
-     */
-    private setupButtonEvents(): void {
-        // Auto-find start button if not assigned
-        if (!this.btnStart && this.nodeReadyStage) {
-            const btnNode = this.nodeReadyStage.getChildByName('btn_start');
-            if (btnNode) {
-                this.btnStart = btnNode.getComponent(Button);
-            }
-        }
-
-        // Register start button click event
-        if (this.btnStart) {
-            this.btnStart.node.on(Button.EventType.CLICK, this.onStartButtonClicked, this);
-            console.log('[Game] Start button registered');
-        } else {
-            console.warn('[Game] Start button not found!');
+    public update(deltaTime: number): void {
+        if (this.stageManager) {
+            this.stageManager.update(deltaTime);
         }
     }
 
     /**
-     * Handle start button clicked
-     * TODO: Add multiplayer ready logic when implementing networking
+     * Clean up when game is destroyed
      */
-    private onStartButtonClicked(): void {
-        console.log('[Game] Start button clicked');
-
-        if (this._currentStage !== GameStage.READY) {
-            console.warn('[Game] Cannot start - not in ready stage');
-            return;
+    onDestroy(): void {
+        if (this.stageManager) {
+            this.stageManager.cleanup();
         }
-
-        // TODO: In multiplayer, check if all players are ready
-        // For now, just start the game immediately
-        this.enterPlayingStage();
     }
 
-    // ==================== Node Finding ====================
+    // ==================== Node Finding Utilities ====================
 
     /**
      * Auto-find nodes by name if not manually assigned
@@ -363,254 +321,7 @@ export class Game extends Component {
         return handsManagerNode;
     }
 
-    /**
-     * Start game flow: Initialize -> Deal -> Play
-     * Routes to different game modes based on configuration
-     */
-    private startGameFlow(): void {
-        console.log("=== Starting Game Flow ===");
-        console.log(`Game Mode: ${this._gameMode}`);
-
-        // Route to appropriate game mode
-        if (this._gameMode === 'the_decree') {
-            this.startTheDecreeFlow();
-        } else {
-            this.startGuandanFlow();
-        }
-    }
-
-    /**
-     * Start The Decree game flow
-     */
-    private startTheDecreeFlow(): void {
-        console.log("=== Starting The Decree Flow ===");
-
-        // Hide 5th player position for The Decree (4 players max)
-        this.setupTheDecreeUI();
-
-        // Create The Decree mode instance
-        this._theDecreeMode = new TheDecreeMode();
-
-        // Initialize with 4 players
-        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
-        this._theDecreeMode.initGame(playerIds);
-
-        // Deal cards
-        this._theDecreeMode.dealCards();
-
-        console.log('[The Decree] Game initialized');
-        console.log('[The Decree] Community Cards:', this._theDecreeMode.getCommunityCards());
-        console.log('[The Decree] Deck Size:', this._theDecreeMode.getDeckSize());
-
-        // Display player hands
-        console.log('\n=== Player Hands ===');
-        for (let i = 0; i < 4; i++) {
-            const playerId = `player_${i}`;
-            const hand = this.getPlayerHand(playerId);
-            console.log(`${playerId}: ${hand.length} cards`);
-        }
-
-        // Initialize and display hands using adapter
-        this.initializeTheDecreeHandsDisplay();
-
-        // Display community cards
-        this.displayCommunityCards();
-
-        // Enable card selection for player 0 after a short delay
-        this.scheduleOnce(() => {
-            console.log('[The Decree] Enabling card selection for player 0');
-            this._handsManager.enableCardSelection(0, (selectedIndices) => {
-                console.log(`[The Decree] Player 0 selected cards: [${selectedIndices.join(', ')}]`);
-            });
-        }, 1);
-    }
-
-    /**
-     * Start Guandan game flow (existing implementation)
-     */
-    private startGuandanFlow(): void {
-        console.log("=== Starting Guandan Flow ===");
-
-        // Ensure all player positions are visible
-        this.setupGuandanUI();
-
-        // Guandan configuration: 5 players
-        const playerCount = 5;
-        const deckCount = 3;
-        const cardsPerPlayer = 31;
-        const levelRank = 15; // Card "2"
-        const playerNames = [
-            'You (Boss)',
-            'Player 2',
-            'Player 3',
-            'Player 4',
-            'Player 5'
-        ];
-
-        console.log('[Game] Initializing Guandan mode');
-
-        // Step 1: Initialize game
-        this._gameController.init({
-            playerCount: playerCount,
-            deckCount: deckCount,
-            cardsPerPlayer: cardsPerPlayer,
-            levelRank: levelRank
-        });
-
-        // Step 2: Create players
-        this._gameController.createPlayers(playerNames);
-
-        // Step 3: Start game (deals cards automatically)
-        this._gameController.startGame();
-
-        // Initialize hands manager with game controller
-        this._handsManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
-
-        // Display all players' initial hands
-        this._handsManager.updateAllHands();
-
-        // At this point, game is in BOSS_COLLECT phase
-        console.log(`Game Phase: BOSS_COLLECT`);
-        console.log(`Remaining cards: ${this._gameController.remainingCards.length}`);
-        console.log(`Boss: ${this._gameController.bossPlayer.name}`);
-
-        // Step 4: Boss collects cards (you can trigger this with a button later)
-        // For now, let's do it automatically after a delay
-        this.scheduleOnce(() => {
-            this.bossCollectCards();
-        }, 2);
-    }
-
-    /**
-     * Setup UI for The Decree (hide 5th player, show community cards area)
-     */
-    private setupTheDecreeUI(): void {
-        console.log('[UI] Setting up The Decree UI');
-
-        // Hide Guandan objects
-        if (this.objectsGuandanNode) {
-            this.objectsGuandanNode.active = false;
-            console.log('[UI] Hidden Guandan objects');
-        }
-
-        // Show The Decree objects
-        if (this.objectsTheDecreeNode) {
-            this.objectsTheDecreeNode.active = true;
-            console.log('[UI] Showing The Decree objects');
-        }
-
-        // Community cards will be shown by TheDecreeCommunityCardsDisplay component
-        if (this.communityCardsNode) {
-            this.communityCardsNode.active = true;
-            console.log('[UI] Showing Community Cards area');
-        }
-
-        // Adjust player positions for The Decree (4 players)
-        this.adjustPlayerPositionsForTheDecree();
-    }
-
-    /**
-     * Adjust player hand positions for The Decree layout (4 players)
-     */
-    private adjustPlayerPositionsForTheDecree(): void {
-        if (!this.handsManagerNode) return;
-
-        // The Decree: 4 players in diamond formation
-        const positions: Array<{ name: string; x: number; y: number; active: boolean }> = [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
-            { name: 'LeftHand', x: -450, y: 0, active: true },        // Player 1 (Left)
-            { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 2 (Top) - centered
-            { name: 'TopRightHand', x: 450, y: 0, active: true },     // Player 3 (Right)
-            { name: 'RightHand', x: 550, y: 50, active: false }       // Hidden for The Decree
-        ];
-
-        for (const config of positions) {
-            const handNode = this.handsManagerNode.getChildByName(config.name);
-            if (handNode) {
-                handNode.active = config.active;
-                if (config.active) {
-                    handNode.setPosition(config.x, config.y, 0);
-                }
-            }
-        }
-
-        console.log('[UI] Adjusted player positions for The Decree (4 players)');
-    }
-
-    /**
-     * Setup UI for Guandan (show all 5 players)
-     */
-    private setupGuandanUI(): void {
-        console.log('[UI] Setting up Guandan UI');
-
-        // Show Guandan objects
-        if (this.objectsGuandanNode) {
-            this.objectsGuandanNode.active = true;
-            console.log('[UI] Showing Guandan objects');
-        }
-
-        // Hide The Decree objects
-        if (this.objectsTheDecreeNode) {
-            this.objectsTheDecreeNode.active = false;
-            console.log('[UI] Hidden The Decree objects');
-        }
-
-        // Hide community cards area (The Decree only)
-        if (this.communityCardsNode) {
-            this.communityCardsNode.active = false;
-            console.log('[UI] Hidden Community Cards area');
-        }
-
-        // Restore player positions for Guandan (5 players)
-        this.adjustPlayerPositionsForGuandan();
-    }
-
-    /**
-     * Adjust player hand positions for Guandan layout (5 players)
-     */
-    private adjustPlayerPositionsForGuandan(): void {
-        if (!this.handsManagerNode) return;
-
-        // Guandan: 5 players layout
-        const positions: Array<{ name: string; x: number; y: number; active: boolean }> = [
-            { name: 'BottomHand', x: 0, y: -280, active: true },          // Player 0 (Main player)
-            { name: 'LeftHand', x: -550, y: 50, active: true },           // Player 1 (Left)
-            { name: 'TopLeftHand', x: -300, y: 280, active: true },       // Player 2 (Top Left)
-            { name: 'TopRightHand', x: 300, y: 280, active: true },       // Player 3 (Top Right)
-            { name: 'RightHand', x: 550, y: 50, active: true }            // Player 4 (Right)
-        ];
-
-        for (const config of positions) {
-            const handNode = this.handsManagerNode.getChildByName(config.name);
-            if (handNode) {
-                handNode.active = config.active;
-                handNode.setPosition(config.x, config.y, 0);
-            }
-        }
-
-        console.log('[UI] Adjusted player positions for Guandan (5 players)');
-    }
-
-    /**
-     * Boss collects cards (can be called by UI button)
-     */
-    public bossCollectCards(): void {
-        console.log("=== Boss Collecting Cards ===");
-
-        this._gameController.bossCollectCards();
-
-        // Update boss's hand display (player 0)
-        this._handsManager.updatePlayerHand(0);
-
-        // Game is now in PLAYING phase
-        console.log(`Game Phase: PLAYING`);
-        console.log(`Boss has ${this._gameController.bossPlayer.handCards.length} cards`);
-        console.log(`Burned cards: ${this._gameController.burnedCards.length}`);
-        console.log(`Current player: ${this._gameController.currentPlayer.name}`);
-
-        // Now you can start playing
-        // Players can call: this._gameController.playCards() or this._gameController.pass()
-    }
+    // ==================== Public Accessors ====================
 
     /**
      * Get game controller (for external access)
@@ -626,7 +337,7 @@ export class Game extends Component {
         return this._handsManager;
     }
 
-    // ==================== The Decree Game Interfaces ====================
+    // ==================== Legacy TheDecree Interfaces (被PlayingStage使用) ====================
 
     /**
      * Get The Decree mode instance
@@ -1200,15 +911,6 @@ export class Game extends Component {
                     this._handsManager.updatePlayerHand(i);
                 }
             }
-        }
-    }
-
-    /**
-     * Cleanup - unregister events
-     */
-    onDestroy(): void {
-        if (this.btnStart) {
-            this.btnStart.node.off(Button.EventType.CLICK, this.onStartButtonClicked, this);
         }
     }
 }
