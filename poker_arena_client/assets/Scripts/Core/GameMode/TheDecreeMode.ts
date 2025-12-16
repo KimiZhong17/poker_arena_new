@@ -271,6 +271,27 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         this.state = GameState.FIRST_DEALER_SELECTION;
+
+        // 显示发牌结果到UI
+        this.displayCards();
+    }
+
+    /**
+     * 显示所有牌（公共牌和玩家手牌）
+     */
+    private displayCards(): void {
+        // 调用 Game 的显示方法
+        // @ts-ignore - accessing private method
+        if (typeof this.game['initializeTheDecreeHandsDisplay'] === 'function') {
+            // @ts-ignore
+            this.game['initializeTheDecreeHandsDisplay']();
+        }
+
+        // @ts-ignore - accessing private method
+        if (typeof this.game['displayCommunityCards'] === 'function') {
+            // @ts-ignore
+            this.game['displayCommunityCards']();
+        }
     }
 
     public isValidPlay(cards: number[], playerId: string): boolean {

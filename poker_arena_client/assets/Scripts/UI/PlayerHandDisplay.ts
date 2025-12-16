@@ -35,6 +35,7 @@ export class PlayerHandDisplay extends Component {
     private _pokerPrefab: Prefab = null!;
 
     private _levelRank: number = 0;
+    private _cardSpacing: number = 50; // Default spacing for Guandan
 
     // Click handling
     private _isInteractive: boolean = false;
@@ -70,8 +71,19 @@ export class PlayerHandDisplay extends Component {
 
         const cards = this._player.handCards;
 
+        // Dynamically adjust card spacing based on hand size
+        // TheDecree: 5 cards -> wider spacing (100)
+        // Guandan: 20-30 cards -> tighter spacing (50)
+        if (cards.length <= 7) {
+            this._cardSpacing = 100; // Wider spacing for few cards (TheDecree)
+        } else if (cards.length <= 15) {
+            this._cardSpacing = 70;  // Medium spacing
+        } else {
+            this._cardSpacing = 50;  // Tight spacing for many cards (Guandan)
+        }
+
         if (this._displayMode === HandDisplayMode.SPREAD) {
-            console.log(`Displaying ${cards.length} cards in SPREAD mode`);
+            console.log(`Displaying ${cards.length} cards in SPREAD mode with spacing: ${this._cardSpacing}`);
             this.displaySpread(cards);
         } else {
             console.log(`Displaying ${cards.length} cards in STACK mode`);
@@ -92,7 +104,7 @@ export class PlayerHandDisplay extends Component {
     private displaySpread(cards: number[]): void {
         const cardCount = cards.length;
         const cardWidth = 140;  // Adjust based on your card sprite size
-        const cardSpacing = 50; // Spacing between card groups
+        const cardSpacing = this._cardSpacing; // Use dynamic spacing
         const verticalOffset = 30; // Vertical offset for stacked cards
         const wildCardGap = 10; // Extra gap before wild cards (red heart level cards)
 

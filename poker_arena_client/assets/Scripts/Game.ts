@@ -52,6 +52,9 @@ export class Game extends Component {
     private _gameController: GameController = null!;
     private _handsManager: GameHandsManager = null!;
 
+    // Legacy game mode instance (used by legacy methods)
+    private _theDecreeMode: TheDecreeMode | null = null;
+
     // Resources
     private _pokerBundle: AssetManager.Bundle = null;
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
@@ -161,12 +164,14 @@ export class Game extends Component {
             this.handsManagerNode = this.createHandsManagerStructure();
         }
 
+        // Get or create component, but DON'T call init yet
+        // (will be called when game mode starts with actual player data)
         this._handsManager = this.handsManagerNode.getComponent(GameHandsManager);
         if (!this._handsManager) {
             this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
         }
 
-        console.log("[Game] HandsManager initialized");
+        console.log("[Game] HandsManager component created (will init with player data later)");
     }
 
     /**
@@ -804,6 +809,7 @@ export class Game extends Component {
                 const player = new Player(i, playerId, i);
                 player.setHandCards(playerState.hand);
                 adapterPlayers.push(player);
+                console.log(`[The Decree] Player ${i} has ${playerState.hand.length} cards`);
             }
         }
 
@@ -811,21 +817,17 @@ export class Game extends Component {
         // @ts-ignore - accessing private property for adapter
         this._gameController['_players'] = adapterPlayers;
 
-        // Initialize hands manager if not already done
+        // Initialize hands manager component
         if (!this._handsManager) {
-            if (!this.handsManagerNode) {
-                this.handsManagerNode = this.createHandsManagerStructure();
-            }
-
-            this._handsManager = this.handsManagerNode.getComponent(GameHandsManager);
-            if (!this._handsManager) {
-                this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
-            }
-
-            this._handsManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
+            console.error('[The Decree] HandsManager component not found! This should not happen.');
+            return;
         }
 
+        console.log('[The Decree] Initializing hands manager with poker resources and player data...');
+        this._handsManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
+
         // Update all hand displays
+        console.log('[The Decree] Updating all hand displays...');
         this._handsManager.updateAllHands();
 
         console.log('[The Decree] Hands display initialized');
@@ -846,6 +848,9 @@ export class Game extends Component {
             return;
         }
 
+        // Clear existing cards first
+        this.communityCardsNode.removeAllChildren();
+
         const communityCards = this._theDecreeMode.getCommunityCards();
         console.log(`[The Decree] Displaying ${communityCards.length} community cards:`, communityCards);
 
@@ -860,26 +865,23 @@ export class Game extends Component {
         // Create card nodes directly
         communityCards.forEach((cardValue, index) => {
             const cardNode = instantiate(this._pokerPrefab);
-            const poker = cardNode.getComponent(Poker);
 
-            if (poker) {
-                // Get the sprite for this card
-                const spriteName = PokerFactory.getCardSpriteName(cardValue);
-                const pokerFront = this._pokerSprites.get(spriteName);
+            // Add Poker component (it's not on the prefab by default)
+            const poker = cardNode.addComponent(Poker);
 
-                if (pokerFront) {
-                    poker.init(cardValue, pokerBack, pokerFront);
-                    poker.showFront();
+            // Get the sprite for this card
+            const spriteName = PokerFactory.getCardSpriteName(cardValue);
+            const pokerFront = this._pokerSprites.get(spriteName);
 
-                    const x = startX + (cardWidth + cardSpacing) * index;
-                    cardNode.setPosition(new Vec3(x, 0, 0));
-                    this.communityCardsNode.addChild(cardNode);
-                } else {
-                    console.error(`[The Decree] Sprite not found: ${spriteName}`);
-                    cardNode.destroy();
-                }
+            if (pokerFront) {
+                poker.init(cardValue, pokerBack, pokerFront);
+                poker.showFront();
+
+                const x = startX + (cardWidth + cardSpacing) * index;
+                cardNode.setPosition(new Vec3(x, 0, 0));
+                this.communityCardsNode.addChild(cardNode);
             } else {
-                console.error('[The Decree] Poker component not found on prefab');
+                console.error(`[The Decree] Sprite not found: ${spriteName}`);
                 cardNode.destroy();
             }
         });

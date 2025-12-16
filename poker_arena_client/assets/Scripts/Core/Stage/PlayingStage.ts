@@ -3,6 +3,8 @@ import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { GameStage } from '../GameStage';
 import { GameModeBase } from '../GameMode/GameModeBase';
+import { TheDecreeMode } from '../GameMode/TheDecreeMode';
+import { GuandanMode } from '../GameMode/GuandanMode';
 
 /**
  * 游玩阶段
@@ -162,13 +164,9 @@ export class PlayingStage extends GameStageBase {
 
     /**
      * 创建The Decree游戏模式
-     * TODO: 需要在重构TheDecreeMode后更新
      */
     private createTheDecreeMode(): GameModeBase | null {
         try {
-            // 导入TheDecreeMode
-            const { TheDecreeMode } = require('../GameMode/TheDecreeMode');
-
             // 创建配置
             const config = {
                 id: 'the_decree',
@@ -183,6 +181,11 @@ export class PlayingStage extends GameStageBase {
 
             // 创建实例（使用新的构造函数签名）
             const mode = new TheDecreeMode(this.game, config);
+
+            // 将模式引用传递给 Game（用于遗留方法）
+            // @ts-ignore - accessing private property
+            this.game['_theDecreeMode'] = mode;
+
             return mode;
         } catch (error) {
             console.error('[PlayingStage] Failed to create TheDecreeMode:', error);
@@ -192,13 +195,9 @@ export class PlayingStage extends GameStageBase {
 
     /**
      * 创建Guandan游戏模式
-     * TODO: 需要实现GuandanMode类
      */
     private createGuandanMode(): GameModeBase | null {
         try {
-            // 导入GuandanMode
-            const { GuandanMode } = require('../GameMode/GuandanMode');
-
             // 创建配置
             const config = {
                 id: 'guandan',
