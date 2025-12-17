@@ -1,16 +1,20 @@
-import { Button, Node } from 'cc';
+import { Button, Label, Node, Color } from 'cc';
 import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { GameStage } from '../GameStage';
+import { RoomManager } from '../Room/RoomManager';
+import { UserManager } from '../../Manager/UserManager';
 
 /**
  * 准备阶段
  *
  * 职责：
  * - 显示准备阶段UI（Node_ReadyStage）
- * - 管理准备按钮（btn_start）
+ * - 管理准备/开始按钮（btn_start）
  * - 跟踪玩家准备状态
- * - 所有玩家准备好后切换到Playing阶段
+ * - 房主显示"开始"按钮，仅当所有人准备好才可点击
+ * - 非房主显示"准备"按钮，点击后变为"已准备"并禁用
+ * - 所有玩家准备好后房主点击开始切换到Playing阶段
  *
  * 使用场景：
  * 1. 游戏刚开始时
@@ -23,6 +27,7 @@ import { GameStage } from '../GameStage';
 export class ReadyStage extends GameStageBase {
     // UI元素
     private btnStart: Button | null = null;
+    private btnLabel: Label | null = null;
 
     // 玩家准备状态
     // key: playerId (e.g., 'player_0', 'player_1')
@@ -30,10 +35,20 @@ export class ReadyStage extends GameStageBase {
     private playerReadyStates: Map<string, boolean> = new Map();
 
     // 配置
-    private totalPlayers: number = 1; // 默认1人（单机测试），后续可以改成多人
+    private totalPlayers: number = 4; // 默认4人（The Decree模式）
+
+    // 管理器引用
+    private roomManager: RoomManager;
+    private userManager: UserManager;
+
+    // 本地玩家信息
+    private localPlayerId: string = '';
+    private isLocalPlayerHost: boolean = false;
 
     constructor(game: Game, rootNode: Node | null = null) {
         super(game, rootNode);
+        this.roomManager = RoomManager.getInstance();
+        this.userManager = UserManager.getInstance();
     }
 
     /**
@@ -43,16 +58,51 @@ export class ReadyStage extends GameStageBase {
         console.log('[ReadyStage] Entering ready stage');
         this.isActive = true;
 
-        // 1. 重置状态
+        // 1. 获取本地玩家信息
+        this.initLocalPlayerInfo();
+
+        // 2. 重置状态
         this.resetReadyStates();
 
-        // 2. 显示UI
+        // 3. 显示UI
         this.showUI();
 
-        // 3. 设置按钮事件
+        // 4. 设置按钮事件
         this.setupButtons();
 
+        // 5. 更新按钮显示
+        this.updateButtonDisplay();
+
         console.log('[ReadyStage] Waiting for players to ready up...');
+        console.log(`[ReadyStage] Local player: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}`);
+    }
+
+    /**
+     * 初始化本地玩家信息
+     */
+    private initLocalPlayerInfo(): void {
+        const currentRoom = this.roomManager.getCurrentRoom();
+        const currentUser = this.userManager.getCurrentUser();
+
+        if (currentUser) {
+            this.localPlayerId = currentUser.id;
+        } else {
+            // 单机模式：默认为 player_0
+            this.localPlayerId = 'player_0';
+        }
+
+        if (currentRoom) {
+            // 多人模式：检查是否是房主
+            const localPlayer = currentRoom.players.find(p => p.id === this.localPlayerId);
+            this.isLocalPlayerHost = localPlayer?.isHost || false;
+            this.totalPlayers = currentRoom.maxPlayers;
+        } else {
+            // 单机模式：默认为房主
+            this.isLocalPlayerHost = true;
+            this.totalPlayers = 4;
+        }
+
+        console.log(`[ReadyStage] Local player initialized: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}, totalPlayers: ${this.totalPlayers}`);
     }
 
     /**
@@ -108,13 +158,25 @@ export class ReadyStage extends GameStageBase {
     private resetReadyStates(): void {
         this.playerReadyStates.clear();
 
-        // 初始化所有玩家为未准备
-        for (let i = 0; i < this.totalPlayers; i++) {
-            const playerId = `player_${i}`;
-            this.playerReadyStates.set(playerId, false);
-        }
+        // 在单机模式下，使用实际的玩家ID
+        const currentRoom = this.roomManager.getCurrentRoom();
 
-        console.log(`[ReadyStage] Reset ready states for ${this.totalPlayers} players`);
+        if (currentRoom) {
+            // 多人模式：使用房间中的玩家ID
+            for (const player of currentRoom.players) {
+                this.playerReadyStates.set(player.id, false);
+            }
+            console.log(`[ReadyStage] Reset ready states for ${currentRoom.players.length} players in room`);
+        } else {
+            // 单机模式：使用本地玩家ID和模拟玩家
+            this.playerReadyStates.set(this.localPlayerId, false);
+
+            // 添加其他模拟玩家（用于单机测试）
+            for (let i = 1; i < this.totalPlayers; i++) {
+                this.playerReadyStates.set(`player_${i}`, false);
+            }
+            console.log(`[ReadyStage] Reset ready states for ${this.totalPlayers} players (single player mode)`);
+        }
     }
 
     /**
@@ -130,11 +192,65 @@ export class ReadyStage extends GameStageBase {
         this.btnStart = this.findStartButton();
 
         if (this.btnStart) {
+            // 查找按钮上的 Label 组件（用于显示文字）
+            this.btnLabel = this.btnStart.node.getComponentInChildren(Label);
+
+            if (!this.btnLabel) {
+                console.warn('[ReadyStage] No label found on start button, text will not be updated');
+            } else {
+                console.log('[ReadyStage] Found label on start button');
+            }
+
             // 注册点击事件
             this.btnStart.node.on(Button.EventType.CLICK, this.onStartButtonClicked, this);
             console.log('[ReadyStage] Start button registered');
         } else {
             console.warn('[ReadyStage] Start button not found');
+        }
+    }
+
+    /**
+     * 更新按钮显示（文字和可用状态）
+     * 只修改文字内容和按钮交互状态，保留原有的样式设置
+     */
+    private updateButtonDisplay(): void {
+        if (!this.btnStart) {
+            return;
+        }
+
+        if (this.isLocalPlayerHost) {
+            // 房主显示"开始"
+            if (this.btnLabel) {
+                this.btnLabel.string = '开 始';
+            }
+
+            // 检查是否所有非房主玩家都已准备
+            const allReady = this.allNonHostPlayersReady();
+
+            // 控制按钮是否可点击
+            this.btnStart.interactable = allReady;
+
+            if (allReady) {
+                console.log('[ReadyStage] All players ready! Host can start game');
+            } else {
+                const readyCount = this.getReadyPlayerCount();
+                console.log(`[ReadyStage] Waiting for players: ${readyCount}/${this.totalPlayers - 1} ready`);
+            }
+        } else {
+            // 非房主显示"准备"或"已准备"
+            const isReady = this.playerReadyStates.get(this.localPlayerId) || false;
+
+            if (isReady) {
+                if (this.btnLabel) {
+                    this.btnLabel.string = '已准备';
+                }
+                this.btnStart.interactable = false; // 禁用按钮
+            } else {
+                if (this.btnLabel) {
+                    this.btnLabel.string = '准 备';
+                }
+                this.btnStart.interactable = true; // 启用按钮
+            }
         }
     }
 
@@ -186,8 +302,18 @@ export class ReadyStage extends GameStageBase {
     private onStartButtonClicked(): void {
         console.log('[ReadyStage] Start button clicked');
 
-        // 标记player_0为已准备
-        this.onPlayerReady('player_0');
+        if (this.isLocalPlayerHost) {
+            // 房主点击"开始游戏"
+            if (this.allNonHostPlayersReady()) {
+                console.log('[ReadyStage] Host starting game...');
+                this.startGame();
+            } else {
+                console.warn('[ReadyStage] Cannot start: not all players are ready');
+            }
+        } else {
+            // 非房主点击"准备"
+            this.onPlayerReady(this.localPlayerId);
+        }
     }
 
     /**
@@ -201,39 +327,73 @@ export class ReadyStage extends GameStageBase {
             return;
         }
 
+        // 房主不需要准备
+        if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
+            console.warn('[ReadyStage] Host does not need to ready up');
+            return;
+        }
+
         // 标记为已准备
         this.playerReadyStates.set(playerId, true);
         console.log(`[ReadyStage] Player ${playerId} is ready`);
 
-        // 检查是否所有玩家都准备好
-        if (this.allPlayersReady()) {
-            console.log('[ReadyStage] All players ready! Starting game...');
-            this.startGame();
-        } else {
-            // 显示等待其他玩家的提示
-            const readyCount = this.getReadyPlayerCount();
-            console.log(`[ReadyStage] ${readyCount}/${this.totalPlayers} players ready`);
+        // 更新按钮显示
+        this.updateButtonDisplay();
+
+        // 如果是多人模式，通知 RoomManager
+        const currentRoom = this.roomManager.getCurrentRoom();
+        if (currentRoom) {
+            this.roomManager.setPlayerReady(playerId, true);
         }
+
+        // 显示进度信息
+        const readyCount = this.getReadyPlayerCount();
+        const totalNonHost = this.totalPlayers - 1;
+        console.log(`[ReadyStage] ${readyCount}/${totalNonHost} players ready`);
     }
 
     /**
-     * 检查是否所有玩家都准备好
+     * 检查是否所有非房主玩家都准备好
      */
-    private allPlayersReady(): boolean {
+    private allNonHostPlayersReady(): boolean {
+        // 在单机模式下，如果是房主，直接返回 true
+        if (this.totalPlayers === 1 || !this.roomManager.getCurrentRoom()) {
+            return true;
+        }
+
+        // 检查所有非房主玩家是否准备
         for (const [playerId, isReady] of this.playerReadyStates) {
+            // 跳过房主
+            if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
+                continue;
+            }
+
             if (!isReady) {
                 return false;
             }
         }
+
         return true;
     }
 
     /**
-     * 获取已准备的玩家数量
+     * 检查是否所有玩家都准备好（旧方法，保留兼容性）
+     */
+    private allPlayersReady(): boolean {
+        return this.allNonHostPlayersReady();
+    }
+
+    /**
+     * 获取已准备的玩家数量（不包括房主）
      */
     private getReadyPlayerCount(): number {
         let count = 0;
         for (const [playerId, isReady] of this.playerReadyStates) {
+            // 跳过房主
+            if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
+                continue;
+            }
+
             if (isReady) {
                 count++;
             }

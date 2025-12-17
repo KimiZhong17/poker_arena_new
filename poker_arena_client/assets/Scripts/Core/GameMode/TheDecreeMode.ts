@@ -43,10 +43,10 @@ enum GameState {
 /**
  * The Decree game mode implementation
  *
- * 天命之战游戏模式 - 德州扑克风格的4人游戏
+ * 未定之数游戏模式 - 德州扑克风格的4人游戏
  *
  * 规则：
- * - 4名玩家
+ * - 2-4名玩家
  * - 每人初始5张手牌，桌面4张公共牌
  * - 每轮：庄家宣布出牌数量(1-3张) → 所有玩家选牌 → 比大小
  * - 计分基于牌型强度，最大牌型玩家额外+1分
@@ -60,6 +60,10 @@ export class TheDecreeMode extends GameModeBase {
     private communityCards: number[] = [];  // 4 community cards
     private deck: number[] = [];  // Remaining deck
     private currentRound: RoundState | null = null;
+
+    // Auto-play timing
+    private stateTimer: number = 0;  // Timer for current state
+    private readonly STATE_DELAY = 2.0;  // Delay between states (seconds)
 
     constructor(game: Game, config?: GameModeConfig) {
         // 使用提供的config或默认config
@@ -129,6 +133,55 @@ export class TheDecreeMode extends GameModeBase {
         this.communityCards = [];
         this.deck = [];
         this.currentRound = null;
+        this.stateTimer = 0;
+    }
+
+    /**
+     * 每帧更新 - 驱动游戏状态机
+     */
+    public update(deltaTime: number): void {
+        if (!this.isActive) return;
+
+        this.stateTimer += deltaTime;
+
+        // Process state machine based on current state
+        switch (this.state) {
+            case GameState.FIRST_DEALER_SELECTION:
+                if (this.stateTimer >= this.STATE_DELAY) {
+                    this.autoSelectFirstDealer();
+                    this.stateTimer = 0;
+                }
+                break;
+
+            case GameState.DEALER_CALL:
+                if (this.stateTimer >= this.STATE_DELAY) {
+                    this.autoDealerCall();
+                    this.stateTimer = 0;
+                }
+                break;
+
+            case GameState.PLAYER_SELECTION:
+                if (this.stateTimer >= this.STATE_DELAY) {
+                    this.autoPlayerSelection();
+                    this.stateTimer = 0;
+                }
+                break;
+
+            case GameState.SCORING:
+                if (this.stateTimer >= this.STATE_DELAY * 1.5) {
+                    this.logRoundResult();
+                    this.state = GameState.REFILL;
+                    this.stateTimer = 0;
+                }
+                break;
+
+            case GameState.REFILL:
+                if (this.stateTimer >= this.STATE_DELAY) {
+                    this.autoRefill();
+                    this.stateTimer = 0;
+                }
+                break;
+        }
     }
 
     // ==================== UI 控制接口实现 ====================
@@ -623,5 +676,201 @@ export class TheDecreeMode extends GameModeBase {
             scores.set(playerId, player.score);
         }
         return scores;
+    }
+
+    // ========== Auto-play Methods ==========
+
+    /**
+     * 自动选择首庄
+     * 每个玩家亮出手牌第一张，最大的成为庄家
+     */
+    private autoSelectFirstDealer(): void {
+        console.log('[TheDecree] Auto-selecting first dealer...');
+
+        const revealedCards = new Map<string, number>();
+        for (const playerId of this.playerOrder) {
+            const player = this.players.get(playerId)!;
+            if (player.hand.length > 0) {
+                revealedCards.set(playerId, player.hand[0]);
+            }
+        }
+
+        const dealerId = this.selectFirstDealer(revealedCards);
+        console.log(`[TheDecree] First dealer selected: ${dealerId}`);
+
+        // Log revealed cards
+        for (const [playerId, card] of revealedCards) {
+            const suit = this.getSuitName(this.getSuit(card));
+            const point = this.getPointName(this.getPoint(card));
+            console.log(`  ${playerId}: ${point}${suit}`);
+        }
+
+        // Start first round
+        this.startNewRound(dealerId);
+    }
+
+    /**
+     * 自动庄家叫牌（AI决策）
+     */
+    private autoDealerCall(): void {
+        if (!this.currentRound) return;
+
+        const dealerId = this.currentRound.dealerId;
+        const dealer = this.players.get(dealerId)!;
+
+        // Simple AI: Random choice weighted by hand size
+        let cardsToPlay: 1 | 2 | 3;
+        const handSize = dealer.hand.length;
+
+        if (handSize >= 3) {
+            // Randomly choose 1, 2, or 3
+            const choice = Math.floor(Math.random() * 3) + 1;
+            cardsToPlay = choice as 1 | 2 | 3;
+        } else if (handSize === 2) {
+            cardsToPlay = Math.random() < 0.5 ? 1 : 2;
+        } else {
+            cardsToPlay = 1;
+        }
+
+        console.log(`[TheDecree] Round ${this.currentRound.roundNumber}: Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
+        this.dealerCall(cardsToPlay);
+    }
+
+    /**
+     * 自动所有玩家选牌（AI决策）
+     */
+    private autoPlayerSelection(): void {
+        if (!this.currentRound) return;
+
+        const cardsToPlay = this.currentRound.cardsToPlay;
+
+        for (const playerId of this.playerOrder) {
+            const player = this.players.get(playerId)!;
+            if (player.hasPlayed) continue;
+
+            // Simple AI: Just play first N cards
+            const selectedCards = player.hand.slice(0, cardsToPlay);
+
+            if (selectedCards.length === cardsToPlay) {
+                this.playCards(selectedCards, playerId);
+
+                const cardNames = selectedCards.map(card => {
+                    const suit = this.getSuitName(this.getSuit(card));
+                    const point = this.getPointName(this.getPoint(card));
+                    return `${point}${suit}`;
+                }).join(', ');
+
+                console.log(`[TheDecree]   ${playerId} plays: [${cardNames}]`);
+            }
+        }
+    }
+
+    /**
+     * 输出回合结果
+     */
+    private logRoundResult(): void {
+        if (!this.currentRound) return;
+
+        console.log(`[TheDecree] Round ${this.currentRound.roundNumber} Result:`);
+        console.log(`  Winner: ${this.currentRound.roundWinnerId}`);
+        console.log(`  Loser: ${this.currentRound.roundLoserId}`);
+        console.log('  Current Scores:');
+
+        for (const [playerId, player] of this.players) {
+            console.log(`    ${playerId}: ${player.score}`);
+        }
+    }
+
+    /**
+     * 自动补牌并开始下一轮
+     */
+    private autoRefill(): void {
+        console.log('[TheDecree] Refilling hands...');
+
+        // Check if game should end
+        if (this.deck.length < this.players.size * 2) {
+            console.log('[TheDecree] Deck running low, game ending soon...');
+        }
+
+        // Refill hands
+        this.refillHands();
+
+        // Check if game is over
+        if (this.isGameOver() || this.deck.length === 0) {
+            this.handleGameOver();
+        } else {
+            console.log(`[TheDecree] Starting round ${this.currentRound?.roundNumber}... (Deck: ${this.deck.length} cards remaining)`);
+        }
+    }
+
+    /**
+     * 处理游戏结束
+     */
+    private handleGameOver(): void {
+        console.log('[TheDecree] ========== GAME OVER ==========');
+        this.state = GameState.GAME_OVER;
+
+        // Find final winner
+        let winnerId = '';
+        let maxScore = -1;
+
+        for (const [playerId, player] of this.players) {
+            console.log(`  ${playerId}: ${player.score} points`);
+            if (player.score > maxScore) {
+                maxScore = player.score;
+                winnerId = playerId;
+            }
+        }
+
+        console.log(`[TheDecree] Final Winner: ${winnerId} with ${maxScore} points!`);
+        console.log('[TheDecree] ====================================');
+
+        // Prepare game result
+        const gameResult = {
+            winnerId,
+            scores: this.getScores(),
+            totalRounds: this.currentRound?.roundNumber || 0
+        };
+
+        // Notify PlayingStage
+        // Access PlayingStage through Game's stageManager
+        const stageManager = this.game.stageManager;
+        if (stageManager) {
+            const playingStage = stageManager.getCurrentStage();
+            if (playingStage && typeof (playingStage as any).onGameFinished === 'function') {
+                (playingStage as any).onGameFinished(gameResult);
+            }
+        }
+    }
+
+    // ========== Helper Methods for Logging ==========
+
+    private getSuitName(suit: CardSuit): string {
+        switch (suit) {
+            case CardSuit.SPADE: return '♠';
+            case CardSuit.HEART: return '♥';
+            case CardSuit.CLUB: return '♣';
+            case CardSuit.DIAMOND: return '♦';
+            default: return '?';
+        }
+    }
+
+    private getPointName(point: CardPoint): string {
+        switch (point) {
+            case CardPoint.P_A: return 'A';
+            case CardPoint.P_2: return '2';
+            case CardPoint.P_3: return '3';
+            case CardPoint.P_4: return '4';
+            case CardPoint.P_5: return '5';
+            case CardPoint.P_6: return '6';
+            case CardPoint.P_7: return '7';
+            case CardPoint.P_8: return '8';
+            case CardPoint.P_9: return '9';
+            case CardPoint.P_10: return '10';
+            case CardPoint.P_J: return 'J';
+            case CardPoint.P_Q: return 'Q';
+            case CardPoint.P_K: return 'K';
+            default: return '?';
+        }
     }
 }
