@@ -1,5 +1,6 @@
 import { HandEvaluator, HandResult } from "../Card/HandEvaluator";
 import { Game } from "../../Game";
+import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
 
 /**
  * Game mode configuration
@@ -110,9 +111,55 @@ export abstract class GameModeBase {
     /**
      * 调整玩家位置布局
      * 不同游戏模式可能有不同的玩家数量和布局
-     * 例如：TheDecree是4人菱形布局，Guandan是5人布局
+     *
+     * 默认实现：使用 PlayerLayoutConfig 提供的标准布局
+     * 子类可以：
+     * 1. 直接使用此默认实现
+     * 2. 调用 applyPlayerLayout() 但传入自定义配置
+     * 3. 完全覆盖以实现自定义逻辑
      */
-    public abstract adjustPlayerLayout(): void;
+    public adjustPlayerLayout(): void {
+        const playerCount = this.config.maxPlayers;
+        console.log(`[${this.config.name}] Adjusting player layout for ${playerCount} players`);
+
+        const positions = PlayerLayoutConfig.getStandardLayout(playerCount);
+        this.applyPlayerLayout(positions);
+
+        const layoutName = PlayerLayoutConfig.getLayoutName(playerCount);
+        console.log(`[${this.config.name}] Player layout adjusted: ${playerCount} players in ${layoutName} formation`);
+    }
+
+    /**
+     * 应用玩家布局配置
+     * 将位置配置应用到实际的节点上
+     *
+     * @param positions 位置配置数组
+     * @protected 子类可以调用此方法来应用自定义配置
+     */
+    protected applyPlayerLayout(positions: Array<{ name: string; x: number; y: number; active: boolean }>): void {
+        const handsManager = this.game.handsManager;
+        if (!handsManager) {
+            console.warn(`[${this.config.name}] HandsManager not found`);
+            return;
+        }
+
+        const handsManagerNode = this.game.playerUIManagerNode;
+        if (!handsManagerNode) {
+            console.warn(`[${this.config.name}] HandsManagerNode not found`);
+            return;
+        }
+
+        // 应用布局配置
+        for (const config of positions) {
+            const handNode = handsManagerNode.getChildByName(config.name);
+            if (handNode) {
+                handNode.active = config.active;
+                if (config.active) {
+                    handNode.setPosition(config.x, config.y, 0);
+                }
+            }
+        }
+    }
 
     // ==================== 游戏逻辑接口 ====================
 

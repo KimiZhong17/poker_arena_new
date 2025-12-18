@@ -2,6 +2,7 @@ import { GameModeBase, GameModeConfig } from "./GameModeBase";
 import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from "./TexasHoldEmEvaluator";
 import { CardSuit, CardPoint } from "../../Card/CardConst";
 import { Game } from "../../Game";
+import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
 
 /**
  * Player state in The Decree
@@ -70,8 +71,8 @@ export class TheDecreeMode extends GameModeBase {
         const defaultConfig: GameModeConfig = {
             id: "the_decree",
             name: "TheDecree",
-            displayName: "天命之战",
-            minPlayers: 4,
+            displayName: "未定之数",
+            minPlayers: 2,
             maxPlayers: 4,
             deckCount: 1,
             initialHandSize: 5,
@@ -232,48 +233,21 @@ export class TheDecreeMode extends GameModeBase {
 
     /**
      * 调整玩家位置布局
-     * TheDecree是4人游戏，使用菱形布局：
-     * - Player 0: 底部（玩家）
-     * - Player 1: 左侧
-     * - Player 2: 顶部
-     * - Player 3: 右侧
-     * - Player 4 (RightHand): 隐藏
+     * TheDecree支持2-4人，使用标准布局配置
      */
     public adjustPlayerLayout(): void {
-        console.log('[TheDecree] Adjusting player layout (4 players)');
+        // 如果已经有玩家，使用实际玩家数量；否则使用配置的最大玩家数
+        const playerCount = this.playerOrder.length || this.config.maxPlayers;
+        console.log(`[TheDecree] Adjusting player layout for ${playerCount} players`);
 
-        const handsManager = this.game.handsManager;
-        if (!handsManager) {
-            console.warn('[TheDecree] HandsManager not found');
-            return;
-        }
+        // 使用 PlayerLayoutConfig 提供的标准布局
+        const positions = PlayerLayoutConfig.getStandardLayout(playerCount);
 
-        const handsManagerNode = this.game.handsManagerNode;
-        if (!handsManagerNode) {
-            console.warn('[TheDecree] HandsManagerNode not found');
-            return;
-        }
+        // 应用布局（使用基类的 protected 方法）
+        this.applyPlayerLayout(positions);
 
-        // TheDecree: 4人菱形布局
-        const positions: Array<{ name: string; x: number; y: number; active: boolean }> = [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
-            { name: 'LeftHand', x: -450, y: 0, active: true },        // Player 1 (Left)
-            { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 2 (Top) - centered
-            { name: 'TopRightHand', x: 450, y: 0, active: true },     // Player 3 (Right)
-            { name: 'RightHand', x: 550, y: 50, active: false }       // Hidden for TheDecree
-        ];
-
-        for (const config of positions) {
-            const handNode = handsManagerNode.getChildByName(config.name);
-            if (handNode) {
-                handNode.active = config.active;
-                if (config.active) {
-                    handNode.setPosition(config.x, config.y, 0);
-                }
-            }
-        }
-
-        console.log('[TheDecree] Player layout adjusted (4 players in diamond formation)');
+        const layoutName = PlayerLayoutConfig.getLayoutName(playerCount);
+        console.log(`[TheDecree] Player layout adjusted: ${playerCount} players in ${layoutName} formation`);
     }
 
     // ========== Public API ==========
@@ -373,15 +347,12 @@ export class TheDecreeMode extends GameModeBase {
 
         const player = this.players.get(playerId)!;
 
-        // Remove cards from hand
+        // Mark cards as played (keep them in hand for display)
         player.playedCards = cards;
         player.hasPlayed = true;
-        cards.forEach(card => {
-            const index = player.hand.indexOf(card);
-            if (index !== -1) {
-                player.hand.splice(index, 1);
-            }
-        });
+
+        // NOTE: Cards are NOT removed from player.hand
+        // They will be displayed with an offset to show they've been played
 
         this.currentRound!.playerPlays.set(playerId, cards);
 
@@ -528,16 +499,16 @@ export class TheDecreeMode extends GameModeBase {
         if (!this.currentRound) return;
 
         const scoreTable: { [key in TexasHandType]: number } = {
-            [TexasHandType.HIGH_CARD]: 0,
-            [TexasHandType.ONE_PAIR]: 1,
-            [TexasHandType.TWO_PAIR]: 2,
-            [TexasHandType.THREE_OF_A_KIND]: 3,
-            [TexasHandType.STRAIGHT]: 4,
-            [TexasHandType.FLUSH]: 5,
-            [TexasHandType.FULL_HOUSE]: 6,
-            [TexasHandType.FOUR_OF_A_KIND]: 7,
-            [TexasHandType.STRAIGHT_FLUSH]: 8,
-            [TexasHandType.ROYAL_FLUSH]: 9
+            [TexasHandType.HIGH_CARD]: 2,
+            [TexasHandType.ONE_PAIR]: 3,
+            [TexasHandType.TWO_PAIR]: 5,
+            [TexasHandType.THREE_OF_A_KIND]: 7,
+            [TexasHandType.STRAIGHT]: 8,
+            [TexasHandType.FLUSH]: 9,
+            [TexasHandType.FULL_HOUSE]: 12,
+            [TexasHandType.FOUR_OF_A_KIND]: 14,
+            [TexasHandType.STRAIGHT_FLUSH]: 18,
+            [TexasHandType.ROYAL_FLUSH]: 25
         };
 
         // Award base scores
@@ -567,6 +538,17 @@ export class TheDecreeMode extends GameModeBase {
             const playerId = this.playerOrder[index];
             const player = this.players.get(playerId)!;
 
+            // First, remove played cards from hand
+            if (player.playedCards.length > 0) {
+                player.playedCards.forEach(card => {
+                    const cardIndex = player.hand.indexOf(card);
+                    if (cardIndex !== -1) {
+                        player.hand.splice(cardIndex, 1);
+                    }
+                });
+            }
+
+            // Then refill to 5 cards
             while (player.hand.length < 5 && this.deck.length > 0) {
                 player.hand.push(this.drawCard());
             }

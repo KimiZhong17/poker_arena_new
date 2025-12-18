@@ -1,5 +1,5 @@
 import { _decorator, Component } from 'cc';
-import { GameHandsManager } from '../UI/GameHandsManager';
+import { PlayerUIManager } from '../UI/PlayerUIManager';
 import { Game } from '../Game';
 const { ccclass, property } = _decorator;
 
@@ -15,7 +15,7 @@ const { ccclass, property } = _decorator;
 export class CardSelectionExample extends Component {
 
     private _game: Game = null!;
-    private _handsManager: GameHandsManager = null!;
+    private _playerUIManager: PlayerUIManager = null!;
 
     start() {
         // Get game instance
@@ -36,9 +36,13 @@ export class CardSelectionExample extends Component {
      * Enable card selection for the main player (player 0)
      */
     private enablePlayerCardSelection(): void {
-        // Get hands manager from game
-        // You need to expose handsManager in Game.ts or get it via another way
-        // For now, assume we have access
+        // Get player UI manager from game
+        this._playerUIManager = this._game.playerUIManager;
+
+        if (!this._playerUIManager) {
+            console.error('PlayerUIManager not found');
+            return;
+        }
 
         console.log('=== Card Selection Example ===');
         console.log('Click/touch cards to select them!');
@@ -46,7 +50,7 @@ export class CardSelectionExample extends Component {
 
         // Enable card selection for player 0 (main player)
         // Pass a callback to handle selection changes
-        this._handsManager.enableCardSelection(0, (selectedIndices: number[]) => {
+        this._playerUIManager.enableCardSelection(0, (selectedIndices: number[]) => {
             console.log(`Selected cards changed: [${selectedIndices.join(', ')}]`);
 
             // You can do something with the selection here

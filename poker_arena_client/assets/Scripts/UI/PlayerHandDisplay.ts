@@ -42,29 +42,37 @@ export class PlayerHandDisplay extends Component {
     private _selectedIndices: Set<number> = new Set();
     private _selectionChangedCallback: SelectionChangedCallback | null = null;
 
+    // Played cards tracking (for TheDecree mode)
+    private _playedCards: number[] = [];  // Cards that have been played this round
+    private _playerIndex: number = 0;     // Player index (0-3) for positioning
+
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
         this._levelRank = levelRank;
+        this._playerIndex = playerIndex;
 
         // If handContainer not set, use current node
         if (!this.handContainer) {
             this.handContainer = this.node;
         }
 
-        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}`);
+        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}`);
     }
 
     /**
      * Update the display with current player's cards
+     * @param playedCards Optional array of cards that have been played (for TheDecree mode)
      */
-    public updateDisplay(): void {
-        console.log(`Updating display for ${this._player.name}, cards: ${this._player.handCards.length}, container: ${this.handContainer ? 'exists' : 'NULL'}`);
+    public updateDisplay(playedCards: number[] = []): void {
+        console.log(`Updating display for ${this._player.name}, cards: ${this._player.handCards.length}, played: ${playedCards.length}, container: ${this.handContainer ? 'exists' : 'NULL'}`);
+
+        this._playedCards = playedCards;
 
         // Clear existing cards
         this.clearCards();
@@ -108,11 +116,18 @@ export class PlayerHandDisplay extends Component {
         const verticalOffset = 30; // Vertical offset for stacked cards
         const wildCardGap = 10; // Extra gap before wild cards (red heart level cards)
 
+        // Sort cards by point value first (ascending order)
+        const sortedCards = [...cards].sort((a, b) => {
+            const pointA = a & 0x0F;
+            const pointB = b & 0x0F;
+            return pointA - pointB;
+        });
+
         // Separate wild cards (Heart level cards) from normal cards
         const normalCards: number[] = [];
         const wildCards: number[] = [];
 
-        for (const card of cards) {
+        for (const card of sortedCards) {  // Use sorted cards
             const suit = card & 0xF0;
             const point = card & 0x0F;
 
@@ -173,15 +188,28 @@ export class PlayerHandDisplay extends Component {
                 const cardNode = this.createCardNode(group[i], true);
 
                 // Position: same x for all cards in group, offset y for stacking
-                const y = i * verticalOffset;
-                cardNode.setPosition(x, y, 0);
+                let y = i * verticalOffset;
+                let finalX = x;
+                let finalY = y;
+
+                // Check if this card is in the played cards list
+                if (this._playedCards.includes(group[i])) {
+                    const offset = this.getPlayedCardOffset();
+                    finalX += offset.x;
+                    finalY += offset.y;
+
+                    // Add visual effect: slightly transparent
+                    cardNode.setScale(0.95, 0.95, 1);
+                }
+
+                cardNode.setPosition(finalX, finalY, 0);
 
                 this.handContainer.addChild(cardNode);
                 this._pokerNodes.push(cardNode);
 
                 // Log first card details
                 if (groupIndex === 0 && i === group.length - 1) {
-                    console.log(`First normal card position: (${x}, ${y})`);
+                    console.log(`First normal card position: (${finalX}, ${finalY})`);
                 }
             }
 
@@ -197,19 +225,52 @@ export class PlayerHandDisplay extends Component {
             for (let i = wildCards.length - 1; i >= 0; i--) {
                 const cardNode = this.createCardNode(wildCards[i], true);
 
-                const y = i * verticalOffset;
-                cardNode.setPosition(wildX, y, 0);
+                let y = i * verticalOffset;
+                let finalX = wildX;
+                let finalY = y;
+
+                // Check if this card is in the played cards list
+                if (this._playedCards.includes(wildCards[i])) {
+                    const offset = this.getPlayedCardOffset();
+                    finalX += offset.x;
+                    finalY += offset.y;
+
+                    // Add visual effect
+                    cardNode.setScale(0.95, 0.95, 1);
+                }
+
+                cardNode.setPosition(finalX, finalY, 0);
 
                 this.handContainer.addChild(cardNode);
                 this._pokerNodes.push(cardNode);
 
                 if (i === wildCards.length - 1) {
-                    console.log(`First wild card position: (${wildX}, ${y})`);
+                    console.log(`First wild card position: (${finalX}, ${finalY})`);
                 }
             }
         }
 
         console.log(`Added ${this._pokerNodes.length} card nodes to container`);
+    }
+
+    /**
+     * Get offset for played cards based on player position
+     * @returns Vec3 offset to apply to played cards
+     */
+    private getPlayedCardOffset(): { x: number; y: number } {
+        // Define offsets based on player index
+        // 0: Bottom (player) - move up
+        // 1: Left - move right
+        // 2: Top - move down
+        // 3: Right - move left
+        const offsets = [
+            { x: 0, y: 40 },      // Player 0 (Bottom): up
+            { x: 80, y: 0 },      // Player 1 (Left): right
+            { x: 0, y: -50 },     // Player 2 (Top): down
+            { x: -80, y: 0 }      // Player 3 (Right): left
+        ];
+
+        return offsets[this._playerIndex] || { x: 0, y: 40 };
     }
 
     /**

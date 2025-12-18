@@ -1,7 +1,7 @@
 import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, instantiate, Vec3 } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
-import { GameHandsManager } from './UI/GameHandsManager';
+import { PlayerUIManager } from './UI/PlayerUIManager';
 import { SceneManager } from './Manager/SceneManager';
 import { GameModeFactory } from './Core/GameMode/GameModeFactory';
 import { GameModeBase } from './Core/GameMode/GameModeBase';
@@ -22,7 +22,7 @@ export class Game extends Component {
     public gameControllerNode: Node = null!;
 
     @property(Node)
-    public handsManagerNode: Node = null!;
+    public playerUIManagerNode: Node = null!;
 
     // Game mode specific containers
     @property(Node)
@@ -43,14 +43,11 @@ export class Game extends Component {
     // Specific UI/Gameplay nodes (optional - can access via children)
     @property(Node)
     public communityCardsNode: Node = null!;
-
-    // @property(Node)
-    // public dealerCallPanelNode: Node = null!;
-
+    
     // Managers
     public stageManager: StageManager = null!;
     private _gameController: GameController = null!;
-    private _handsManager: GameHandsManager = null!;
+    private _playerUIManager: PlayerUIManager = null!
 
     // Legacy game mode instance (used by legacy methods)
     private _theDecreeMode: TheDecreeMode | null = null;
@@ -145,8 +142,8 @@ export class Game extends Component {
         // 2. Auto-find nodes if not manually assigned
         this.autoFindNodes();
 
-        // 3. Initialize hands manager (will be used by GameModes)
-        this.initializeHandsManager();
+        // 3. Initialize player UI manager (will be used by GameModes)
+        this.initializePlayerUIManager();
 
         // 4. Create and setup Stage Manager
         this.createStageManager();
@@ -157,21 +154,21 @@ export class Game extends Component {
     }
 
     /**
-     * Initialize hands manager
+     * Initialize player UI manager
      */
-    private initializeHandsManager(): void {
-        if (!this.handsManagerNode) {
-            this.handsManagerNode = this.createHandsManagerStructure();
+    private initializePlayerUIManager(): void {
+        if (!this.playerUIManagerNode) {
+            this.playerUIManagerNode = this.createHandsManagerStructure();
         }
 
         // Get or create component, but DON'T call init yet
         // (will be called when game mode starts with actual player data)
-        this._handsManager = this.handsManagerNode.getComponent(GameHandsManager);
-        if (!this._handsManager) {
-            this._handsManager = this.handsManagerNode.addComponent(GameHandsManager);
+        this._playerUIManager = this.playerUIManagerNode.getComponent(PlayerUIManager);
+        if (!this._playerUIManager) {
+            this._playerUIManager = this.playerUIManagerNode.addComponent(PlayerUIManager);
         }
 
-        console.log("[Game] HandsManager component created (will init with player data later)");
+        console.log("[Game] PlayerUIManager component created (will init with player data later)");
     }
 
     /**
@@ -275,32 +272,34 @@ export class Game extends Component {
     }
 
     /**
-     * Create hands manager node structure automatically
+     * Create player UI manager node structure automatically
+     * Creates the PlayerUI node (which will host PlayerUIManager component) and hand position nodes
+     *
+     * Note: Node_PlayerUI should be at Canvas root level to be visible across all game stages
+     * (ReadyStage, PlayStage, EndStage all need access to player UI)
      */
     private createHandsManagerStructure(): Node {
-        // Find existing HoleCards - it should be under the Main node (this.node)
-        let holeCards = this.node.getChildByName("HoleCards");
-
-        if (!holeCards) {
-            console.warn("HoleCards not found under Main node, creating new one");
-            holeCards = new Node("HoleCards");
-            this.node.addChild(holeCards);
+        // Try to find existing Node_PlayerUI at Canvas root level
+        const canvasNode = this.node.parent; // Main's parent is Canvas
+        if (canvasNode) {
+            const existingPlayerUI = canvasNode.getChildByName("Node_PlayerUI");
+            if (existingPlayerUI) {
+                console.log("[Game] Found existing Node_PlayerUI at Canvas root level");
+                return existingPlayerUI;
+            }
         }
 
-        console.log("HoleCards found, current sibling index:", holeCards.getSiblingIndex());
-        console.log("HoleCards parent:", holeCards.parent?.name);
-        console.log("HoleCards siblings:", holeCards.parent?.children.map(c => c.name));
+        // If not found, create Node_PlayerUI at Canvas root level
+        const parentNode = canvasNode || this.node;
+        const playerUINode = new Node("Node_PlayerUI");
+        parentNode.addChild(playerUINode);
 
-        // Create HandsManager node
-        const handsManagerNode = new Node("HandsManager");
-        holeCards.addChild(handsManagerNode);
+        console.log(`[Game] Creating Node_PlayerUI at Canvas root level...`);
 
-        console.log("HandsManager added to HoleCards");
-
-        // Make sure HoleCards is the last child of Main (rendered on top)
-        const siblingCount = this.node.children.length;
-        holeCards.setSiblingIndex(siblingCount - 1);
-        console.log("HoleCards moved to index:", holeCards.getSiblingIndex(), "out of", siblingCount);
+        // Make sure PlayerUI is rendered on top
+        const siblingCount = parentNode.children.length;
+        playerUINode.setSiblingIndex(siblingCount - 1);
+        console.log(`[Game] Node_PlayerUI created at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
 
         // Create hand container nodes with positions
         const handNodes = [
@@ -315,15 +314,15 @@ export class Game extends Component {
             const handNode = new Node(config.name);
             handNode.setPosition(config.x, config.y, 0);
 
-            // Create container child node
+            // Create container child node for cards
             const container = new Node("Container");
             handNode.addChild(container);
 
-            handsManagerNode.addChild(handNode);
+            playerUINode.addChild(handNode);
         });
 
-        console.log("HandsManager structure created automatically");
-        return handsManagerNode;
+        console.log("[Game] Node_PlayerUI structure created with 5 hand positions");
+        return playerUINode;
     }
 
     // ==================== Public Accessors ====================
@@ -336,10 +335,10 @@ export class Game extends Component {
     }
 
     /**
-     * Get hands manager (for external access)
+     * Get player UI manager (for external access)
      */
-    public get handsManager(): GameHandsManager {
-        return this._handsManager;
+    public get playerUIManager(): PlayerUIManager {
+        return this._playerUIManager;
     }
 
     // ==================== Legacy TheDecree Interfaces (被PlayingStage使用) ====================
@@ -555,7 +554,7 @@ export class Game extends Component {
             console.log(`[Guandan] Player ${player.name} (${playerIndex}) played ${cards.length} cards`);
 
             // Update hand display
-            this._handsManager.updatePlayerHand(playerIndex);
+            this._playerUIManager.updatePlayerHand(playerIndex);
 
             // Check if player finished
             if (player.isFinished()) {
@@ -818,17 +817,17 @@ export class Game extends Component {
         this._gameController['_players'] = adapterPlayers;
 
         // Initialize hands manager component
-        if (!this._handsManager) {
-            console.error('[The Decree] HandsManager component not found! This should not happen.');
+        if (!this._playerUIManager) {
+            console.error('[The Decree] PlayerUIManager component not found! This should not happen.');
             return;
         }
 
-        console.log('[The Decree] Initializing hands manager with poker resources and player data...');
-        this._handsManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
+        console.log('[The Decree] Initializing player UI manager with poker resources and player data...');
+        this._playerUIManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
 
         // Update all hand displays
         console.log('[The Decree] Updating all hand displays...');
-        this._handsManager.updateAllHands();
+        this._playerUIManager.updateAllHands();
 
         console.log('[The Decree] Hands display initialized');
     }
@@ -894,7 +893,7 @@ export class Game extends Component {
      * Call this after playerSelectCards succeeds
      */
     private updateTheDecreeHandsDisplay(): void {
-        if (!this._theDecreeMode || !this._handsManager) {
+        if (!this._theDecreeMode || !this._playerUIManager) {
             return;
         }
 
@@ -910,7 +909,7 @@ export class Game extends Component {
                 const player = this._gameController.players[i];
                 if (player) {
                     player.setHandCards(playerState.hand);
-                    this._handsManager.updatePlayerHand(i);
+                    this._playerUIManager.updatePlayerHand(i);
                 }
             }
         }
