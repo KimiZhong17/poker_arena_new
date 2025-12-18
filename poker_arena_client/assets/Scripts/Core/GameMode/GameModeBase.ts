@@ -1,6 +1,7 @@
-import { HandEvaluator, HandResult } from "../Card/HandEvaluator";
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
+import { Player } from "../Player";
+import { RoomManager } from "../Room/RoomManager";
 
 /**
  * Game mode configuration
@@ -38,6 +39,10 @@ export abstract class GameModeBase {
     protected game: Game;
     protected config: GameModeConfig;
     protected isActive: boolean = false;
+
+    // UI 用的 Player 对象数组
+    // 所有游戏模式都需要这个来驱动 PlayerUIManager
+    protected uiPlayers: Player[] = [];
 
     constructor(game: Game, config: GameModeConfig) {
         this.game = game;
@@ -108,6 +113,142 @@ export abstract class GameModeBase {
      */
     public abstract hideUI(): void;
 
+    // ==================== UI 玩家管理（所有模式通用）====================
+
+    /**
+     * 从 RoomManager 获取玩家名称
+     * 如果找不到则返回默认名称
+     *
+     * @param playerId 玩家ID
+     * @param defaultName 默认名称（如果在房间中找不到）
+     * @protected
+     */
+    protected getPlayerNameFromRoom(playerId: string, defaultName: string): string {
+        const roomManager = RoomManager.getInstance();
+        const currentRoom = roomManager.getCurrentRoom();
+
+        if (currentRoom) {
+            const roomPlayer = currentRoom.players.find(p => p.id === playerId);
+            if (roomPlayer) {
+                return roomPlayer.name;
+            }
+        }
+
+        return defaultName;
+    }
+
+    /**
+     * 创建 UI 用的 Player 对象
+     * 基于 playerIds 创建 Player 实例，用于驱动 PlayerUIManager
+     * 自动从 RoomManager 获取玩家名称
+     *
+     * @param playerIds 玩家ID数组（例如：['player_0', 'player_1', ...]）
+     * @protected 子类在 initGame() 中调用此方法
+     */
+    protected createUIPlayers(playerIds: string[]): void {
+        this.uiPlayers = [];
+
+        for (let i = 0; i < playerIds.length; i++) {
+            const playerId = playerIds[i];
+            // 从 RoomManager 获取玩家名称，如果找不到则使用默认名称
+            const playerName = this.getPlayerNameFromRoom(playerId, `Player ${i + 1}`);
+            const player = new Player(i, playerName, i);
+            this.uiPlayers.push(player);
+        }
+
+        console.log(`[${this.config.name}] Created ${this.uiPlayers.length} UI players`);
+    }
+
+    /**
+     * 初始化 PlayerUIManager
+     * 将 uiPlayers 设置到 GameController，并初始化 PlayerUIManager
+     *
+     * @protected 子类在 onEnter() 中调用此方法（通常在 dealCards() 之后）
+     */
+    protected initializePlayerUIManager(): void {
+        const playerUIManager = this.game.playerUIManager;
+        const gameController = this.game.gameController;
+
+        if (!playerUIManager) {
+            console.error(`[${this.config.name}] PlayerUIManager not found!`);
+            return;
+        }
+
+        if (!gameController) {
+            console.error(`[${this.config.name}] GameController not found!`);
+            return;
+        }
+
+        // 设置 GameController 的 players（用于 PlayerUIManager）
+        // @ts-ignore - accessing private property
+        gameController['_players'] = this.uiPlayers;
+
+        // 获取 poker 资源（从 Game 获取）
+        // @ts-ignore - accessing private property
+        const pokerSprites = this.game['_pokerSprites'];
+        // @ts-ignore - accessing private property
+        const pokerPrefab = this.game['_pokerPrefab'];
+
+        if (!pokerSprites || !pokerPrefab) {
+            console.error(`[${this.config.name}] Poker resources not loaded!`);
+            return;
+        }
+
+        // 初始化 PlayerUIManager
+        playerUIManager.init(gameController, pokerSprites, pokerPrefab);
+
+        console.log(`[${this.config.name}] PlayerUIManager initialized with ${this.uiPlayers.length} players`);
+    }
+
+    /**
+     * 更新所有玩家的手牌显示
+     * 子类需要在更新玩家手牌数据后调用此方法
+     *
+     * @protected
+     */
+    protected updateAllHandsDisplay(): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            playerUIManager.updateAllHands();
+        }
+    }
+
+    /**
+     * 更新特定玩家的手牌显示
+     *
+     * @param playerIndex 玩家索引
+     * @param playedCards 已打出的牌（可选，用于高亮显示）
+     * @protected
+     */
+    protected updatePlayerHandDisplay(playerIndex: number, playedCards: number[] = []): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            playerUIManager.updatePlayerHand(playerIndex, playedCards);
+        }
+    }
+
+    /**
+     * 获取 UI Player 对象
+     * 供子类访问
+     *
+     * @param index 玩家索引
+     * @protected
+     */
+    protected getUIPlayer(index: number): Player | null {
+        return this.uiPlayers[index] || null;
+    }
+
+    /**
+     * 获取所有 UI Player 对象
+     *
+     * @protected
+     */
+    protected getUIPlayers(): Player[] {
+        return this.uiPlayers;
+    }
+
+    // ==================== 玩家布局 ====================
+
     /**
      * 调整玩家位置布局
      * 不同游戏模式可能有不同的玩家数量和布局
@@ -137,15 +278,9 @@ export abstract class GameModeBase {
      * @protected 子类可以调用此方法来应用自定义配置
      */
     protected applyPlayerLayout(positions: Array<{ name: string; x: number; y: number; active: boolean }>): void {
-        const handsManager = this.game.handsManager;
-        if (!handsManager) {
-            console.warn(`[${this.config.name}] HandsManager not found`);
-            return;
-        }
-
         const handsManagerNode = this.game.playerUIManagerNode;
         if (!handsManagerNode) {
-            console.warn(`[${this.config.name}] HandsManagerNode not found`);
+            console.warn(`[${this.config.name}] PlayerUIManagerNode not found`);
             return;
         }
 

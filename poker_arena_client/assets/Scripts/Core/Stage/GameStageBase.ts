@@ -37,13 +37,18 @@ export abstract class GameStageBase {
 
     /**
      * 离开此阶段时调用
+     * 默认会自动隐藏UI，子类可以覆盖此方法添加额外的清理逻辑
      * 实现此方法时应该：
-     * 1. 隐藏阶段UI
-     * 2. 清理阶段状态
-     * 3. 注销事件监听
-     * 4. 停止阶段逻辑
+     * 1. 清理阶段状态
+     * 2. 注销事件监听
+     * 3. 停止阶段逻辑
+     * 注意：不需要手动调用 hideUI()，会自动调用
      */
-    abstract onExit(): void;
+    public onExit(): void {
+        console.log(`[${this.constructor.name}] Exiting stage`);
+        this.isActive = false;
+        this.hideUI();  // 自动隐藏 UI
+    }
 
     /**
      * 每帧更新（可选实现）

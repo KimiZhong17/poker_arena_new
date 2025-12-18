@@ -79,7 +79,7 @@ export class StageManager {
 
         console.log(`[StageManager] Switching from ${this.currentStageType || 'null'} to ${stageType}`);
 
-        // 退出当前阶段
+        // 退出当前阶段（onExit 会自动调用 hideUI）
         if (this.currentStage) {
             console.log(`[StageManager] Exiting stage: ${this.currentStageType}`);
             this.currentStage.onExit();

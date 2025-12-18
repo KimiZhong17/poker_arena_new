@@ -58,16 +58,15 @@ export class EndStage extends GameStageBase {
      */
     public onExit(): void {
         console.log('[EndStage] Exiting end stage');
-        this.isActive = false;
 
         // 1. 清理按钮事件
         this.cleanupButtons();
 
-        // 2. 隐藏UI
-        this.hideUI();
-
-        // 3. 清理结果数据
+        // 2. 清理结果数据
         this.gameResult = null;
+
+        // 3. 调用基类的 onExit（会自动隐藏UI）
+        super.onExit();
     }
 
     /**

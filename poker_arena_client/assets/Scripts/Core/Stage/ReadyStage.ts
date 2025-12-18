@@ -110,13 +110,12 @@ export class ReadyStage extends GameStageBase {
      */
     public onExit(): void {
         console.log('[ReadyStage] Exiting ready stage');
-        this.isActive = false;
 
         // 1. 清理按钮事件
         this.cleanupButtons();
 
-        // 2. 隐藏UI
-        this.hideUI();
+        // 2. 调用基类的 onExit（会自动隐藏UI）
+        super.onExit();
     }
 
     /**

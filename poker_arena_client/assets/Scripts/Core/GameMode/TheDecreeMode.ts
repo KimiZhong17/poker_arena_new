@@ -3,17 +3,10 @@ import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from "./TexasHol
 import { CardSuit, CardPoint } from "../../Card/CardConst";
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
-
-/**
- * Player state in The Decree
- */
-interface PlayerState {
-    id: string;
-    hand: number[];          // Private cards (5 cards initially)
-    score: number;           // Total score
-    playedCards: number[];   // Cards played this round (1-3 cards)
-    hasPlayed: boolean;      // Whether player has selected cards this round
-}
+import { instantiate, Vec3 } from 'cc';
+import { Poker } from '../../UI/Poker';
+import { PokerFactory } from '../../UI/PokerFactory';
+import { DecreePlayer } from './DecreePlayer';
 
 /**
  * Round state
@@ -56,7 +49,7 @@ enum GameState {
 export class TheDecreeMode extends GameModeBase {
     // Game state
     private state: GameState = GameState.SETUP;
-    private players: Map<string, PlayerState> = new Map();
+    private players: Map<string, DecreePlayer> = new Map();
     private playerOrder: string[] = [];  // Order of players
     private communityCards: number[] = [];  // 4 community cards
     private deck: number[] = [];  // Remaining deck
@@ -263,15 +256,19 @@ export class TheDecreeMode extends GameModeBase {
         this.playerOrder = [...playerIds];
         this.players.clear();
 
-        playerIds.forEach(id => {
-            this.players.set(id, {
-                id,
-                hand: [],
-                score: 0,
-                playedCards: [],
-                hasPlayed: false
-            });
-        });
+        // 创建 DecreePlayer 对象（同时也是 UI 用的 Player）
+        this.uiPlayers = [];
+
+        for (let i = 0; i < playerIds.length; i++) {
+            const playerId = playerIds[i];
+            // 从 RoomManager 获取玩家名称，如果找不到则使用默认名称
+            const playerName = this.getPlayerNameFromRoom(playerId, `Player ${i + 1}`);
+            const player = new DecreePlayer(i, playerName, i);
+            this.players.set(playerId, player);
+            this.uiPlayers.push(player);
+        }
+
+        console.log(`[TheDecree] Created ${this.players.size} DecreePlayer instances`);
 
         this.state = GameState.SETUP;
         this.initializeDeck();
@@ -288,37 +285,92 @@ export class TheDecreeMode extends GameModeBase {
 
         // Deal 5 cards to each player
         for (const player of this.players.values()) {
-            player.hand = [
+            player.setHandCards([
                 this.drawCard(),
                 this.drawCard(),
                 this.drawCard(),
                 this.drawCard(),
                 this.drawCard()
-            ];
+            ]);
         }
 
         this.state = GameState.FIRST_DEALER_SELECTION;
 
-        // 显示发牌结果到UI
+        // 显示发牌结果（不再需要 syncPlayerDataToUI，因为 players 就是 uiPlayers）
         this.displayCards();
     }
 
     /**
      * 显示所有牌（公共牌和玩家手牌）
+     * 注意：现在 players 和 uiPlayers 是同一组对象，不需要同步
      */
     private displayCards(): void {
-        // 调用 Game 的显示方法
-        // @ts-ignore - accessing private method
-        if (typeof this.game['initializeTheDecreeHandsDisplay'] === 'function') {
-            // @ts-ignore
-            this.game['initializeTheDecreeHandsDisplay']();
+        // 初始化 PlayerUIManager（只在第一次调用时初始化）
+        this.initializePlayerUIManager();
+
+        // 更新所有手牌显示
+        this.updateAllHandsDisplay();
+
+        // 显示公共牌
+        this.displayCommunityCards();
+    }
+
+    /**
+     * 显示公共牌
+     */
+    private displayCommunityCards(): void {
+        const communityCardsNode = this.game.communityCardsNode;
+        if (!communityCardsNode) {
+            console.warn('[TheDecree] Community cards node not found');
+            return;
         }
 
-        // @ts-ignore - accessing private method
-        if (typeof this.game['displayCommunityCards'] === 'function') {
-            // @ts-ignore
-            this.game['displayCommunityCards']();
+        // 清除现有牌
+        communityCardsNode.removeAllChildren();
+
+        console.log(`[TheDecree] Displaying ${this.communityCards.length} community cards:`, this.communityCards);
+
+        // 简单的横向布局
+        const cardWidth = 140;
+        const cardSpacing = 20;
+        const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
+        const startX = -totalWidth / 2 + cardWidth / 2;
+
+        // 获取 poker 资源
+        // @ts-ignore - accessing private property
+        const pokerSprites = this.game['_pokerSprites'];
+        // @ts-ignore - accessing private property
+        const pokerPrefab = this.game['_pokerPrefab'];
+
+        if (!pokerSprites || !pokerPrefab) {
+            console.error('[TheDecree] Poker resources not available');
+            return;
         }
+
+        const pokerBack = pokerSprites.get("CardBack3");
+
+        // 创建牌节点
+        this.communityCards.forEach((cardValue, index) => {
+            const cardNode = instantiate(pokerPrefab);
+            const poker = cardNode.addComponent(Poker);
+
+            const spriteName = PokerFactory.getCardSpriteName(cardValue);
+            const pokerFront = pokerSprites.get(spriteName);
+
+            if (pokerFront) {
+                poker.init(cardValue, pokerBack, pokerFront);
+                poker.showFront();
+
+                const x = startX + (cardWidth + cardSpacing) * index;
+                cardNode.setPosition(new Vec3(x, 0, 0));
+                communityCardsNode.addChild(cardNode);
+            } else {
+                console.error(`[TheDecree] Sprite not found: ${spriteName}`);
+                cardNode.destroy();
+            }
+        });
+
+        console.log('[TheDecree] Community cards displayed successfully');
     }
 
     public isValidPlay(cards: number[], playerId: string): boolean {
@@ -337,7 +389,7 @@ export class TheDecreeMode extends GameModeBase {
         if (cards.length !== this.currentRound.cardsToPlay) return false;
 
         // Check if player has these cards
-        return cards.every(card => player.hand.includes(card));
+        return cards.every(card => player.handCards.indexOf(card) !== -1);
     }
 
     public playCards(cards: number[], playerId: string): boolean {
@@ -356,6 +408,12 @@ export class TheDecreeMode extends GameModeBase {
 
         this.currentRound!.playerPlays.set(playerId, cards);
 
+        // 更新显示（不再需要同步，因为 players 就是 uiPlayers）
+        const playerIndex = this.playerOrder.indexOf(playerId);
+        if (playerIndex >= 0) {
+            this.updatePlayerHandDisplay(playerIndex, cards);
+        }
+
         // Check if all players have played
         if (this.allPlayersPlayed()) {
             this.state = GameState.SHOWDOWN;
@@ -368,7 +426,7 @@ export class TheDecreeMode extends GameModeBase {
     public isGameOver(): boolean {
         // Game is over when all players have no cards left
         for (const player of this.players.values()) {
-            if (player.hand.length > 0) {
+            if (player.handCards.length > 0) {
                 return false;
             }
         }
@@ -540,19 +598,22 @@ export class TheDecreeMode extends GameModeBase {
 
             // First, remove played cards from hand
             if (player.playedCards.length > 0) {
-                player.playedCards.forEach(card => {
-                    const cardIndex = player.hand.indexOf(card);
+                player.playedCards.forEach((card: number) => {
+                    const cardIndex = player.handCards.indexOf(card);
                     if (cardIndex !== -1) {
-                        player.hand.splice(cardIndex, 1);
+                        player.handCards.splice(cardIndex, 1);
                     }
                 });
             }
 
             // Then refill to 5 cards
-            while (player.hand.length < 5 && this.deck.length > 0) {
-                player.hand.push(this.drawCard());
+            while (player.handCards.length < 5 && this.deck.length > 0) {
+                player.addCards([this.drawCard()]);
             }
         }
+
+        // 更新所有手牌显示（不再需要同步，因为 players 就是 uiPlayers）
+        this.updateAllHandsDisplay();
 
         // Prepare for next round
         // Loser becomes next dealer
@@ -640,7 +701,7 @@ export class TheDecreeMode extends GameModeBase {
         return [...this.communityCards];
     }
 
-    public getPlayerState(playerId: string): PlayerState | undefined {
+    public getPlayer(playerId: string): DecreePlayer | undefined {
         return this.players.get(playerId);
     }
 
@@ -672,8 +733,8 @@ export class TheDecreeMode extends GameModeBase {
         const revealedCards = new Map<string, number>();
         for (const playerId of this.playerOrder) {
             const player = this.players.get(playerId)!;
-            if (player.hand.length > 0) {
-                revealedCards.set(playerId, player.hand[0]);
+            if (player.handCards.length > 0) {
+                revealedCards.set(playerId, player.handCards[0]);
             }
         }
 
@@ -702,7 +763,7 @@ export class TheDecreeMode extends GameModeBase {
 
         // Simple AI: Random choice weighted by hand size
         let cardsToPlay: 1 | 2 | 3;
-        const handSize = dealer.hand.length;
+        const handSize = dealer.handCards.length;
 
         if (handSize >= 3) {
             // Randomly choose 1, 2, or 3
@@ -731,12 +792,12 @@ export class TheDecreeMode extends GameModeBase {
             if (player.hasPlayed) continue;
 
             // Simple AI: Just play first N cards
-            const selectedCards = player.hand.slice(0, cardsToPlay);
+            const selectedCards = player.handCards.slice(0, cardsToPlay);
 
             if (selectedCards.length === cardsToPlay) {
                 this.playCards(selectedCards, playerId);
 
-                const cardNames = selectedCards.map(card => {
+                const cardNames = selectedCards.map((card: number) => {
                     const suit = this.getSuitName(this.getSuit(card));
                     const point = this.getPointName(this.getPoint(card));
                     return `${point}${suit}`;

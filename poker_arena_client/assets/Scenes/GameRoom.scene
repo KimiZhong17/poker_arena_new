@@ -191,7 +191,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 449.85144644253324,
+    "_orthoHeight": 431.5657620041754,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -529,7 +529,7 @@
     "_string": "开 始",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 100,
+    "_actualFontSize": 70,
     "_fontSize": 70,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -818,7 +818,7 @@
         "__id__": 54
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 56
@@ -1133,7 +1133,7 @@
     "_string": "1",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44.96484375,
+    "_actualFontSize": 30,
     "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1445,7 +1445,7 @@
     "_string": "2",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44.96484375,
+    "_actualFontSize": 30,
     "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1757,7 +1757,7 @@
     "_string": "3",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44.96484375,
+    "_actualFontSize": 30,
     "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -2069,7 +2069,7 @@
     "_string": "出 牌",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 100,
+    "_actualFontSize": 70,
     "_fontSize": 70,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -2377,7 +2377,7 @@
       "__id__": 2
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 58
@@ -2515,17 +2515,17 @@
     "__prefab": null,
     "gameControllerNode": null,
     "playerUIManagerNode": null,
-    "objectsGuandanNode": {
-      "__id__": 54
-    },
-    "objectsTheDecreeNode": {
-      "__id__": 21
-    },
+    "objectsGuandanNode": null,
+    "objectsTheDecreeNode": null,
     "nodeReadyStage": {
       "__id__": 8
     },
-    "nodePlayingStage": null,
-    "nodeEndStage": null,
+    "nodePlayingStage": {
+      "__id__": 20
+    },
+    "nodeEndStage": {
+      "__id__": 57
+    },
     "communityCardsNode": null,
     "_id": "40EnCcv5NA0a9w2zy4FdIR"
   },

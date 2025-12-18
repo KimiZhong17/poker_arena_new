@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, instantiate, Vec3 } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
@@ -6,8 +6,6 @@ import { SceneManager } from './Manager/SceneManager';
 import { GameModeFactory } from './Core/GameMode/GameModeFactory';
 import { GameModeBase } from './Core/GameMode/GameModeBase';
 import { TheDecreeMode } from './Core/GameMode/TheDecreeMode';
-import { Player } from './Core/Player';
-import { Poker } from './UI/Poker';
 import { GameStage } from './Core/GameStage';
 import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
@@ -158,7 +156,7 @@ export class Game extends Component {
      */
     private initializePlayerUIManager(): void {
         if (!this.playerUIManagerNode) {
-            this.playerUIManagerNode = this.createHandsManagerStructure();
+            this.playerUIManagerNode = this.createPlayerUIManager();
         }
 
         // Get or create component, but DON'T call init yet
@@ -278,7 +276,7 @@ export class Game extends Component {
      * Note: Node_PlayerUI should be at Canvas root level to be visible across all game stages
      * (ReadyStage, PlayStage, EndStage all need access to player UI)
      */
-    private createHandsManagerStructure(): Node {
+    private createPlayerUIManager(): Node {
         // Try to find existing Node_PlayerUI at Canvas root level
         const canvasNode = this.node.parent; // Main's parent is Canvas
         if (canvasNode) {
@@ -370,8 +368,8 @@ export class Game extends Component {
             console.error('[The Decree] Game not initialized');
             return [];
         }
-        const playerState = this._theDecreeMode.getPlayerState(playerId);
-        return playerState ? playerState.hand : [];
+        const playerState = this._theDecreeMode.getPlayer(playerId);
+        return playerState ? playerState.handCards : [];
     }
 
     /**
@@ -419,9 +417,9 @@ export class Game extends Component {
         // Convert card indices to actual cards
         const cardMap = new Map<string, number>();
         for (const [playerId, cardIndex] of revealedCards) {
-            const playerState = this._theDecreeMode.getPlayerState(playerId);
-            if (playerState && cardIndex >= 0 && cardIndex < playerState.hand.length) {
-                cardMap.set(playerId, playerState.hand[cardIndex]);
+            const playerState = this._theDecreeMode.getPlayer(playerId);
+            if (playerState && cardIndex >= 0 && cardIndex < playerState.handCards.length) {
+                cardMap.set(playerId, playerState.handCards[cardIndex]);
             }
         }
 
@@ -485,21 +483,18 @@ export class Game extends Component {
             return false;
         }
 
-        const playerState = this._theDecreeMode.getPlayerState(playerId);
+        const playerState = this._theDecreeMode.getPlayer(playerId);
         if (!playerState) {
             console.error(`[The Decree] Player ${playerId} not found`);
             return false;
         }
 
         // Convert indices to actual cards
-        const cards = cardIndices.map(index => playerState.hand[index]).filter(c => c !== undefined);
+        const cards = cardIndices.map(index => playerState.handCards[index]).filter(c => c !== undefined);
 
         const success = this._theDecreeMode.playCards(cards, playerId);
         if (success) {
             console.log(`[The Decree] Player ${playerId} played ${cards.length} cards`);
-
-            // Update hands display
-            this.updateTheDecreeHandsDisplay();
 
             // Check if round is over (all players played)
             const currentRound = this._theDecreeMode.getCurrentRound();
@@ -770,148 +765,9 @@ export class Game extends Component {
     }
 
     // ==================== The Decree Helper Methods ====================
-
-    /**
-     * Initialize hands display for The Decree mode
-     * Creates adapter Player objects from TheDecreeMode PlayerState
-     */
-    private initializeTheDecreeHandsDisplay(): void {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Cannot initialize hands - game not ready');
-            return;
-        }
-
-        console.log('[The Decree] Initializing hands display...');
-
-        // Create temporary GameController for hands manager
-        if (!this._gameController) {
-            if (this.gameControllerNode) {
-                this._gameController = this.gameControllerNode.getComponent(GameController);
-                if (!this._gameController) {
-                    this._gameController = this.gameControllerNode.addComponent(GameController);
-                }
-            } else {
-                this._gameController = this.node.addComponent(GameController);
-            }
-        }
-
-        // Create adapter Player objects from The Decree player states
-        const adapterPlayers: Player[] = [];
-        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
-
-        for (let i = 0; i < playerIds.length; i++) {
-            const playerId = playerIds[i];
-            const playerState = this._theDecreeMode.getPlayerState(playerId);
-
-            if (playerState) {
-                // Create adapter player
-                const player = new Player(i, playerId, i);
-                player.setHandCards(playerState.hand);
-                adapterPlayers.push(player);
-                console.log(`[The Decree] Player ${i} has ${playerState.hand.length} cards`);
-            }
-        }
-
-        // Temporarily set adapter players in game controller
-        // @ts-ignore - accessing private property for adapter
-        this._gameController['_players'] = adapterPlayers;
-
-        // Initialize hands manager component
-        if (!this._playerUIManager) {
-            console.error('[The Decree] PlayerUIManager component not found! This should not happen.');
-            return;
-        }
-
-        console.log('[The Decree] Initializing player UI manager with poker resources and player data...');
-        this._playerUIManager.init(this._gameController, this._pokerSprites, this._pokerPrefab);
-
-        // Update all hand displays
-        console.log('[The Decree] Updating all hand displays...');
-        this._playerUIManager.updateAllHands();
-
-        console.log('[The Decree] Hands display initialized');
-    }
-
-    /**
-     * Display community cards for The Decree mode
-     * Directly creates card nodes under communityCardsNode
-     */
-    private displayCommunityCards(): void {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Cannot display community cards - game not ready');
-            return;
-        }
-
-        if (!this.communityCardsNode) {
-            console.warn('[The Decree] Community cards node not found');
-            return;
-        }
-
-        // Clear existing cards first
-        this.communityCardsNode.removeAllChildren();
-
-        const communityCards = this._theDecreeMode.getCommunityCards();
-        console.log(`[The Decree] Displaying ${communityCards.length} community cards:`, communityCards);
-
-        // Simple layout: 4 cards in a horizontal row
-        const cardWidth = 140;
-        const cardSpacing = 20;
-        const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
-        const startX = -totalWidth / 2 + cardWidth / 2;
-
-        const pokerBack = this._pokerSprites.get("CardBack3");
-
-        // Create card nodes directly
-        communityCards.forEach((cardValue, index) => {
-            const cardNode = instantiate(this._pokerPrefab);
-
-            // Add Poker component (it's not on the prefab by default)
-            const poker = cardNode.addComponent(Poker);
-
-            // Get the sprite for this card
-            const spriteName = PokerFactory.getCardSpriteName(cardValue);
-            const pokerFront = this._pokerSprites.get(spriteName);
-
-            if (pokerFront) {
-                poker.init(cardValue, pokerBack, pokerFront);
-                poker.showFront();
-
-                const x = startX + (cardWidth + cardSpacing) * index;
-                cardNode.setPosition(new Vec3(x, 0, 0));
-                this.communityCardsNode.addChild(cardNode);
-            } else {
-                console.error(`[The Decree] Sprite not found: ${spriteName}`);
-                cardNode.destroy();
-            }
-        });
-
-        console.log('[The Decree] Community cards displayed successfully');
-    }
-
-    /**
-     * Update The Decree hands display after cards are played
-     * Call this after playerSelectCards succeeds
-     */
-    private updateTheDecreeHandsDisplay(): void {
-        if (!this._theDecreeMode || !this._playerUIManager) {
-            return;
-        }
-
-        // Update adapter players with latest hand data
-        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
-
-        for (let i = 0; i < playerIds.length; i++) {
-            const playerId = playerIds[i];
-            const playerState = this._theDecreeMode.getPlayerState(playerId);
-
-            if (playerState && this._gameController) {
-                // Update adapter player's hand
-                const player = this._gameController.players[i];
-                if (player) {
-                    player.setHandCards(playerState.hand);
-                    this._playerUIManager.updatePlayerHand(i);
-                }
-            }
-        }
-    }
+    // NOTE: Most helper methods have been moved to TheDecreeMode itself
+    // Legacy methods removed:
+    // - initializeTheDecreeHandsDisplay() - now handled by TheDecreeMode.displayCards()
+    // - displayCommunityCards() - now handled by TheDecreeMode.displayCommunityCards()
+    // - updateTheDecreeHandsDisplay() - now handled by TheDecreeMode.syncPlayerDataToUI()
 }

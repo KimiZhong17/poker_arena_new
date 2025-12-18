@@ -70,15 +70,14 @@ export class PlayingStage extends GameStageBase {
      */
     public onExit(): void {
         console.log('[PlayingStage] Exiting playing stage');
-        this.isActive = false;
 
         // 1. 退出游戏模式
         if (this.currentGameMode) {
             this.currentGameMode.onExit();
         }
 
-        // 2. 隐藏UI
-        this.hideUI();
+        // 2. 调用基类的 onExit（会自动隐藏UI）
+        super.onExit();
     }
 
     /**
