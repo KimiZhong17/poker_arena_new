@@ -11,66 +11,110 @@ export enum PlayerState {
 }
 
 /**
- * Player data model
+ * Player info in room
+ * 玩家的"身份信息"（登录/房间相关）
+ */
+export interface PlayerInfo {
+    id: string;           // 唯一标识（可以是网络ID）
+    name: string;         // 用户名
+    avatar?: string;      // 头像URL
+    isReady: boolean;     // 是否准备（房间中）
+    isHost: boolean;      // 是否房主
+    seatIndex: number;    // 座位索引
+}
+
+/**
+ * Player - 玩家游戏状态基类
+ * 玩家的"游戏数据"
+ *
+ * 设计原则：
+ * - 只包含数据和数据操作
+ * - 不包含游戏规则逻辑（规则在 GameMode 中）
+ * - 不包含 UI 逻辑（UI 在 PlayerUINode 中）
+ * - 可以被子类扩展（如 TheDecreePlayer）
  */
 export class Player {
-    private _id: number;                    // Player ID
-    private _name: string;                  // Player name
-    private _position: number;              // Position/Seat (0-3 for 4 players)
-    private _handCards: number[];           // Hand cards
-    private _state: PlayerState;            // Current state
-    private _isDealer: boolean;             // Is dealer
+    // 基础信息（来自 PlayerInfo）
+    protected _info: PlayerInfo;
 
-    constructor(id: number, name: string, position: number) {
-        this._id = id;
-        this._name = name;
-        this._position = position;
-        this._handCards = [];
-        this._state = PlayerState.WAITING;
-        this._isDealer = false;
+    // 游戏状态（所有玩法通用）
+    protected _handCards: number[] = [];      // 手牌
+    protected _score: number = 0;             // 分数
+    protected _state: PlayerState = PlayerState.WAITING;
+    protected _isDealer: boolean = false;     // 是否是庄家
+
+    constructor(info: PlayerInfo) {
+        this._info = info;
     }
 
-    // ========== Getters ==========
+    // ==================== 基础信息访问器 ====================
 
-    public get id(): number {
-        return this._id;
+    get id(): string {
+        return this._info.id;
     }
 
-    public get name(): string {
-        return this._name;
+    get name(): string {
+        return this._info.name;
     }
 
-    public get position(): number {
-        return this._position;
+    get avatar(): string | undefined {
+        return this._info.avatar;
     }
 
-    public get handCards(): number[] {
+    get seatIndex(): number {
+        return this._info.seatIndex;
+    }
+
+    get isReady(): boolean {
+        return this._info.isReady;
+    }
+
+    get isHost(): boolean {
+        return this._info.isHost;
+    }
+
+    /**
+     * 获取 PlayerInfo（只读）
+     */
+    get info(): Readonly<PlayerInfo> {
+        return this._info;
+    }
+
+    // ==================== 游戏状态访问器 ====================
+
+    get handCards(): number[] {
         return this._handCards;
     }
 
-    public get state(): PlayerState {
+    get score(): number {
+        return this._score;
+    }
+
+    set score(value: number) {
+        this._score = value;
+    }
+
+    get state(): PlayerState {
         return this._state;
     }
 
-    public get isDealer(): boolean {
-        return this._isDealer;
-    }
-
-    public get cardCount(): number {
-        return this._handCards.length;
-    }
-
-    // ========== Setters ==========
-
-    public set state(value: PlayerState) {
+    set state(value: PlayerState) {
         this._state = value;
     }
 
-    public set isDealer(value: boolean) {
+    get isDealer(): boolean {
+        return this._isDealer;
+    }
+
+    set isDealer(value: boolean) {
         this._isDealer = value;
     }
 
-    // ========== Card operations ==========
+    get cardCount(): number {
+        return this._handCards.length;
+    }
+
+    // ==================== 手牌数据操作（纯数据，无逻辑）====================
 
     /**
      * Set hand cards (usually after dealing)
@@ -135,8 +179,8 @@ export class Player {
             const isJokerA = suitA === 0x40;
             const isJokerB = suitB === 0x40;
 
-            if (isJokerA && !isJokerB) return 1;  // A is joker, B is not -> A goes after B
-            if (!isJokerA && isJokerB) return -1; // B is joker, A is not -> A goes before B
+            if (isJokerA && !isJokerB) return 1;
+            if (!isJokerA && isJokerB) return -1;
 
             // Both are jokers: sort by point (Black Joker 0x01 < Red Joker 0x02)
             if (isJokerA && isJokerB) {
@@ -152,6 +196,24 @@ export class Player {
         });
     }
 
+    // ==================== 分数操作 ====================
+
+    /**
+     * 更新分数（增加或减少）
+     */
+    public updateScore(delta: number): void {
+        this._score += delta;
+    }
+
+    /**
+     * 重置分数
+     */
+    public resetScore(): void {
+        this._score = 0;
+    }
+
+    // ==================== 状态查询 ====================
+
     /**
      * Check if player has finished (no cards left)
      */
@@ -159,21 +221,74 @@ export class Player {
         return this._handCards.length === 0;
     }
 
-    // ========== Utility methods ==========
+    /**
+     * Check if player has cards
+     */
+    public hasCardsInHand(): boolean {
+        return this._handCards.length > 0;
+    }
+
+    // ==================== 重置方法 ====================
 
     /**
      * Reset player state for new game
+     * 重置游戏状态，但保留 PlayerInfo
      */
     public reset(): void {
         this._handCards = [];
+        this._score = 0;
         this._state = PlayerState.WAITING;
         this._isDealer = false;
     }
+
+    // ==================== 调试方法 ====================
 
     /**
      * Get player info as string for debugging
      */
     public toString(): string {
-        return `Player[${this._id}] ${this._name} - Position: ${this._position}, Cards: ${this._handCards.length}, State: ${PlayerState[this._state]}`;
+        return `Player[${this._info.id}] ${this._info.name} - Seat: ${this._info.seatIndex}, Cards: ${this._handCards.length}, Score: ${this._score}, State: ${PlayerState[this._state]}`;
+    }
+}
+
+/**
+ * TheDecreePlayer - TheDecree 模式的玩家
+ * 扩展基类，添加特定玩法的数据
+ */
+export class TheDecreePlayer extends Player {
+    // TheDecree 特有数据
+    private _playedCards: number[] = [];      // 本轮出的牌
+    private _hasPlayed: boolean = false;       // 是否已出牌
+
+    get playedCards(): number[] {
+        return this._playedCards;
+    }
+
+    get hasPlayed(): boolean {
+        return this._hasPlayed;
+    }
+
+    /**
+     * 标记玩家已出牌
+     */
+    public playCards(cards: number[]): void {
+        this._playedCards = [...cards];
+        this._hasPlayed = true;
+    }
+
+    /**
+     * 重置本轮状态
+     */
+    public resetRound(): void {
+        this._playedCards = [];
+        this._hasPlayed = false;
+    }
+
+    /**
+     * 重置游戏（覆盖基类，同时重置 TheDecree 特有状态）
+     */
+    public override reset(): void {
+        super.reset();
+        this.resetRound();
     }
 }

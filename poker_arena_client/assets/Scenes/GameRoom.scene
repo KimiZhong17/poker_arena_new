@@ -795,11 +795,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "bottomHandNode": null,
-    "leftHandNode": null,
-    "rightHandNode": null,
-    "topLeftHandNode": null,
-    "topRightHandNode": null,
     "_id": "0dRQYmJURCvIpRUYrsT2Vu"
   },
   {
@@ -2514,7 +2509,9 @@
     "_enabled": true,
     "__prefab": null,
     "gameControllerNode": null,
-    "playerUIManagerNode": null,
+    "playerUIManagerNode": {
+      "__id__": 17
+    },
     "objectsGuandanNode": null,
     "objectsTheDecreeNode": null,
     "nodeReadyStage": {
@@ -2539,11 +2536,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "bottomHandNode": null,
-    "leftHandNode": null,
-    "rightHandNode": null,
-    "topLeftHandNode": null,
-    "topRightHandNode": null,
     "_id": "6bem3EsV1N4I17wjVi2eRs"
   },
   {

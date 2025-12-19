@@ -9,18 +9,6 @@ export enum RoomState {
 }
 
 /**
- * Player info in room
- */
-export interface PlayerInfo {
-    id: string;
-    name: string;
-    avatar?: string;
-    isReady: boolean;
-    isHost: boolean;
-    seatIndex: number;
-}
-
-/**
  * Room data structure
  */
 export interface RoomData {

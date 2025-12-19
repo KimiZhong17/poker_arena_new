@@ -1,7 +1,7 @@
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
-import { Player } from "../Player";
-import { RoomManager } from "../Room/RoomManager";
+import { Player, PlayerInfo } from "../Player";
+import { PlayerManager } from "../PlayerManager";
 
 /**
  * Game mode configuration
@@ -20,29 +20,21 @@ export interface GameModeConfig {
 /**
  * Base class for all game modes
  *
- * 所有游戏模式（TheDecree、Guandan等）都必须继承此类
+ * 重构后的职责：
+ * - 定义游戏模式的生命周期接口
+ * - 提供 PlayerUIManager 初始化的通用方法
+ * - 子类负责创建和管理 PlayerManager（数据层）
+ * - 通过 Game 访问 PlayerUIManager（UI层）
  *
- * 职责：
- * - 实现游戏规则逻辑
- * - 管理游戏状态
- * - 控制游戏模式相关的UI
- * - 处理玩家操作
- *
- * 生命周期：
- * 1. constructor - 创建时
- * 2. onEnter - 进入此模式时（初始化游戏、显示UI）
- * 3. update - 每帧更新（可选）
- * 4. onExit - 离开此模式时（清理状态、隐藏UI）
- * 5. cleanup - 销毁时（释放资源）
+ * 架构：
+ * GameMode (协调者)
+ * ├── PlayerManager (数据层，子类管理)
+ * └── PlayerUIManager (UI层，从 Game 访问)
  */
 export abstract class GameModeBase {
     protected game: Game;
     protected config: GameModeConfig;
     protected isActive: boolean = false;
-
-    // UI 用的 Player 对象数组
-    // 所有游戏模式都需要这个来驱动 PlayerUIManager
-    protected uiPlayers: Player[] = [];
 
     constructor(game: Game, config: GameModeConfig) {
         this.game = game;
@@ -57,11 +49,11 @@ export abstract class GameModeBase {
 
     /**
      * 进入此游戏模式时调用
-     * 实现此方法时应该：
-     * 1. 初始化游戏状态
-     * 2. 显示UI
-     * 3. 设置玩家布局
-     * 4. 开始游戏流程（如发牌）
+     * 子类应该覆盖此方法并：
+     * 1. 调用 super.onEnter()
+     * 2. 初始化 PlayerManager
+     * 3. 调用 initGame()
+     * 4. 调用 dealCards()
      */
     public onEnter(): void {
         console.log(`[${this.config.name}] Entering game mode`);
@@ -71,10 +63,6 @@ export abstract class GameModeBase {
 
     /**
      * 离开此游戏模式时调用
-     * 实现此方法时应该：
-     * 1. 清理游戏状态
-     * 2. 隐藏UI
-     * 3. 停止游戏流程
      */
     public onExit(): void {
         console.log(`[${this.config.name}] Exiting game mode`);
@@ -84,14 +72,11 @@ export abstract class GameModeBase {
 
     /**
      * 每帧更新（可选实现）
-     * 如果游戏模式需要逐帧更新逻辑，可以覆盖此方法
-     * @param deltaTime 距离上一帧的时间间隔（秒）
      */
     public update?(deltaTime: number): void;
 
     /**
      * 清理资源
-     * 在游戏模式不再使用时调用
      */
     public cleanup(): void {
         console.log(`[${this.config.name}] Cleaning up`);
@@ -102,86 +87,33 @@ export abstract class GameModeBase {
 
     /**
      * 显示游戏模式相关UI
-     * 子类必须实现此方法来显示特定游戏模式的UI元素
-     * 例如：显示特定的按钮、面板、公共牌区域等
+     * 子类必须实现此方法
      */
     public abstract showUI(): void;
 
     /**
      * 隐藏游戏模式相关UI
-     * 子类必须实现此方法来隐藏特定游戏模式的UI元素
+     * 子类必须实现此方法
      */
     public abstract hideUI(): void;
 
-    // ==================== UI 玩家管理（所有模式通用）====================
-
-    /**
-     * 从 RoomManager 获取玩家名称
-     * 如果找不到则返回默认名称
-     *
-     * @param playerId 玩家ID
-     * @param defaultName 默认名称（如果在房间中找不到）
-     * @protected
-     */
-    protected getPlayerNameFromRoom(playerId: string, defaultName: string): string {
-        const roomManager = RoomManager.getInstance();
-        const currentRoom = roomManager.getCurrentRoom();
-
-        if (currentRoom) {
-            const roomPlayer = currentRoom.players.find(p => p.id === playerId);
-            if (roomPlayer) {
-                return roomPlayer.name;
-            }
-        }
-
-        return defaultName;
-    }
-
-    /**
-     * 创建 UI 用的 Player 对象
-     * 基于 playerIds 创建 Player 实例，用于驱动 PlayerUIManager
-     * 自动从 RoomManager 获取玩家名称
-     *
-     * @param playerIds 玩家ID数组（例如：['player_0', 'player_1', ...]）
-     * @protected 子类在 initGame() 中调用此方法
-     */
-    protected createUIPlayers(playerIds: string[]): void {
-        this.uiPlayers = [];
-
-        for (let i = 0; i < playerIds.length; i++) {
-            const playerId = playerIds[i];
-            // 从 RoomManager 获取玩家名称，如果找不到则使用默认名称
-            const playerName = this.getPlayerNameFromRoom(playerId, `Player ${i + 1}`);
-            const player = new Player(i, playerName, i);
-            this.uiPlayers.push(player);
-        }
-
-        console.log(`[${this.config.name}] Created ${this.uiPlayers.length} UI players`);
-    }
+    // ==================== PlayerUIManager 初始化（通用方法）====================
 
     /**
      * 初始化 PlayerUIManager
-     * 将 uiPlayers 设置到 GameController，并初始化 PlayerUIManager
+     * 子类在发牌后调用此方法
      *
-     * @protected 子类在 onEnter() 中调用此方法（通常在 dealCards() 之后）
+     * @param players Player 数组（从 PlayerManager 获取）
+     * @protected
      */
-    protected initializePlayerUIManager(): void {
-        const playerUIManager = this.game.playerUIManager;
-        const gameController = this.game.gameController;
+    protected initializePlayerUIManager(players: Player[]): void {
+        console.log(`[${this.config.name}] initializePlayerUIManager() - Starting...`);
 
+        const playerUIManager = this.game.playerUIManager;
         if (!playerUIManager) {
             console.error(`[${this.config.name}] PlayerUIManager not found!`);
             return;
         }
-
-        if (!gameController) {
-            console.error(`[${this.config.name}] GameController not found!`);
-            return;
-        }
-
-        // 设置 GameController 的 players（用于 PlayerUIManager）
-        // @ts-ignore - accessing private property
-        gameController['_players'] = this.uiPlayers;
 
         // 获取 poker 资源（从 Game 获取）
         // @ts-ignore - accessing private property
@@ -194,16 +126,29 @@ export abstract class GameModeBase {
             return;
         }
 
-        // 初始化 PlayerUIManager
-        playerUIManager.init(gameController, pokerSprites, pokerPrefab);
+        // 获取布局配置
+        const layoutConfig = PlayerLayoutConfig.getStandardLayout(players.length);
 
-        console.log(`[${this.config.name}] PlayerUIManager initialized with ${this.uiPlayers.length} players`);
+        console.log(`[${this.config.name}] Initializing PlayerUIManager with ${players.length} players`);
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+            console.log(`  - Player ${i}: ${player.name}, cards: ${player.handCards.length}`);
+        }
+
+        // 初始化 PlayerUIManager（新接口）
+        playerUIManager.init(
+            players,                      // Player 数组
+            pokerSprites,                 // 扑克牌精灵
+            pokerPrefab,                  // 扑克牌预制体
+            this.getCurrentLevelRank(),   // 关卡等级
+            layoutConfig                  // 布局配置
+        );
+
+        console.log(`[${this.config.name}] PlayerUIManager initialized`);
     }
 
     /**
      * 更新所有玩家的手牌显示
-     * 子类需要在更新玩家手牌数据后调用此方法
-     *
      * @protected
      */
     protected updateAllHandsDisplay(): void {
@@ -227,37 +172,12 @@ export abstract class GameModeBase {
         }
     }
 
-    /**
-     * 获取 UI Player 对象
-     * 供子类访问
-     *
-     * @param index 玩家索引
-     * @protected
-     */
-    protected getUIPlayer(index: number): Player | null {
-        return this.uiPlayers[index] || null;
-    }
-
-    /**
-     * 获取所有 UI Player 对象
-     *
-     * @protected
-     */
-    protected getUIPlayers(): Player[] {
-        return this.uiPlayers;
-    }
-
     // ==================== 玩家布局 ====================
 
     /**
      * 调整玩家位置布局
-     * 不同游戏模式可能有不同的玩家数量和布局
-     *
      * 默认实现：使用 PlayerLayoutConfig 提供的标准布局
-     * 子类可以：
-     * 1. 直接使用此默认实现
-     * 2. 调用 applyPlayerLayout() 但传入自定义配置
-     * 3. 完全覆盖以实现自定义逻辑
+     * 子类可以覆盖以实现自定义布局
      */
     public adjustPlayerLayout(): void {
         const playerCount = this.config.maxPlayers;
@@ -296,36 +216,41 @@ export abstract class GameModeBase {
         }
     }
 
-    // ==================== 游戏逻辑接口 ====================
+    // ==================== 游戏逻辑接口（子类必须实现）====================
 
     /**
      * Initialize game state
+     * 子类实现：创建 PlayerManager，初始化玩家数据
      */
-    public abstract initGame(playerIds: string[]): void;
+    public abstract initGame(playerInfos: PlayerInfo[]): void;
 
     /**
      * Deal cards to players
+     * 子类实现：发牌逻辑，然后调用 initializePlayerUIManager()
      */
     public abstract dealCards(): void;
 
     /**
      * Validate if a play is legal
+     * 子类实现：游戏规则验证
      */
     public abstract isValidPlay(cards: number[], playerId: string): boolean;
 
     /**
      * Process a player's play
+     * 子类实现：处理玩家出牌
      */
     public abstract playCards(cards: number[], playerId: string): boolean;
 
     /**
      * Check if game is over
+     * 子类实现：游戏结束判断
      */
     public abstract isGameOver(): boolean;
 
     /**
      * Get current level rank (for games like Guandan)
-     * 如果游戏模式不需要level rank，可以返回0
+     * 如果游戏模式不需要 level rank，可以返回 0
      */
     public abstract getCurrentLevelRank(): number;
 

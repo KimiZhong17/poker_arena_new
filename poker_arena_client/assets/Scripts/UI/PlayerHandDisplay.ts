@@ -251,6 +251,64 @@ export class PlayerHandDisplay extends Component {
         }
 
         console.log(`Added ${this._pokerNodes.length} card nodes to container`);
+
+        // Debug: Check container properties
+        console.log('🃏🃏🃏 CARD VISIBILITY DEBUG START 🃏🃏🃏');
+        const worldPos = this.handContainer.getWorldPosition();
+        console.log(`📦 Container world position: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)})`);
+        console.log(`📏 Container scale: (${this.handContainer.scale.x}, ${this.handContainer.scale.y})`);
+        console.log(`👁️ Container active: ${this.handContainer.active}, visible: ${this.handContainer.activeInHierarchy}`);
+
+        // Check container UIOpacity
+        const containerOpacity = this.handContainer.getComponent('cc.UIOpacity') as any;
+        console.log(`🎨 Container opacity: ${containerOpacity ? containerOpacity.opacity : 'No UIOpacity component (255 default)'}`);
+
+        // Check container parent hierarchy
+        let parentNode = this.handContainer.parent;
+        let level = 0;
+        console.log(`📂 Container hierarchy:`);
+        while (parentNode && level < 5) {
+            console.log(`  ${'  '.repeat(level)}↑ ${parentNode.name} (active: ${parentNode.active}, layer: ${parentNode.layer})`);
+            parentNode = parentNode.parent;
+            level++;
+        }
+
+        // Debug: Check first card node
+        if (this._pokerNodes.length > 0) {
+            const firstCard = this._pokerNodes[0];
+            const cardWorldPos = firstCard.getWorldPosition();
+            console.log(`🎴 First card world position: (${cardWorldPos.x.toFixed(2)}, ${cardWorldPos.y.toFixed(2)})`);
+            console.log(`📐 First card scale: (${firstCard.scale.x}, ${firstCard.scale.y})`);
+            console.log(`✅ First card active: ${firstCard.active}, visible: ${firstCard.activeInHierarchy}`);
+
+            // Check sprite component
+            const sprite = firstCard.getComponent('cc.Sprite') as any;
+            if (sprite) {
+                console.log(`🖼️ First card Sprite: frame=${sprite.spriteFrame ? 'YES' : 'NO'}, color=${sprite.color.toString()}`);
+                console.log(`   Sprite enabled: ${sprite.enabled}, node: ${sprite.node.name}`);
+            } else {
+                console.log(`❌ First card has NO Sprite component!`);
+            }
+
+            // Check UITransform
+            const uiTransform = firstCard.getComponent('cc.UITransform') as any;
+            if (uiTransform) {
+                console.log(`📏 First card UITransform: width=${uiTransform.width}, height=${uiTransform.height}`);
+            }
+
+            // Check layer and children
+            console.log(`🎭 First card layer: ${firstCard.layer} (container layer: ${this.handContainer.layer})`);
+            console.log(`👶 First card children count: ${firstCard.children.length}`);
+
+            // Check if sprite is in a child node
+            if (firstCard.children.length > 0) {
+                firstCard.children.forEach((child, index) => {
+                    const childSprite = child.getComponent('cc.Sprite') as any;
+                    console.log(`   Child ${index}: ${child.name}, layer: ${child.layer}, hasSprite: ${childSprite ? 'YES' : 'NO'}`);
+                });
+            }
+        }
+        console.log('🃏🃏🃏 CARD VISIBILITY DEBUG END 🃏🃏🃏');
     }
 
     /**
@@ -304,6 +362,13 @@ export class PlayerHandDisplay extends Component {
         const pokerNode = instantiate(this._pokerPrefab);
         const pokerCtrl = pokerNode.addComponent(Poker);
 
+        // Force scale to 1 (override prefab scale)
+        pokerNode.setScale(1, 1, 1);
+
+        // CRITICAL: Set the same layer as container for proper rendering
+        // Must set layer for node AND all children recursively
+        this.setNodeLayerRecursive(pokerNode, this.handContainer.layer);
+
         const pokerBack = this._pokerSprites.get("CardBack3");
 
         if (showFront) {
@@ -329,6 +394,16 @@ export class PlayerHandDisplay extends Component {
         this._pokerComponents.push(pokerCtrl);
 
         return pokerNode;
+    }
+
+    /**
+     * Recursively set layer for node and all its children
+     */
+    private setNodeLayerRecursive(node: Node, layer: number): void {
+        node.layer = layer;
+        node.children.forEach(child => {
+            this.setNodeLayerRecursive(child, layer);
+        });
     }
 
     /**

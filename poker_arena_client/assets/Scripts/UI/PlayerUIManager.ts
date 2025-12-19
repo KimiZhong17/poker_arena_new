@@ -1,391 +1,296 @@
-import { _decorator, Component, Node, Prefab, SpriteFrame, Label, Sprite } from 'cc';
-import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
-import { GameController } from '../Core/GameController';
-const { ccclass, property } = _decorator;
+import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
+import { PlayerUINode } from './PlayerUINode';
+import { Player } from '../Core/Player';
+import { SelectionChangedCallback } from './PlayerHandDisplay';
+import { PlayerPosition } from '../Core/GameMode/PlayerLayoutConfig';
+
+const { ccclass } = _decorator;
 
 /**
- * PlayerUIManager - 统一管理所有玩家的UI
+ * PlayerUIManager - 管理所有玩家的UI节点
  *
- * 核心功能：
- * - 手牌显示 (PlayerHandDisplay)
- * - 玩家信息 (头像、名字、分数)
- * - Dealer 标识
- * - 倒计时显示（可选）
+ * 重构后的职责：
+ * - 管理 PlayerUINode 数组（单一数组，简化管理）
+ * - 提供批量操作接口（更新所有玩家、显示庄家等）
+ * - 负责创建和初始化 PlayerUINode
+ * - 应用玩家布局配置
  *
- * 节点结构（每个手牌节点下）：
- * - BottomHand/LeftHand/TopLeftHand/TopRightHand/RightHand
- *   ├── Cards (手牌容器)
- *   ├── PlayerInfo (玩家信息容器)
- *   │   ├── NameLabel
- *   │   ├── ScoreLabel
- *   │   └── Avatar (optional)
- *   └── DealerIndicator (Dealer标识)
+ * 设计理念：
+ * - 从管理多个数组 → 管理单一 PlayerUINode 数组
+ * - UI层管理器，与数据层（PlayerManager）分离
+ * - 通过 GameMode 协调数据和UI
  */
 @ccclass('PlayerUIManager')
 export class PlayerUIManager extends Component {
+    // ===== 玩家UI节点数组（核心）=====
+    private _playerUINodes: PlayerUINode[] = [];
 
-    @property(Node)
-    public bottomHandNode: Node = null!;  // Main player (you)
-
-    @property(Node)
-    public leftHandNode: Node = null!;    // Left player
-
-    @property(Node)
-    public rightHandNode: Node = null!;   // Right player
-
-    @property(Node)
-    public topLeftHandNode: Node = null!;  // Top left player
-
-    @property(Node)
-    public topRightHandNode: Node = null!; // Top right player
-
-    // Hand displays
-    private _handDisplays: PlayerHandDisplay[] = [];
-    private _gameController: GameController = null!;
+    // ===== 资源引用 =====
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
     private _pokerPrefab: Prefab = null!;
 
-    // Player info UI nodes
-    private _playerInfoNodes: Node[] = [];
-    private _nameLabels: Label[] = [];
-    private _scoreLabels: Label[] = [];
-    private _avatarSprites: Sprite[] = [];
-
-    // Dealer indicators
-    private _dealerIndicators: Node[] = [];
+    // ===== 配置 =====
+    private _levelRank: number = 0;
+    private _initialized: boolean = false;
 
     /**
-     * Initialize the PlayerUIManager
+     * 初始化 PlayerUIManager
+     * @param players 玩家数据数组
+     * @param pokerSprites 扑克牌精灵资源
+     * @param pokerPrefab 扑克牌预制体
+     * @param levelRank 当前关卡等级
+     * @param layoutConfig 玩家布局配置
      */
-    public init(gameController: GameController, pokerSprites: Map<string, SpriteFrame>, pokerPrefab: Prefab): void {
-        this._gameController = gameController;
+    public init(
+        players: Player[],
+        pokerSprites: Map<string, SpriteFrame>,
+        pokerPrefab: Prefab,
+        levelRank: number = 0,
+        layoutConfig: PlayerPosition[]
+    ): void {
+        if (this._initialized) {
+            console.warn('[PlayerUIManager] Already initialized! Skipping re-initialization.');
+            return;
+        }
+
+        console.log('[PlayerUIManager] Initializing...');
+        console.log(`[PlayerUIManager] Players: ${players.length}, Layout configs: ${layoutConfig.length}`);
+
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
+        this._levelRank = levelRank;
 
-        this.setupHandDisplays();
-        this.setupPlayerUINodes();
+        // 创建 PlayerUINode 节点
+        this.createPlayerUINodes(players, layoutConfig);
+
+        this._initialized = true;
+        console.log(`[PlayerUIManager] Initialized with ${this._playerUINodes.length} players`);
     }
 
     /**
-     * Setup hand displays for all players
+     * 创建玩家UI节点
      */
-    private setupHandDisplays(): void {
-        const players = this._gameController.players;
-
-        // Auto-find hand nodes if not assigned
-        if (!this.bottomHandNode) {
-            this.bottomHandNode = this.node.getChildByName("BottomHand")!;
-        }
-        if (!this.leftHandNode) {
-            this.leftHandNode = this.node.getChildByName("LeftHand")!;
-        }
-        if (!this.topLeftHandNode) {
-            this.topLeftHandNode = this.node.getChildByName("TopLeftHand")!;
-        }
-        if (!this.topRightHandNode) {
-            this.topRightHandNode = this.node.getChildByName("TopRightHand")!;
-        }
-        if (!this.rightHandNode) {
-            this.rightHandNode = this.node.getChildByName("RightHand")!;
-        }
-
-        // Map players to display positions
-        const displayNodes = [
-            this.bottomHandNode,      // Player 0 (You)
-            this.leftHandNode,        // Player 1
-            this.topLeftHandNode,     // Player 2
-            this.topRightHandNode,    // Player 3
-            this.rightHandNode        // Player 4
-        ];
+    private createPlayerUINodes(players: Player[], layoutConfig: PlayerPosition[]): void {
+        this._playerUINodes = [];
 
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
-            const displayNode = displayNodes[i];
+            const config = layoutConfig[i];
 
-            if (!displayNode) {
-                console.warn(`[PlayerUIManager] Display node not assigned for player ${i}`);
+            if (!config) {
+                console.error(`[PlayerUIManager] No layout config for player ${i}`);
                 continue;
             }
 
-            // Get or create container for cards
-            let container = displayNode.getChildByName("Cards");
-            if (!container) {
-                container = displayNode.getChildByName("Container");
-                if (!container) {
-                    container = displayNode;
-                }
+            console.log(`[PlayerUIManager] Creating UI node for player ${i} (${player.name}) at (${config.x}, ${config.y})`);
+
+            // 查找或创建节点
+            let playerNode = this.node.getChildByName(config.name);
+            if (!playerNode) {
+                playerNode = new Node(config.name);
+                playerNode.addComponent(UITransform);
+                playerNode.layer = this.node.layer;
+                this.node.addChild(playerNode);
+                console.log(`[PlayerUIManager] Created new node: ${config.name}`);
             }
 
-            // Main player shows spread cards, others show stack
-            const displayMode = (i === 0) ? HandDisplayMode.SPREAD : HandDisplayMode.STACK;
+            // 应用布局配置
+            playerNode.setPosition(config.x, config.y, 0);
+            playerNode.active = config.active;
 
-            const handDisplay = container.addComponent(PlayerHandDisplay);
-            handDisplay.handContainer = container;
-            const levelRank = this._gameController.config?.levelRank || 0;
-            handDisplay.init(player, displayMode, this._pokerSprites, this._pokerPrefab, levelRank, i);
+            // 添加或获取 PlayerUINode 组件
+            let playerUINode = playerNode.getComponent(PlayerUINode);
+            if (!playerUINode) {
+                playerUINode = playerNode.addComponent(PlayerUINode);
+            }
 
-            this._handDisplays.push(handDisplay);
+            // 初始化 PlayerUINode
+            playerUINode.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank);
+
+            this._playerUINodes.push(playerUINode);
         }
 
-        console.log(`[PlayerUIManager] Setup ${this._handDisplays.length} hand displays`);
+        console.log(`[PlayerUIManager] Created ${this._playerUINodes.length} PlayerUINode components`);
     }
 
+    // ===== 批量操作接口 =====
     /**
-     * Setup player UI nodes (name, score, avatar, dealer indicator)
-     */
-    private setupPlayerUINodes(): void {
-        const displayNodes = [
-            this.bottomHandNode,
-            this.leftHandNode,
-            this.topLeftHandNode,
-            this.topRightHandNode,
-            this.rightHandNode
-        ];
-
-        for (let i = 0; i < displayNodes.length; i++) {
-            const handNode = displayNodes[i];
-            if (!handNode) continue;
-
-            // Find PlayerInfo container
-            const playerInfo = handNode.getChildByName("PlayerInfo");
-            if (playerInfo) {
-                this._playerInfoNodes[i] = playerInfo;
-
-                // Find child components
-                const nameLabel = playerInfo.getChildByName("NameLabel")?.getComponent(Label);
-                const scoreLabel = playerInfo.getChildByName("ScoreLabel")?.getComponent(Label);
-                const avatar = playerInfo.getChildByName("Avatar")?.getComponent(Sprite);
-
-                if (nameLabel) this._nameLabels[i] = nameLabel;
-                if (scoreLabel) this._scoreLabels[i] = scoreLabel;
-                if (avatar) this._avatarSprites[i] = avatar;
-            }
-
-            // Find DealerIndicator
-            const dealerIndicator = handNode.getChildByName("DealerIndicator");
-            if (dealerIndicator) {
-                this._dealerIndicators[i] = dealerIndicator;
-                dealerIndicator.active = false; // Hide by default
-            }
-        }
-
-        console.log(`[PlayerUIManager] Setup UI nodes for ${this._playerInfoNodes.length} players`);
-    }
-
-    // ==================== Hand Display Methods ====================
-
-    /**
-     * Update all hand displays
+     * 更新所有玩家手牌显示
      */
     public updateAllHands(): void {
-        this._handDisplays.forEach(display => {
-            display.updateDisplay();
+        console.log('[PlayerUIManager] Updating all hands...');
+        this._playerUINodes.forEach(node => {
+            node.updateHandDisplay();
         });
     }
 
     /**
-     * Update a specific player's hand
+     * 更新指定玩家手牌
      */
     public updatePlayerHand(playerIndex: number, playedCards: number[] = []): void {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            this._handDisplays[playerIndex].updateDisplay(playedCards);
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.updateHandDisplay(playedCards);
+        } else {
+            console.warn(`[PlayerUIManager] Player ${playerIndex} not found for hand update`);
         }
     }
 
     /**
-     * Get player hand display component
+     * 更新所有玩家信息
      */
-    public getPlayerHandDisplay(playerIndex: number): PlayerHandDisplay | null {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            return this._handDisplays[playerIndex];
-        }
-        return null;
+    public updateAllPlayerInfo(): void {
+        this._playerUINodes.forEach(node => node.updatePlayerInfo());
     }
 
-    // ==================== Card Selection ====================
-
     /**
-     * Enable card selection for a player
+     * 更新指定玩家信息
      */
-    public enableCardSelection(playerIndex: number, callback: SelectionChangedCallback | null = null): void {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            this._handDisplays[playerIndex].enableCardSelection(callback);
+    public updatePlayerInfo(playerIndex: number): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.updatePlayerInfo();
         }
     }
 
     /**
-     * Disable card selection for a player
-     */
-    public disableCardSelection(playerIndex: number): void {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            this._handDisplays[playerIndex].disableCardSelection();
-        }
-    }
-
-    /**
-     * Get selected card indices for a player
-     */
-    public getSelectedIndices(playerIndex: number): number[] {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            return this._handDisplays[playerIndex].getSelectedIndices();
-        }
-        return [];
-    }
-
-    /**
-     * Clear selection for a player
-     */
-    public clearSelection(playerIndex: number): void {
-        if (playerIndex >= 0 && playerIndex < this._handDisplays.length) {
-            this._handDisplays[playerIndex].clearSelection();
-        }
-    }
-
-    // ==================== Player Info Management ====================
-
-    /**
-     * Set player info (name, score)
-     * @param playerIndex Player index
-     * @param name Player name
-     * @param score Player score (default: 0)
-     */
-    public setPlayerInfo(playerIndex: number, name: string, score: number = 0): void {
-        if (playerIndex < 0 || playerIndex >= this._nameLabels.length) return;
-
-        // Update name
-        if (this._nameLabels[playerIndex]) {
-            this._nameLabels[playerIndex].string = name;
-        }
-
-        // Update score
-        if (this._scoreLabels[playerIndex]) {
-            this._scoreLabels[playerIndex].string = `分数: ${score}`;
-        }
-
-        console.log(`[PlayerUIManager] Set player info for index ${playerIndex}: ${name}, score: ${score}`);
-    }
-
-    /**
-     * Update player score
+     * 更新指定玩家分数
      */
     public updatePlayerScore(playerIndex: number, score: number): void {
-        if (playerIndex < 0 || playerIndex >= this._scoreLabels.length) return;
-
-        if (this._scoreLabels[playerIndex]) {
-            this._scoreLabels[playerIndex].string = `分数: ${score}`;
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.updateScore(score);
         }
     }
 
     /**
-     * Batch update all player scores
+     * 批量更新所有玩家分数
      */
     public updateAllScores(scores: number[]): void {
-        for (let i = 0; i < scores.length && i < this._scoreLabels.length; i++) {
+        for (let i = 0; i < scores.length && i < this._playerUINodes.length; i++) {
             this.updatePlayerScore(i, scores[i]);
         }
     }
 
-    // ==================== Dealer Indicator Management ====================
-
     /**
-     * Show dealer indicator for a specific player
+     * 显示庄家标识
      */
     public showDealer(dealerIndex: number): void {
-        // Hide all dealers first
-        this.hideAllDealers();
+        // 先隐藏所有
+        this._playerUINodes.forEach(node => node.hideDealerIndicator());
 
-        // Show the specified dealer
-        if (dealerIndex >= 0 && dealerIndex < this._dealerIndicators.length) {
-            const indicator = this._dealerIndicators[dealerIndex];
-            if (indicator) {
-                indicator.active = true;
-                console.log(`[PlayerUIManager] Showing dealer for player ${dealerIndex}`);
-            }
+        // 显示指定玩家
+        const node = this._playerUINodes[dealerIndex];
+        if (node) {
+            node.showDealerIndicator();
+            console.log(`[PlayerUIManager] Showing dealer for player ${dealerIndex}`);
         }
     }
 
     /**
-     * Hide all dealer indicators
+     * 隐藏所有庄家标识
      */
     public hideAllDealers(): void {
-        this._dealerIndicators.forEach(indicator => {
-            if (indicator) {
-                indicator.active = false;
-            }
-        });
+        this._playerUINodes.forEach(node => node.hideDealerIndicator());
     }
 
-    // ==================== Utility Methods ====================
-
+    // ===== 卡牌选择接口 =====
     /**
-     * Get hand node by player index
+     * 启用玩家卡牌选择
      */
-    public getHandNode(playerIndex: number): Node | null {
-        const nodes = [
-            this.bottomHandNode,
-            this.leftHandNode,
-            this.topLeftHandNode,
-            this.topRightHandNode,
-            this.rightHandNode
-        ];
-        return nodes[playerIndex] || null;
+    public enableCardSelection(playerIndex: number, callback: SelectionChangedCallback | null = null): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.enableCardSelection(callback);
+        }
     }
 
     /**
-     * Get world position of a player's hand node (useful for animations)
+     * 禁用玩家卡牌选择
      */
-    public getHandWorldPosition(playerIndex: number): { x: number, y: number } | null {
-        const handNode = this.getHandNode(playerIndex);
-        if (!handNode) return null;
-
-        const worldPos = handNode.getWorldPosition();
-        return { x: worldPos.x, y: worldPos.y };
+    public disableCardSelection(playerIndex: number): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.disableCardSelection();
+        }
     }
 
     /**
-     * Get all hand nodes (useful for batch operations)
+     * 获取选中的卡牌索引
      */
-    public getAllHandNodes(): Node[] {
-        return [
-            this.bottomHandNode,
-            this.leftHandNode,
-            this.topLeftHandNode,
-            this.topRightHandNode,
-            this.rightHandNode
-        ].filter(node => node !== null);
+    public getSelectedIndices(playerIndex: number): number[] {
+        const node = this._playerUINodes[playerIndex];
+        return node ? node.getSelectedIndices() : [];
     }
 
     /**
-     * Get player count (number of active player UIs)
+     * 清除选择
+     */
+    public clearSelection(playerIndex: number): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.clearSelection();
+        }
+    }
+
+    // ===== 访问器接口 =====
+    /**
+     * 获取 PlayerUINode
+     */
+    public getPlayerUINode(playerIndex: number): PlayerUINode | null {
+        return this._playerUINodes[playerIndex] || null;
+    }
+
+    /**
+     * 获取玩家数量
      */
     public getPlayerCount(): number {
-        return this._handDisplays.length;
+        return this._playerUINodes.length;
     }
 
     /**
-     * Check if player UI is set up for a specific index
+     * 获取玩家世界坐标
+     */
+    public getPlayerWorldPosition(playerIndex: number): { x: number, y: number } | null {
+        const node = this._playerUINodes[playerIndex];
+        return node ? node.getWorldPosition() : null;
+    }
+
+    /**
+     * 检查玩家UI是否设置
      */
     public hasPlayerUI(playerIndex: number): boolean {
         return playerIndex >= 0 &&
-               playerIndex < this._handDisplays.length &&
-               this._handDisplays[playerIndex] !== null;
+               playerIndex < this._playerUINodes.length &&
+               this._playerUINodes[playerIndex] !== null;
     }
 
     /**
-     * Clear all player UI
+     * 获取所有 PlayerUINode
+     */
+    public getAllPlayerUINodes(): PlayerUINode[] {
+        return [...this._playerUINodes];
+    }
+
+    /**
+     * 清除所有玩家UI
      */
     public clearAll(): void {
-        // Clear name labels
-        this._nameLabels.forEach(label => {
-            if (label) label.string = "";
-        });
-
-        // Clear score labels
-        this._scoreLabels.forEach(label => {
-            if (label) label.string = "";
-        });
-
-        // Hide all dealers
+        this._playerUINodes.forEach(node => node.clearAll());
         this.hideAllDealers();
+    }
+
+    /**
+     * 重置（用于新游戏）
+     */
+    public reset(): void {
+        this._playerUINodes.forEach(node => {
+            if (node && node.node) {
+                node.node.destroy();
+            }
+        });
+        this._playerUINodes = [];
+        this._initialized = false;
+        console.log('[PlayerUIManager] Reset complete');
     }
 }

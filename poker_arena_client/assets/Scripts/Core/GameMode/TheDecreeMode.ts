@@ -6,7 +6,8 @@ import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
 import { instantiate, Vec3 } from 'cc';
 import { Poker } from '../../UI/Poker';
 import { PokerFactory } from '../../UI/PokerFactory';
-import { DecreePlayer } from './DecreePlayer';
+import { PlayerManager } from '../PlayerManager';
+import { PlayerInfo, TheDecreePlayer } from '../Player';
 
 /**
  * Round state
@@ -49,8 +50,10 @@ enum GameState {
 export class TheDecreeMode extends GameModeBase {
     // Game state
     private state: GameState = GameState.SETUP;
-    private players: Map<string, DecreePlayer> = new Map();
-    private playerOrder: string[] = [];  // Order of players
+
+    // 数据层：使用 PlayerManager 管理玩家
+    private playerManager: PlayerManager = new PlayerManager();
+
     private communityCards: number[] = [];  // 4 community cards
     private deck: number[] = [];  // Remaining deck
     private currentRound: RoundState | null = null;
@@ -92,8 +95,13 @@ export class TheDecreeMode extends GameModeBase {
         this.showUI();
 
         // 3. 初始化游戏
-        const playerIds = ['player_0', 'player_1', 'player_2', 'player_3'];
-        this.initGame(playerIds);
+        const playerInfos: PlayerInfo[] = [
+            { id: 'player_0', name: 'Player 1', isReady: true, isHost: true, seatIndex: 0 },
+            { id: 'player_1', name: 'Player 2', isReady: true, isHost: false, seatIndex: 1 },
+            { id: 'player_2', name: 'Player 3', isReady: true, isHost: false, seatIndex: 2 },
+            { id: 'player_3', name: 'Player 4', isReady: true, isHost: false, seatIndex: 3 }
+        ];
+        this.initGame(playerInfos);
 
         // 4. 发牌
         this.dealCards();
@@ -122,8 +130,7 @@ export class TheDecreeMode extends GameModeBase {
         console.log('[TheDecree] Cleaning up');
         super.cleanup();
 
-        this.players.clear();
-        this.playerOrder = [];
+        this.playerManager.clear();
         this.communityCards = [];
         this.deck = [];
         this.currentRound = null;
@@ -230,7 +237,7 @@ export class TheDecreeMode extends GameModeBase {
      */
     public adjustPlayerLayout(): void {
         // 如果已经有玩家，使用实际玩家数量；否则使用配置的最大玩家数
-        const playerCount = this.playerOrder.length || this.config.maxPlayers;
+        const playerCount = this.playerManager.getPlayerCount() || this.config.maxPlayers;
         console.log(`[TheDecree] Adjusting player layout for ${playerCount} players`);
 
         // 使用 PlayerLayoutConfig 提供的标准布局
@@ -245,30 +252,18 @@ export class TheDecreeMode extends GameModeBase {
 
     // ========== Public API ==========
 
-    public initGame(playerIds: string[]): void {
-        if (playerIds.length < this.config.minPlayers ||
-            playerIds.length > this.config.maxPlayers) {
+    public initGame(playerInfos: PlayerInfo[]): void {
+        if (playerInfos.length < this.config.minPlayers ||
+            playerInfos.length > this.config.maxPlayers) {
             throw new Error(
                 `The Decree requires ${this.config.minPlayers}-${this.config.maxPlayers} players`
             );
         }
 
-        this.playerOrder = [...playerIds];
-        this.players.clear();
+        // 使用 PlayerManager 创建玩家
+        this.playerManager.createPlayers(playerInfos, TheDecreePlayer);
 
-        // 创建 DecreePlayer 对象（同时也是 UI 用的 Player）
-        this.uiPlayers = [];
-
-        for (let i = 0; i < playerIds.length; i++) {
-            const playerId = playerIds[i];
-            // 从 RoomManager 获取玩家名称，如果找不到则使用默认名称
-            const playerName = this.getPlayerNameFromRoom(playerId, `Player ${i + 1}`);
-            const player = new DecreePlayer(i, playerName, i);
-            this.players.set(playerId, player);
-            this.uiPlayers.push(player);
-        }
-
-        console.log(`[TheDecree] Created ${this.players.size} DecreePlayer instances`);
+        console.log(`[TheDecree] Created ${this.playerManager.getPlayerCount()} TheDecreePlayer instances`);
 
         this.state = GameState.SETUP;
         this.initializeDeck();
@@ -284,7 +279,7 @@ export class TheDecreeMode extends GameModeBase {
         ];
 
         // Deal 5 cards to each player
-        for (const player of this.players.values()) {
+        for (const player of this.playerManager.getAllPlayers()) {
             player.setHandCards([
                 this.drawCard(),
                 this.drawCard(),
@@ -296,23 +291,24 @@ export class TheDecreeMode extends GameModeBase {
 
         this.state = GameState.FIRST_DEALER_SELECTION;
 
-        // 显示发牌结果（不再需要 syncPlayerDataToUI，因为 players 就是 uiPlayers）
+        // 初始化 PlayerUIManager 并显示发牌结果
+        this.initializePlayerUIManager(this.playerManager.getAllPlayers());
         this.displayCards();
     }
 
     /**
      * 显示所有牌（公共牌和玩家手牌）
-     * 注意：现在 players 和 uiPlayers 是同一组对象，不需要同步
      */
     private displayCards(): void {
-        // 初始化 PlayerUIManager（只在第一次调用时初始化）
-        this.initializePlayerUIManager();
+        console.log('[TheDecree] displayCards() - Starting display...');
 
         // 更新所有手牌显示
         this.updateAllHandsDisplay();
 
         // 显示公共牌
         this.displayCommunityCards();
+
+        console.log('[TheDecree] displayCards() - Display complete');
     }
 
     /**
@@ -376,7 +372,7 @@ export class TheDecreeMode extends GameModeBase {
     public isValidPlay(cards: number[], playerId: string): boolean {
         if (!this.currentRound) return false;
 
-        const player = this.players.get(playerId);
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer | undefined;
         if (!player) return false;
 
         // Check if it's the right state
@@ -397,19 +393,18 @@ export class TheDecreeMode extends GameModeBase {
             return false;
         }
 
-        const player = this.players.get(playerId)!;
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
 
         // Mark cards as played (keep them in hand for display)
-        player.playedCards = cards;
-        player.hasPlayed = true;
+        player.playCards(cards);
 
         // NOTE: Cards are NOT removed from player.hand
         // They will be displayed with an offset to show they've been played
 
         this.currentRound!.playerPlays.set(playerId, cards);
 
-        // 更新显示（不再需要同步，因为 players 就是 uiPlayers）
-        const playerIndex = this.playerOrder.indexOf(playerId);
+        // 更新显示
+        const playerIndex = this.playerManager.getPlayerOrder().indexOf(playerId);
         if (playerIndex >= 0) {
             this.updatePlayerHandDisplay(playerIndex, cards);
         }
@@ -425,7 +420,7 @@ export class TheDecreeMode extends GameModeBase {
 
     public isGameOver(): boolean {
         // Game is over when all players have no cards left
-        for (const player of this.players.values()) {
+        for (const player of this.playerManager.getAllPlayers()) {
             if (player.handCards.length > 0) {
                 return false;
             }
@@ -490,9 +485,9 @@ export class TheDecreeMode extends GameModeBase {
         };
 
         // Reset player states
-        for (const player of this.players.values()) {
-            player.playedCards = [];
-            player.hasPlayed = false;
+        for (const player of this.playerManager.getAllPlayers()) {
+            const theDecreePlayer = player as TheDecreePlayer;
+            theDecreePlayer.resetRound();
         }
 
         this.state = GameState.DEALER_CALL;
@@ -571,14 +566,18 @@ export class TheDecreeMode extends GameModeBase {
 
         // Award base scores
         for (const [playerId, result] of results) {
-            const player = this.players.get(playerId)!;
-            player.score += scoreTable[result.type];
+            const player = this.playerManager.getPlayer(playerId);
+            if (player) {
+                player.score += scoreTable[result.type];
+            }
         }
 
         // Winner bonus (+1)
         if (this.currentRound.roundWinnerId) {
-            const winner = this.players.get(this.currentRound.roundWinnerId)!;
-            winner.score += 1;
+            const winner = this.playerManager.getPlayer(this.currentRound.roundWinnerId);
+            if (winner) {
+                winner.score += 1;
+            }
         }
     }
 
@@ -588,13 +587,14 @@ export class TheDecreeMode extends GameModeBase {
      * Refill players' hands to 5 cards
      */
     public refillHands(): void {
-        const dealerIndex = this.playerOrder.indexOf(this.currentRound!.dealerId);
+        const playerOrder = this.playerManager.getPlayerOrder();
+        const dealerIndex = playerOrder.indexOf(this.currentRound!.dealerId);
 
         // Start from dealer, clockwise
-        for (let i = 0; i < this.playerOrder.length; i++) {
-            const index = (dealerIndex + i) % this.playerOrder.length;
-            const playerId = this.playerOrder[index];
-            const player = this.players.get(playerId)!;
+        for (let i = 0; i < playerOrder.length; i++) {
+            const index = (dealerIndex + i) % playerOrder.length;
+            const playerId = playerOrder[index];
+            const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
 
             // First, remove played cards from hand
             if (player.playedCards.length > 0) {
@@ -612,7 +612,7 @@ export class TheDecreeMode extends GameModeBase {
             }
         }
 
-        // 更新所有手牌显示（不再需要同步，因为 players 就是 uiPlayers）
+        // 更新所有手牌显示
         this.updateAllHandsDisplay();
 
         // Prepare for next round
@@ -664,7 +664,7 @@ export class TheDecreeMode extends GameModeBase {
 
     private allPlayersPlayed(): boolean {
         if (!this.currentRound) return false;
-        return this.currentRound.playerPlays.size === this.players.size;
+        return this.currentRound.playerPlays.size === this.playerManager.getPlayerCount();
     }
 
     private getSuit(card: number): CardSuit {
@@ -701,8 +701,8 @@ export class TheDecreeMode extends GameModeBase {
         return [...this.communityCards];
     }
 
-    public getPlayer(playerId: string): DecreePlayer | undefined {
-        return this.players.get(playerId);
+    public getPlayer(playerId: string): TheDecreePlayer | undefined {
+        return this.playerManager.getPlayer(playerId) as TheDecreePlayer | undefined;
     }
 
     public getCurrentRound(): RoundState | null {
@@ -715,8 +715,8 @@ export class TheDecreeMode extends GameModeBase {
 
     public getScores(): Map<string, number> {
         const scores = new Map<string, number>();
-        for (const [playerId, player] of this.players) {
-            scores.set(playerId, player.score);
+        for (const player of this.playerManager.getAllPlayers()) {
+            scores.set(player.id, player.score);
         }
         return scores;
     }
@@ -731,9 +731,10 @@ export class TheDecreeMode extends GameModeBase {
         console.log('[TheDecree] Auto-selecting first dealer...');
 
         const revealedCards = new Map<string, number>();
-        for (const playerId of this.playerOrder) {
-            const player = this.players.get(playerId)!;
-            if (player.handCards.length > 0) {
+        const playerOrder = this.playerManager.getPlayerOrder();
+        for (const playerId of playerOrder) {
+            const player = this.playerManager.getPlayer(playerId);
+            if (player && player.handCards.length > 0) {
                 revealedCards.set(playerId, player.handCards[0]);
             }
         }
@@ -759,7 +760,8 @@ export class TheDecreeMode extends GameModeBase {
         if (!this.currentRound) return;
 
         const dealerId = this.currentRound.dealerId;
-        const dealer = this.players.get(dealerId)!;
+        const dealer = this.playerManager.getPlayer(dealerId);
+        if (!dealer) return;
 
         // Simple AI: Random choice weighted by hand size
         let cardsToPlay: 1 | 2 | 3;
@@ -786,10 +788,11 @@ export class TheDecreeMode extends GameModeBase {
         if (!this.currentRound) return;
 
         const cardsToPlay = this.currentRound.cardsToPlay;
+        const playerOrder = this.playerManager.getPlayerOrder();
 
-        for (const playerId of this.playerOrder) {
-            const player = this.players.get(playerId)!;
-            if (player.hasPlayed) continue;
+        for (const playerId of playerOrder) {
+            const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+            if (!player || player.hasPlayed) continue;
 
             // Simple AI: Just play first N cards
             const selectedCards = player.handCards.slice(0, cardsToPlay);
@@ -819,8 +822,8 @@ export class TheDecreeMode extends GameModeBase {
         console.log(`  Loser: ${this.currentRound.roundLoserId}`);
         console.log('  Current Scores:');
 
-        for (const [playerId, player] of this.players) {
-            console.log(`    ${playerId}: ${player.score}`);
+        for (const player of this.playerManager.getAllPlayers()) {
+            console.log(`    ${player.id}: ${player.score}`);
         }
     }
 
@@ -831,7 +834,8 @@ export class TheDecreeMode extends GameModeBase {
         console.log('[TheDecree] Refilling hands...');
 
         // Check if game should end
-        if (this.deck.length < this.players.size * 2) {
+        const playerCount = this.playerManager.getPlayerCount();
+        if (this.deck.length < playerCount * 2) {
             console.log('[TheDecree] Deck running low, game ending soon...');
         }
 
@@ -857,11 +861,11 @@ export class TheDecreeMode extends GameModeBase {
         let winnerId = '';
         let maxScore = -1;
 
-        for (const [playerId, player] of this.players) {
-            console.log(`  ${playerId}: ${player.score} points`);
+        for (const player of this.playerManager.getAllPlayers()) {
+            console.log(`  ${player.id}: ${player.score} points`);
             if (player.score > maxScore) {
                 maxScore = player.score;
-                winnerId = playerId;
+                winnerId = player.id;
             }
         }
 
