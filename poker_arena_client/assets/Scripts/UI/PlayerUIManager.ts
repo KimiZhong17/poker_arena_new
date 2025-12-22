@@ -32,6 +32,7 @@ export class PlayerUIManager extends Component {
     // ===== 配置 =====
     private _levelRank: number = 0;
     private _initialized: boolean = false;
+    private _enableGrouping: boolean = true; // 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
 
     /**
      * 初始化 PlayerUIManager
@@ -40,13 +41,15 @@ export class PlayerUIManager extends Component {
      * @param pokerPrefab 扑克牌预制体
      * @param levelRank 当前关卡等级
      * @param layoutConfig 玩家布局配置
+     * @param enableGrouping 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
      */
     public init(
         players: Player[],
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
         levelRank: number = 0,
-        layoutConfig: PlayerPosition[]
+        layoutConfig: PlayerPosition[],
+        enableGrouping: boolean = true
     ): void {
         if (this._initialized) {
             console.warn('[PlayerUIManager] Already initialized! Skipping re-initialization.');
@@ -59,6 +62,7 @@ export class PlayerUIManager extends Component {
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
         this._levelRank = levelRank;
+        this._enableGrouping = enableGrouping;
 
         // 创建 PlayerUINode 节点
         this.createPlayerUINodes(players, layoutConfig);
@@ -105,7 +109,7 @@ export class PlayerUIManager extends Component {
             }
 
             // 初始化 PlayerUINode
-            playerUINode.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank);
+            playerUINode.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping);
 
             this._playerUINodes.push(playerUINode);
         }

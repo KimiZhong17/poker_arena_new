@@ -291,8 +291,8 @@ export class TheDecreeMode extends GameModeBase {
 
         this.state = GameState.FIRST_DEALER_SELECTION;
 
-        // 初始化 PlayerUIManager 并显示发牌结果
-        this.initializePlayerUIManager(this.playerManager.getAllPlayers());
+        // 初始化 PlayerUIManager 并显示发牌结果（TheDecree 不需要堆叠功能）
+        this.initializePlayerUIManager(this.playerManager.getAllPlayers(), false);
         this.displayCards();
     }
 
@@ -328,8 +328,8 @@ export class TheDecreeMode extends GameModeBase {
 
         // 简单的横向布局
         const cardWidth = 140;
-        const cardSpacing = 20;
-        const totalWidth = (cardWidth * 4) + (cardSpacing * 3);
+        const cardSpacing = 100;
+        const totalWidth = (4 - 1) * cardSpacing + cardWidth;
         const startX = -totalWidth / 2 + cardWidth / 2;
 
         // 获取 poker 资源
@@ -357,7 +357,7 @@ export class TheDecreeMode extends GameModeBase {
                 poker.init(cardValue, pokerBack, pokerFront);
                 poker.showFront();
 
-                const x = startX + (cardWidth + cardSpacing) * index;
+                const x = startX + cardSpacing * index;
                 cardNode.setPosition(new Vec3(x, 0, 0));
                 communityCardsNode.addChild(cardNode);
             } else {

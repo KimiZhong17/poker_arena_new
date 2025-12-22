@@ -44,13 +44,15 @@ export class PlayerUINode extends Component {
      * @param pokerSprites 扑克牌精灵资源
      * @param pokerPrefab 扑克牌预制体
      * @param levelRank 当前关卡等级（Guandan用）
+     * @param enableGrouping 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
      */
     public init(
         player: Player,
         playerIndex: number,
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
-        levelRank: number
+        levelRank: number,
+        enableGrouping: boolean = true
     ): void {
         this._player = player;
         this._playerIndex = playerIndex;
@@ -61,7 +63,7 @@ export class PlayerUINode extends Component {
         this.setupChildNodes();
 
         // 初始化手牌显示
-        this.setupHandDisplay(pokerSprites, pokerPrefab, levelRank);
+        this.setupHandDisplay(pokerSprites, pokerPrefab, levelRank, enableGrouping);
 
         // 初始化玩家信息
         this.updatePlayerInfo();
@@ -156,19 +158,22 @@ export class PlayerUINode extends Component {
     private setupHandDisplay(
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
-        levelRank: number
+        levelRank: number,
+        enableGrouping: boolean = true
     ): void {
         if (!this.handContainer) {
             console.error(`[PlayerUINode] HandContainer not found for ${this._player.name}`);
             return;
         }
 
-        // Main player (index 0) shows spread cards, others show stack
+        // TheDecree 模式（enableGrouping = false）：主玩家 SPREAD，其他玩家 STACK
+        // Guandan 模式（enableGrouping = true）：主玩家 SPREAD，其他玩家 STACK
+        // 主玩家（index 0）显示正面牌 SPREAD，其他玩家显示牌背 STACK（出牌时会在STACK模式中单独显示）
         const displayMode = (this._playerIndex === 0) ? HandDisplayMode.SPREAD : HandDisplayMode.STACK;
 
         this._handDisplay = this.handContainer.addComponent(PlayerHandDisplay);
         this._handDisplay.handContainer = this.handContainer;
-        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex);
+        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping);
 
         console.log(`[PlayerUINode] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
     }

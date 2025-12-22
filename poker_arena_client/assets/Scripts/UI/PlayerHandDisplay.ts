@@ -45,24 +45,26 @@ export class PlayerHandDisplay extends Component {
     // Played cards tracking (for TheDecree mode)
     private _playedCards: number[] = [];  // Cards that have been played this round
     private _playerIndex: number = 0;     // Player index (0-3) for positioning
+    private _enableGrouping: boolean = true; // Whether to group cards by point value (true for Guandan, false for TheDecree)
 
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
         this._levelRank = levelRank;
         this._playerIndex = playerIndex;
+        this._enableGrouping = enableGrouping;
 
         // If handContainer not set, use current node
         if (!this.handContainer) {
             this.handContainer = this.node;
         }
 
-        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}`);
+        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}, grouping: ${enableGrouping}`);
     }
 
     /**
@@ -79,11 +81,12 @@ export class PlayerHandDisplay extends Component {
 
         const cards = this._player.handCards;
 
-        // Dynamically adjust card spacing based on hand size
-        // TheDecree: 5 cards -> wider spacing (100)
-        // Guandan: 20-30 cards -> tighter spacing (50)
-        if (cards.length <= 7) {
-            this._cardSpacing = 100; // Wider spacing for few cards (TheDecree)
+        // Dynamically adjust card spacing based on hand size and game mode
+        if (!this._enableGrouping) {
+            // TheDecree mode: 5 cards with overlap, smaller spacing for overlapping effect
+            this._cardSpacing = 100; // 50px offset per card (cards will overlap since width is 140px)
+        } else if (cards.length <= 7) {
+            this._cardSpacing = 100; // Wider spacing for few cards (Guandan)
         } else if (cards.length <= 15) {
             this._cardSpacing = 70;  // Medium spacing
         } else {
@@ -106,8 +109,9 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Display cards spread out horizontally (for main player)
-     * Cards with the same point value are stacked vertically
-     * Heart level cards (wild cards) are displayed separately on the right
+     * If enableGrouping is true: Cards with the same point value are stacked vertically (Guandan mode)
+     * If enableGrouping is false: All cards are displayed in a simple horizontal line (TheDecree mode)
+     * Heart level cards (wild cards) are displayed separately on the right (only for Guandan)
      */
     private displaySpread(cards: number[]): void {
         const cardCount = cards.length;
@@ -122,6 +126,14 @@ export class PlayerHandDisplay extends Component {
             const pointB = b & 0x0F;
             return pointA - pointB;
         });
+
+        // If grouping is disabled (TheDecree mode), display cards in a simple horizontal line
+        if (!this._enableGrouping) {
+            this.displaySpreadSimple(sortedCards, cardWidth, cardSpacing);
+            return;
+        }
+
+        // === Guandan mode: Group cards by point value ===
 
         // Separate wild cards (Heart level cards) from normal cards
         const normalCards: number[] = [];
@@ -198,8 +210,8 @@ export class PlayerHandDisplay extends Component {
                     finalX += offset.x;
                     finalY += offset.y;
 
-                    // Add visual effect: slightly transparent
-                    cardNode.setScale(0.95, 0.95, 1);
+                    // 出牌后只改变位置，保持与其他卡牌相同的大小
+                    // 不再改变缩放，确保所有卡牌大小一致
                 }
 
                 cardNode.setPosition(finalX, finalY, 0);
@@ -235,8 +247,8 @@ export class PlayerHandDisplay extends Component {
                     finalX += offset.x;
                     finalY += offset.y;
 
-                    // Add visual effect
-                    cardNode.setScale(0.95, 0.95, 1);
+                    // 出牌后只改变位置，保持与其他卡牌相同的大小
+                    // 不再改变缩放，确保所有卡牌大小一致
                 }
 
                 cardNode.setPosition(finalX, finalY, 0);
@@ -251,64 +263,46 @@ export class PlayerHandDisplay extends Component {
         }
 
         console.log(`Added ${this._pokerNodes.length} card nodes to container`);
+    }
 
-        // Debug: Check container properties
-        console.log('🃏🃏🃏 CARD VISIBILITY DEBUG START 🃏🃏🃏');
-        const worldPos = this.handContainer.getWorldPosition();
-        console.log(`📦 Container world position: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)})`);
-        console.log(`📏 Container scale: (${this.handContainer.scale.x}, ${this.handContainer.scale.y})`);
-        console.log(`👁️ Container active: ${this.handContainer.active}, visible: ${this.handContainer.activeInHierarchy}`);
+    /**
+     * Display cards in a simple horizontal line (for TheDecree mode)
+     * No grouping, no stacking, just a simple spread with overlapping
+     */
+    private displaySpreadSimple(cards: number[], cardWidth: number, cardSpacing: number): void {
+        const cardCount = cards.length;
+        // 重叠显示：总宽度 = 第一张卡的半宽 + 中间卡片的偏移 + 最后一张卡的半宽
+        const totalWidth = (cardCount - 1) * cardSpacing + cardWidth;
+        const startX = -totalWidth / 2 + cardWidth / 2;
 
-        // Check container UIOpacity
-        const containerOpacity = this.handContainer.getComponent('cc.UIOpacity') as any;
-        console.log(`🎨 Container opacity: ${containerOpacity ? containerOpacity.opacity : 'No UIOpacity component (255 default)'}`);
+        console.log(`Display spread simple: ${cardCount} cards with overlap, spacing: ${cardSpacing}`);
 
-        // Check container parent hierarchy
-        let parentNode = this.handContainer.parent;
-        let level = 0;
-        console.log(`📂 Container hierarchy:`);
-        while (parentNode && level < 5) {
-            console.log(`  ${'  '.repeat(level)}↑ ${parentNode.name} (active: ${parentNode.active}, layer: ${parentNode.layer})`);
-            parentNode = parentNode.parent;
-            level++;
-        }
+        // Display all cards in a simple horizontal line with overlap
+        for (let i = 0; i < cards.length; i++) {
+            const cardNode = this.createCardNode(cards[i], true);
 
-        // Debug: Check first card node
-        if (this._pokerNodes.length > 0) {
-            const firstCard = this._pokerNodes[0];
-            const cardWorldPos = firstCard.getWorldPosition();
-            console.log(`🎴 First card world position: (${cardWorldPos.x.toFixed(2)}, ${cardWorldPos.y.toFixed(2)})`);
-            console.log(`📐 First card scale: (${firstCard.scale.x}, ${firstCard.scale.y})`);
-            console.log(`✅ First card active: ${firstCard.active}, visible: ${firstCard.activeInHierarchy}`);
+            // 重叠显示：每张卡只偏移 cardSpacing 的距离
+            const x = startX + cardSpacing * i;
+            let finalX = x;
+            let finalY = 0;
 
-            // Check sprite component
-            const sprite = firstCard.getComponent('cc.Sprite') as any;
-            if (sprite) {
-                console.log(`🖼️ First card Sprite: frame=${sprite.spriteFrame ? 'YES' : 'NO'}, color=${sprite.color.toString()}`);
-                console.log(`   Sprite enabled: ${sprite.enabled}, node: ${sprite.node.name}`);
-            } else {
-                console.log(`❌ First card has NO Sprite component!`);
+            // Check if this card is in the played cards list
+            if (this._playedCards.includes(cards[i])) {
+                const offset = this.getPlayedCardOffset();
+                finalX += offset.x;
+                finalY += offset.y;
             }
 
-            // Check UITransform
-            const uiTransform = firstCard.getComponent('cc.UITransform') as any;
-            if (uiTransform) {
-                console.log(`📏 First card UITransform: width=${uiTransform.width}, height=${uiTransform.height}`);
-            }
+            cardNode.setPosition(finalX, finalY, 0);
+            this.handContainer.addChild(cardNode);
+            this._pokerNodes.push(cardNode);
 
-            // Check layer and children
-            console.log(`🎭 First card layer: ${firstCard.layer} (container layer: ${this.handContainer.layer})`);
-            console.log(`👶 First card children count: ${firstCard.children.length}`);
-
-            // Check if sprite is in a child node
-            if (firstCard.children.length > 0) {
-                firstCard.children.forEach((child, index) => {
-                    const childSprite = child.getComponent('cc.Sprite') as any;
-                    console.log(`   Child ${index}: ${child.name}, layer: ${child.layer}, hasSprite: ${childSprite ? 'YES' : 'NO'}`);
-                });
+            if (i === 0) {
+                console.log(`First card position: (${finalX}, ${finalY}), card width: ${cardWidth}, spacing: ${cardSpacing}`);
             }
         }
-        console.log('🃏🃏🃏 CARD VISIBILITY DEBUG END 🃏🃏🃏');
+
+        console.log(`Added ${this._pokerNodes.length} card nodes to container`);
     }
 
     /**
@@ -333,9 +327,12 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Display cards as a stack (for other players, showing backs)
+     * If there are played cards, also display them face-up in a spread
      */
     private displayStack(cardCount: number): void {
-        // Show a few stacked cards to indicate card count
+        console.log(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
+
+        // 1. Show stacked card backs (representing the hand)
         const maxStackDisplay = Math.min(5, cardCount); // Show max 5 cards in stack
         const stackOffset = 3; // Pixel offset for stacking effect
 
@@ -351,8 +348,40 @@ export class PlayerHandDisplay extends Component {
             this._pokerNodes.push(cardNode);
         }
 
-        // Optionally add a label to show exact card count
-        // TODO: Add label component if needed
+        console.log(`[displayStack] Added ${maxStackDisplay} card backs`);
+
+        // 2. If there are played cards, display them face-up in a spread with overlap
+        if (this._playedCards.length > 0) {
+            const playedCardSpacing = 30; // Smaller spacing for played cards overlap
+            const playedCardWidth = 140;
+            // 重叠显示：总宽度 = (卡片数-1) * 间距 + 卡片宽度
+            const playedCardsWidth = (this._playedCards.length - 1) * playedCardSpacing + playedCardWidth;
+            const playedStartX = -playedCardsWidth / 2 + playedCardWidth / 2;
+
+            // Get the offset for played cards based on player position
+            const offset = this.getPlayedCardOffset();
+
+            console.log(`[displayStack] Displaying ${this._playedCards.length} played cards at offset (${offset.x}, ${offset.y}) with spacing ${playedCardSpacing}`);
+
+            for (let i = 0; i < this._playedCards.length; i++) {
+                const cardValue = this._playedCards[i];
+                const cardNode = this.createCardNode(cardValue, true); // Show front
+
+                // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
+                const x = playedStartX + playedCardSpacing * i;
+                const finalX = x + offset.x;
+                const finalY = offset.y;
+
+                cardNode.setPosition(finalX, finalY, 0);
+
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+
+                console.log(`[displayStack] Played card ${i}: position (${finalX}, ${finalY})`);
+            }
+        }
+
+        console.log(`[displayStack] Total nodes: ${this._pokerNodes.length}`);
     }
 
     /**
@@ -362,8 +391,8 @@ export class PlayerHandDisplay extends Component {
         const pokerNode = instantiate(this._pokerPrefab);
         const pokerCtrl = pokerNode.addComponent(Poker);
 
-        // Force scale to 1 (override prefab scale)
-        pokerNode.setScale(1, 1, 1);
+        // 使用预制体的默认缩放（与公牌保持一致）
+        // 不再强制设置 setScale，让预制体的缩放生效
 
         // CRITICAL: Set the same layer as container for proper rendering
         // Must set layer for node AND all children recursively

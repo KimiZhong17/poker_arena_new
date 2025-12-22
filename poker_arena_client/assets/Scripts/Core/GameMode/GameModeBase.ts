@@ -104,9 +104,10 @@ export abstract class GameModeBase {
      * 子类在发牌后调用此方法
      *
      * @param players Player 数组（从 PlayerManager 获取）
+     * @param enableGrouping 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
      * @protected
      */
-    protected initializePlayerUIManager(players: Player[]): void {
+    protected initializePlayerUIManager(players: Player[], enableGrouping: boolean = true): void {
         console.log(`[${this.config.name}] initializePlayerUIManager() - Starting...`);
 
         const playerUIManager = this.game.playerUIManager;
@@ -141,7 +142,8 @@ export abstract class GameModeBase {
             pokerSprites,                 // 扑克牌精灵
             pokerPrefab,                  // 扑克牌预制体
             this.getCurrentLevelRank(),   // 关卡等级
-            layoutConfig                  // 布局配置
+            layoutConfig,                 // 布局配置
+            enableGrouping                // 是否启用分组堆叠
         );
 
         console.log(`[${this.config.name}] PlayerUIManager initialized`);

@@ -171,7 +171,7 @@ export class PlayingStage extends GameStageBase {
                 id: 'the_decree',
                 name: 'TheDecree',
                 displayName: '天命之战',
-                minPlayers: 4,
+                minPlayers: 2,
                 maxPlayers: 4,
                 deckCount: 1,
                 initialHandSize: 5,
