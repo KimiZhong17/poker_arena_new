@@ -123,7 +123,21 @@ export class PlayerUINode extends Component {
         const panel = new Node("InfoPanel");
         panel.addComponent(UITransform);
         panel.layer = this.node.layer;
-        panel.setPosition(0, -100, 0); // 默认位置：手牌下方
+
+        // Position based on player index
+        // Player 0 (main player at bottom): position at same height as hand cards, on the left
+        // Player 2 (top player): position on the left side of hand cards
+        // Other players: default position below hand
+        if (this._playerIndex === 0) {
+            // Bottom player: same Y as hand cards (0), left side
+            panel.setPosition(-300, 0, 0);
+        } else if (this._playerIndex === 2) {
+            // Top player: same Y as hand cards (0), left side
+            panel.setPosition(-300, 0, 0);
+        } else {
+            // Left and right players: below hand
+            panel.setPosition(0, -100, 0);
+        }
 
         // 创建子元素
         const nameLabel = new Node("NameLabel");
@@ -148,7 +162,7 @@ export class PlayerUINode extends Component {
         panel.addChild(avatar);
 
         this.node.addChild(panel);
-        console.log(`[PlayerUINode] Created InfoPanel for ${this._player?.name || 'player'}`);
+        console.log(`[PlayerUINode] Created InfoPanel for ${this._player?.name || 'player'} (index: ${this._playerIndex}) at position: ${panel.position.x}, ${panel.position.y}`);
         return panel;
     }
 

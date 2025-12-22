@@ -174,6 +174,30 @@ export abstract class GameModeBase {
         }
     }
 
+    /**
+     * 更新所有玩家分数显示
+     * @protected
+     */
+    protected updateAllScoresDisplay(): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            playerUIManager.updateAllPlayerInfo();
+        }
+    }
+
+    /**
+     * 更新特定玩家的分数显示
+     * @param playerIndex 玩家索引
+     * @param score 新分数
+     * @protected
+     */
+    protected updatePlayerScoreDisplay(playerIndex: number, score: number): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            playerUIManager.updatePlayerScore(playerIndex, score);
+        }
+    }
+
     // ==================== 玩家布局 ====================
 
     /**

@@ -305,6 +305,9 @@ export class TheDecreeMode extends GameModeBase {
         // 更新所有手牌显示
         this.updateAllHandsDisplay();
 
+        // 更新所有玩家分数显示（初始分数为0）
+        this.updateAllScoresDisplay();
+
         // 显示公共牌
         this.displayCommunityCards();
 
@@ -579,6 +582,9 @@ export class TheDecreeMode extends GameModeBase {
                 winner.score += 1;
             }
         }
+
+        // Update score display in real-time
+        this.updateAllScoresDisplay();
     }
 
     // ========== Refill ==========
@@ -590,13 +596,12 @@ export class TheDecreeMode extends GameModeBase {
         const playerOrder = this.playerManager.getPlayerOrder();
         const dealerIndex = playerOrder.indexOf(this.currentRound!.dealerId);
 
-        // Start from dealer, clockwise
+        // First, remove played cards from all players' hands
         for (let i = 0; i < playerOrder.length; i++) {
             const index = (dealerIndex + i) % playerOrder.length;
             const playerId = playerOrder[index];
             const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
 
-            // First, remove played cards from hand
             if (player.playedCards.length > 0) {
                 player.playedCards.forEach((card: number) => {
                     const cardIndex = player.handCards.indexOf(card);
@@ -605,10 +610,24 @@ export class TheDecreeMode extends GameModeBase {
                     }
                 });
             }
+        }
 
-            // Then refill to 5 cards
-            while (player.handCards.length < 5 && this.deck.length > 0) {
-                player.addCards([this.drawCard()]);
+        // Then refill cards fairly - one card at a time to each player in turn
+        // This ensures fair distribution when deck is running low
+        let continueRefilling = true;
+        while (continueRefilling && this.deck.length > 0) {
+            continueRefilling = false;
+
+            for (let i = 0; i < playerOrder.length; i++) {
+                const index = (dealerIndex + i) % playerOrder.length;
+                const playerId = playerOrder[index];
+                const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+
+                // Give one card if player needs it and deck has cards
+                if (player.handCards.length < 5 && this.deck.length > 0) {
+                    player.addCards([this.drawCard()]);
+                    continueRefilling = true; // At least one player needs more cards
+                }
             }
         }
 
@@ -833,17 +852,11 @@ export class TheDecreeMode extends GameModeBase {
     private autoRefill(): void {
         console.log('[TheDecree] Refilling hands...');
 
-        // Check if game should end
-        const playerCount = this.playerManager.getPlayerCount();
-        if (this.deck.length < playerCount * 2) {
-            console.log('[TheDecree] Deck running low, game ending soon...');
-        }
-
         // Refill hands
         this.refillHands();
 
-        // Check if game is over
-        if (this.isGameOver() || this.deck.length === 0) {
+        // Check if game is over (only when all players have no cards)
+        if (this.isGameOver()) {
             this.handleGameOver();
         } else {
             console.log(`[TheDecree] Starting round ${this.currentRound?.roundNumber}... (Deck: ${this.deck.length} cards remaining)`);

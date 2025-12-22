@@ -312,17 +312,38 @@ export class PlayerHandDisplay extends Component {
     private getPlayedCardOffset(): { x: number; y: number } {
         // Define offsets based on player index
         // 0: Bottom (player) - move up
-        // 1: Left - move right
-        // 2: Top - move down
-        // 3: Right - move left
+        // 1: Left - move right only (no vertical offset)
+        // 2: Top - move right (to create symmetry with hand pile on left)
+        // 3: Right - move left only (no vertical offset)
         const offsets = [
             { x: 0, y: 40 },      // Player 0 (Bottom): up
-            { x: 80, y: 0 },      // Player 1 (Left): right
-            { x: 0, y: -50 },     // Player 2 (Top): down
-            { x: -80, y: 0 }      // Player 3 (Right): left
+            { x: 150, y: 0 },     // Player 1 (Left): right only
+            { x: 100, y: 0 },  // Player 2 (Top): right and down (symmetry with hand pile)
+            { x: -150, y: 0 }     // Player 3 (Right): left only
         ];
 
         return offsets[this._playerIndex] || { x: 0, y: 40 };
+    }
+
+    /**
+     * Get base offset for hand pile based on player position
+     * This allows positioning the hand pile differently for each player
+     * @returns Base offset to apply to all cards in the hand pile
+     */
+    private getHandPileBaseOffset(): { x: number; y: number } {
+        // Define base offsets for hand pile based on player index
+        // 0: Bottom (player) - centered
+        // 1: Left - centered
+        // 2: Top - slightly left (to create symmetry with played cards on right)
+        // 3: Right - centered
+        const offsets = [
+            { x: 0, y: 0 },       // Player 0 (Bottom): centered
+            { x: 0, y: 0 },       // Player 1 (Left): centered
+            { x: -100, y: 0 },    // Player 2 (Top): left (symmetry with played cards)
+            { x: 0, y: 0 }        // Player 3 (Right): centered
+        ];
+
+        return offsets[this._playerIndex] || { x: 0, y: 0 };
     }
 
     /**
@@ -332,23 +353,29 @@ export class PlayerHandDisplay extends Component {
     private displayStack(cardCount: number): void {
         console.log(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
 
-        // 1. Show stacked card backs (representing the hand)
-        const maxStackDisplay = Math.min(5, cardCount); // Show max 5 cards in stack
+        // Calculate remaining cards (cards in hand that haven't been played yet)
+        const remainingCards = cardCount - this._playedCards.length;
+
+        // Get base offset for hand pile positioning
+        const baseOffset = this.getHandPileBaseOffset();
+
+        // 1. Show stacked card backs (representing the remaining hand cards)
+        const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
         const stackOffset = 3; // Pixel offset for stacking effect
 
         for (let i = 0; i < maxStackDisplay; i++) {
             const cardNode = this.createCardNode(0, false); // 0 = back only
 
-            // Slight offset for stacking effect
-            const x = i * stackOffset;
-            const y = i * stackOffset;
+            // Apply base offset + slight offset for stacking effect
+            const x = baseOffset.x + i * stackOffset;
+            const y = baseOffset.y + i * stackOffset;
             cardNode.setPosition(x, y, 0);
 
             this.handContainer.addChild(cardNode);
             this._pokerNodes.push(cardNode);
         }
 
-        console.log(`[displayStack] Added ${maxStackDisplay} card backs`);
+        console.log(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
 
         // 2. If there are played cards, display them face-up in a spread with overlap
         if (this._playedCards.length > 0) {
