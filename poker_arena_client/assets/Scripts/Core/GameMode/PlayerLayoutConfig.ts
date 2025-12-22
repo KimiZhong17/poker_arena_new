@@ -66,9 +66,9 @@ export class PlayerLayoutConfig {
     public static getFourPlayerLayout(): PlayerPosition[] {
         return [
             { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom) - Moved up from -280 to -180
-            { name: 'LeftHand', x: -550, y: 0, active: true },        // Player 1 (Left)
+            { name: 'LeftHand', x: -550, y: 30, active: true },        // Player 1 (Left)
             { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 2 (Top)
-            { name: 'TopRightHand', x: 550, y: 0, active: true },     // Player 3 (Right)
+            { name: 'TopRightHand', x: 550, y: 30, active: true },     // Player 3 (Right)
             { name: 'RightHand', x: 550, y: 50, active: false }
         ];
     }

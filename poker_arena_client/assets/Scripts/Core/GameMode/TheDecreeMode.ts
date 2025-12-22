@@ -361,7 +361,7 @@ export class TheDecreeMode extends GameModeBase {
                 poker.showFront();
 
                 const x = startX + cardSpacing * index;
-                cardNode.setPosition(new Vec3(x, 0, 0));
+                cardNode.setPosition(new Vec3(x, 30, 0));
                 communityCardsNode.addChild(cardNode);
             } else {
                 console.error(`[TheDecree] Sprite not found: ${spriteName}`);
