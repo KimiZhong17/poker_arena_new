@@ -17,14 +17,13 @@ export class TheDecreeUIController extends Component {
     @property(Button)
     public playButton: Button | null = null;
 
-    @property(Button)
-    public callOneButton: Button | null = null;
+    @property(Node)
+    public btnCall123Node: Node | null = null;
 
-    @property(Button)
-    public callTwoButton: Button | null = null;
-
-    @property(Button)
-    public callThreeButton: Button | null = null;
+    // Auto-found references (don't need to assign in editor)
+    private callOneButton: Button | null = null;
+    private callTwoButton: Button | null = null;
+    private callThreeButton: Button | null = null;
 
     // Temporarily unused - uncomment when needed
     // @property(Button)
@@ -54,6 +53,10 @@ export class TheDecreeUIController extends Component {
 
         // Initialize UI state
         this.updateUIState();
+
+        // Hide call buttons initially
+        this.hideCallButtons();
+        console.log('[TheDecreeUI] Call buttons hidden on load');
     }
 
     start() {
@@ -61,6 +64,50 @@ export class TheDecreeUIController extends Component {
         this.scheduleOnce(() => {
             this.enableCardSelection();
         }, 2);
+
+        // Initialize button visibility
+        this.updateCallButtonsVisibility();
+    }
+
+    /**
+     * Update call buttons visibility based on dealer status
+     * Only show when player_0 is the dealer and in DEALER_CALL state
+     */
+    public updateCallButtonsVisibility(): void {
+        console.log('[TheDecreeUI] updateCallButtonsVisibility() called');
+        console.log('[TheDecreeUI]   _game:', !!this._game);
+        console.log('[TheDecreeUI]   theDecreeMode:', !!this._game?.theDecreeMode);
+
+        if (!this._game || !this._game.theDecreeMode) {
+            console.log('[TheDecreeUI]   Game or mode not ready, hiding buttons');
+            this.hideCallButtons();
+            return;
+        }
+
+        const theDecreeMode = this._game.theDecreeMode;
+        const currentRound = theDecreeMode.getCurrentRound();
+        const gameState = theDecreeMode.getState();
+
+        console.log('[TheDecreeUI]   currentRound:', !!currentRound);
+        console.log('[TheDecreeUI]   dealerId:', currentRound?.dealerId);
+        console.log('[TheDecreeUI]   gameState:', gameState);
+
+        // Show buttons only when:
+        // 1. There's an active round
+        // 2. player_0 is the dealer
+        // 3. Game state is DEALER_CALL
+        const shouldShow = currentRound &&
+                          currentRound.dealerId === 'player_0' &&
+                          gameState === 'dealer_call';
+
+        console.log('[TheDecreeUI]   shouldShow:', shouldShow);
+
+        if (shouldShow) {
+            this.showCallButtons();
+            console.log('[TheDecreeUI] Showing call buttons - player_0 is the dealer');
+        } else {
+            this.hideCallButtons();
+        }
     }
 
     /**
@@ -85,23 +132,36 @@ export class TheDecreeUIController extends Component {
      * Auto-find UI elements by name (if not manually assigned)
      */
     private autoFindUIElements(): void {
-        // Find buttons by name if not assigned
+        // Find play button
         if (!this.playButton) {
             const playButtonNode = this.node.getChildByName('PlayButton');
             this.playButton = playButtonNode?.getComponent(Button) || null;
         }
 
-        if (!this.callOneButton) {
+        // Auto-find Btn_Call123 container node if not assigned
+        if (!this.btnCall123Node) {
+            this.btnCall123Node = this.node.getChildByName('Btn_Call123');
+        }
+
+        // Auto-find call buttons from Btn_Call123 container
+        if (this.btnCall123Node) {
+            // Find buttons inside the container
+            const callOneNode = this.btnCall123Node.getChildByName('CallOneButton');
+            this.callOneButton = callOneNode?.getComponent(Button) || null;
+
+            const callTwoNode = this.btnCall123Node.getChildByName('CallTwoButton');
+            this.callTwoButton = callTwoNode?.getComponent(Button) || null;
+
+            const callThreeNode = this.btnCall123Node.getChildByName('CallThreeButton');
+            this.callThreeButton = callThreeNode?.getComponent(Button) || null;
+        } else {
+            // Fallback: try to find call buttons at root level
             const callOneNode = this.node.getChildByName('CallOneButton');
             this.callOneButton = callOneNode?.getComponent(Button) || null;
-        }
 
-        if (!this.callTwoButton) {
             const callTwoNode = this.node.getChildByName('CallTwoButton');
             this.callTwoButton = callTwoNode?.getComponent(Button) || null;
-        }
 
-        if (!this.callThreeButton) {
             const callThreeNode = this.node.getChildByName('CallThreeButton');
             this.callThreeButton = callThreeNode?.getComponent(Button) || null;
         }
@@ -119,6 +179,7 @@ export class TheDecreeUIController extends Component {
 
         console.log('[TheDecreeUI] UI elements found:', {
             playButton: !!this.playButton,
+            btnCall123Node: !!this.btnCall123Node,
             callOneButton: !!this.callOneButton,
             callTwoButton: !!this.callTwoButton,
             callThreeButton: !!this.callThreeButton,
@@ -253,7 +314,7 @@ export class TheDecreeUIController extends Component {
             console.log(`[TheDecreeUI] Dealer called: ${cardsCount} cards`);
             // this.updateStatusLabel(`庄家叫牌：${cardsCount}张`, 'success');
 
-            // Hide call buttons after calling
+            // Hide call buttons immediately after calling
             this.hideCallButtons();
 
             // Enable card selection for all players
@@ -303,18 +364,63 @@ export class TheDecreeUIController extends Component {
      * Hide call buttons (after dealer has called)
      */
     private hideCallButtons(): void {
-        if (this.callOneButton) this.callOneButton.node.active = false;
-        if (this.callTwoButton) this.callTwoButton.node.active = false;
-        if (this.callThreeButton) this.callThreeButton.node.active = false;
+        console.log('[TheDecreeUI] hideCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
+
+        if (this.btnCall123Node) {
+            this.btnCall123Node.active = false;
+            console.log('[TheDecreeUI] Set btnCall123Node.active = false');
+            console.log('[TheDecreeUI] Parent active:', this.btnCall123Node.parent?.active);
+        } else {
+            // Fallback: hide individual buttons if container not found
+            console.log('[TheDecreeUI] No container found, hiding individual buttons');
+            if (this.callOneButton) {
+                this.callOneButton.node.active = false;
+                console.log('[TheDecreeUI] Set callOneButton.active = false');
+            }
+            if (this.callTwoButton) {
+                this.callTwoButton.node.active = false;
+                console.log('[TheDecreeUI] Set callTwoButton.active = false');
+            }
+            if (this.callThreeButton) {
+                this.callThreeButton.node.active = false;
+                console.log('[TheDecreeUI] Set callThreeButton.active = false');
+            }
+        }
     }
 
     /**
      * Show call buttons (when starting new round)
      */
     private showCallButtons(): void {
-        if (this.callOneButton) this.callOneButton.node.active = true;
-        if (this.callTwoButton) this.callTwoButton.node.active = true;
-        if (this.callThreeButton) this.callThreeButton.node.active = true;
+        console.log('[TheDecreeUI] showCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
+
+        if (this.btnCall123Node) {
+            // Make sure parent node is active
+            if (this.btnCall123Node.parent && !this.btnCall123Node.parent.active) {
+                console.log('[TheDecreeUI] Parent node is inactive! Activating parent:', this.btnCall123Node.parent.name);
+                this.btnCall123Node.parent.active = true;
+            }
+
+            this.btnCall123Node.active = true;
+            console.log('[TheDecreeUI] Set btnCall123Node.active = true');
+            console.log('[TheDecreeUI] After setting - node.active:', this.btnCall123Node.active);
+            console.log('[TheDecreeUI] Parent active:', this.btnCall123Node.parent?.active);
+        } else {
+            // Fallback: show individual buttons if container not found
+            console.log('[TheDecreeUI] No container found, showing individual buttons');
+            if (this.callOneButton) {
+                this.callOneButton.node.active = true;
+                console.log('[TheDecreeUI] Set callOneButton.active = true');
+            }
+            if (this.callTwoButton) {
+                this.callTwoButton.node.active = true;
+                console.log('[TheDecreeUI] Set callTwoButton.active = true');
+            }
+            if (this.callThreeButton) {
+                this.callThreeButton.node.active = true;
+                console.log('[TheDecreeUI] Set callThreeButton.active = true');
+            }
+        }
     }
 
     /**

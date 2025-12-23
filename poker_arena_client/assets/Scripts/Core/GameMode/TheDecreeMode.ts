@@ -94,7 +94,10 @@ export class TheDecreeMode extends GameModeBase {
         // 2. 显示UI
         this.showUI();
 
-        // 3. 初始化游戏
+        // 3. 隐藏 call buttons 初始状态
+        this.updateUICallButtonsVisibility();
+
+        // 4. 初始化游戏
         const playerInfos: PlayerInfo[] = [
             { id: 'player_0', name: 'Player 1', isReady: true, isHost: true, seatIndex: 0 },
             { id: 'player_1', name: 'Player 2', isReady: true, isHost: false, seatIndex: 1 },
@@ -103,7 +106,7 @@ export class TheDecreeMode extends GameModeBase {
         ];
         this.initGame(playerInfos);
 
-        // 4. 发牌
+        // 5. 发牌
         this.dealCards();
 
         console.log('[TheDecree] Game initialized and cards dealt');
@@ -475,6 +478,20 @@ export class TheDecreeMode extends GameModeBase {
     // ========== Round Management ==========
 
     /**
+     * Update UI call buttons visibility
+     * Notifies TheDecreeUIController to show/hide call buttons
+     */
+    private updateUICallButtonsVisibility(): void {
+        if (!this.game.objectsTheDecreeNode) return;
+
+        // Find TheDecreeUIController component
+        const uiController = this.game.objectsTheDecreeNode.getComponent('TheDecreeUIController') as any;
+        if (uiController && typeof uiController.updateCallButtonsVisibility === 'function') {
+            uiController.updateCallButtonsVisibility();
+        }
+    }
+
+    /**
      * Start a new round with specified dealer
      */
     public startNewRound(dealerId: string): void {
@@ -494,6 +511,9 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         this.state = GameState.DEALER_CALL;
+
+        // Notify UI to update call buttons visibility
+        this.updateUICallButtonsVisibility();
     }
 
     /**
@@ -505,6 +525,10 @@ export class TheDecreeMode extends GameModeBase {
 
         this.currentRound.cardsToPlay = cardsToPlay;
         this.state = GameState.PLAYER_SELECTION;
+
+        // Update UI - hide call buttons after dealer makes decision
+        this.updateUICallButtonsVisibility();
+
         return true;
     }
 
