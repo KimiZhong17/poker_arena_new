@@ -1,11 +1,33 @@
 /**
- * 玩家手牌位置配置
+ * Widget 对齐配置
+ */
+export interface WidgetAlignment {
+    // 水平对齐
+    alignLeft?: boolean;
+    alignRight?: boolean;
+    alignHorizontalCenter?: boolean;
+    left?: number;
+    right?: number;
+
+    // 垂直对齐
+    alignTop?: boolean;
+    alignBottom?: boolean;
+    alignVerticalCenter?: boolean;
+    top?: number;
+    bottom?: number;
+}
+
+/**
+ * 玩家手牌位置配置（基于 Widget 锚点）
  */
 export interface PlayerPosition {
-    name: string;    // 节点名称（BottomHand, LeftHand等）
-    x: number;       // X坐标
-    y: number;       // Y坐标
-    active: boolean; // 是否激活
+    name: string;              // 节点名称（BottomHand, LeftHand等）
+    widget: WidgetAlignment;   // Widget 锚点配置
+    active: boolean;           // 是否激活
+
+    // 可选：备用的固定坐标（用于不支持 Widget 的场景）
+    fallbackX?: number;
+    fallbackY?: number;
 }
 
 /**
@@ -39,11 +61,41 @@ export class PlayerLayoutConfig {
      */
     public static getTwoPlayerLayout(): PlayerPosition[] {
         return [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
-            { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 1 (Top)
-            { name: 'LeftHand', x: -450, y: 0, active: false },
-            { name: 'TopRightHand', x: 450, y: 0, active: false },
-            { name: 'RightHand', x: 550, y: 50, active: false }
+            {
+                name: 'BottomHand',
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: -280
+            },
+            {
+                name: 'TopLeftHand',
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 120 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: 280
+            },
+            {
+                name: 'LeftHand',
+                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
+                active: false,
+                fallbackX: -450,
+                fallbackY: 0
+            },
+            {
+                name: 'TopRightHand',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
+                active: false,
+                fallbackX: 450,
+                fallbackY: 0
+            },
+            {
+                name: 'RightHand',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
+                active: false,
+                fallbackX: 550,
+                fallbackY: 50
+            }
         ];
     }
 
@@ -52,11 +104,41 @@ export class PlayerLayoutConfig {
      */
     public static getThreePlayerLayout(): PlayerPosition[] {
         return [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
-            { name: 'TopLeftHand', x: -350, y: 200, active: true },   // Player 1 (Top-Left)
-            { name: 'TopRightHand', x: 350, y: 200, active: true },   // Player 2 (Top-Right)
-            { name: 'LeftHand', x: -450, y: 0, active: false },
-            { name: 'RightHand', x: 550, y: 50, active: false }
+            {
+                name: 'BottomHand',
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: -280
+            },
+            {
+                name: 'TopLeftHand',
+                widget: { alignTop: true, alignLeft: true, top: 100, left: 150 },
+                active: true,
+                fallbackX: -350,
+                fallbackY: 200
+            },
+            {
+                name: 'TopRightHand',
+                widget: { alignTop: true, alignRight: true, top: 100, right: 150 },
+                active: true,
+                fallbackX: 350,
+                fallbackY: 200
+            },
+            {
+                name: 'LeftHand',
+                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
+                active: false,
+                fallbackX: -450,
+                fallbackY: 0
+            },
+            {
+                name: 'RightHand',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
+                active: false,
+                fallbackX: 550,
+                fallbackY: 50
+            }
         ];
     }
 
@@ -65,11 +147,41 @@ export class PlayerLayoutConfig {
      */
     public static getFourPlayerLayout(): PlayerPosition[] {
         return [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom) - Moved up from -280 to -180
-            { name: 'LeftHand', x: -550, y: 30, active: true },        // Player 1 (Left)
-            { name: 'TopLeftHand', x: 0, y: 280, active: true },      // Player 2 (Top)
-            { name: 'TopRightHand', x: 550, y: 30, active: true },     // Player 3 (Right)
-            { name: 'RightHand', x: 550, y: 50, active: false }
+            {
+                name: 'BottomHand',
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 0 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: -280
+            },
+            {
+                name: 'LeftHand',
+                widget: { alignLeft: true, alignVerticalCenter: true, left: 0 },
+                active: true,
+                fallbackX: -550,
+                fallbackY: 30
+            },
+            {
+                name: 'TopLeftHand',
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 50 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: 280
+            },
+            {
+                name: 'TopRightHand',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
+                active: true,
+                fallbackX: 550,
+                fallbackY: 30
+            },
+            {
+                name: 'RightHand',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
+                active: false,
+                fallbackX: 550,
+                fallbackY: 50
+            }
         ];
     }
 
@@ -78,11 +190,41 @@ export class PlayerLayoutConfig {
      */
     public static getFivePlayerLayout(): PlayerPosition[] {
         return [
-            { name: 'BottomHand', x: 0, y: -280, active: true },      // Player 0 (Bottom)
-            { name: 'LeftHand', x: -400, y: -80, active: true },      // Player 1 (Bottom-Left)
-            { name: 'TopLeftHand', x: -250, y: 220, active: true },   // Player 2 (Top-Left)
-            { name: 'TopRightHand', x: 250, y: 220, active: true },   // Player 3 (Top-Right)
-            { name: 'RightHand', x: 400, y: -80, active: true }       // Player 4 (Bottom-Right)
+            {
+                name: 'BottomHand',
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
+                active: true,
+                fallbackX: 0,
+                fallbackY: -280
+            },
+            {
+                name: 'LeftHand',
+                widget: { alignLeft: true, alignBottom: true, left: 80, bottom: 280 },
+                active: true,
+                fallbackX: -400,
+                fallbackY: -80
+            },
+            {
+                name: 'TopLeftHand',
+                widget: { alignTop: true, alignLeft: true, top: 100, left: 180 },
+                active: true,
+                fallbackX: -250,
+                fallbackY: 220
+            },
+            {
+                name: 'TopRightHand',
+                widget: { alignTop: true, alignRight: true, top: 100, right: 180 },
+                active: true,
+                fallbackX: 250,
+                fallbackY: 220
+            },
+            {
+                name: 'RightHand',
+                widget: { alignRight: true, alignBottom: true, right: 80, bottom: 280 },
+                active: true,
+                fallbackX: 400,
+                fallbackY: -80
+            }
         ];
     }
 

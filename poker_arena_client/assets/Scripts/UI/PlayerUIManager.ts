@@ -86,7 +86,7 @@ export class PlayerUIManager extends Component {
                 continue;
             }
 
-            console.log(`[PlayerUIManager] Creating UI node for player ${i} (${player.name}) at (${config.x}, ${config.y})`);
+            console.log(`[PlayerUIManager] Creating UI node for player ${i} (${player.name}) with widget config`);
 
             // 查找或创建节点
             let playerNode = this.node.getChildByName(config.name);
@@ -98,8 +98,22 @@ export class PlayerUIManager extends Component {
                 console.log(`[PlayerUIManager] Created new node: ${config.name}`);
             }
 
-            // 应用布局配置
-            playerNode.setPosition(config.x, config.y, 0);
+            // 如果节点已经有 Widget 组件，不要手动设置位置（让 Widget 自动管理）
+            // 否则使用 fallback 坐标作为初始位置
+            const existingWidget = playerNode.getComponent('cc.Widget');
+            console.log(`[PlayerUIManager] ${config.name} checking Widget: ${!!existingWidget}`);
+            if (!existingWidget) {
+                // 只有在没有 Widget 的情况下才使用 fallback 坐标
+                if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
+                    playerNode.setPosition(config.fallbackX, config.fallbackY, 0);
+                    console.log(`[PlayerUIManager] ${config.name} using fallback position (${config.fallbackX}, ${config.fallbackY})`);
+                }
+            } else {
+                console.log(`[PlayerUIManager] ${config.name} has Widget, position will be managed automatically`);
+                // 强制更新一次 Widget
+                existingWidget.updateAlignment();
+                console.log(`[PlayerUIManager] ${config.name} Widget updated, position: (${playerNode.position.x}, ${playerNode.position.y})`);
+            }
             playerNode.active = config.active;
 
             // 添加或获取 PlayerUINode 组件

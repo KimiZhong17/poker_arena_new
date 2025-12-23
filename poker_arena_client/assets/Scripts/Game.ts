@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
@@ -11,6 +11,7 @@ import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
+import { PlayerLayoutConfig } from './Core/GameMode/PlayerLayoutConfig';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -157,6 +158,10 @@ export class Game extends Component {
     private initializePlayerUIManager(): void {
         if (!this.playerUIManagerNode) {
             this.playerUIManagerNode = this.createPlayerUIManager();
+        } else {
+            // Node exists (assigned in editor), but we still need to setup Widget for hand nodes
+            console.log("[Game] PlayerUIManager node already exists, setting up Widget components...");
+            this.createOrUpdateHandNodes(this.playerUIManagerNode);
         }
 
         // Get or create component, but DON'T call init yet
@@ -198,6 +203,20 @@ export class Game extends Component {
     public update(deltaTime: number): void {
         if (this.stageManager) {
             this.stageManager.update(deltaTime);
+        }
+    }
+
+    /**
+     * 强制给现有节点应用 Widget（调试用）
+     * 在浏览器控制台输入：cc.find('Canvas/Main').getComponent('Game').forceApplyWidgetToExistingNodes()
+     */
+    public forceApplyWidgetToExistingNodes(): void {
+        console.log('[Debug] Forcing Widget application...');
+        if (this.playerUIManagerNode) {
+            this.createOrUpdateHandNodes(this.playerUIManagerNode);
+            console.log('[Debug] Widget force update complete');
+        } else {
+            console.error('[Debug] playerUIManagerNode not found');
         }
     }
 
@@ -272,6 +291,7 @@ export class Game extends Component {
     /**
      * Create player UI manager node structure automatically
      * Creates the PlayerUI node (which will host PlayerUIManager component) and hand position nodes
+     * 使用 Widget 组件实现屏幕自适应
      *
      * Note: Node_PlayerUI should be at Canvas root level to be visible across all game stages
      * (ReadyStage, PlayStage, EndStage all need access to player UI)
@@ -279,48 +299,175 @@ export class Game extends Component {
     private createPlayerUIManager(): Node {
         // Try to find existing Node_PlayerUI at Canvas root level
         const canvasNode = this.node.parent; // Main's parent is Canvas
+        let playerUINode: Node | null = null;
+
         if (canvasNode) {
             const existingPlayerUI = canvasNode.getChildByName("Node_PlayerUI");
             if (existingPlayerUI) {
                 console.log("[Game] Found existing Node_PlayerUI at Canvas root level");
-                return existingPlayerUI;
+                playerUINode = existingPlayerUI;
             }
         }
 
         // If not found, create Node_PlayerUI at Canvas root level
-        const parentNode = canvasNode || this.node;
-        const playerUINode = new Node("Node_PlayerUI");
-        parentNode.addChild(playerUINode);
+        if (!playerUINode) {
+            const parentNode = canvasNode || this.node;
+            playerUINode = new Node("Node_PlayerUI");
+            parentNode.addChild(playerUINode);
 
-        console.log(`[Game] Creating Node_PlayerUI at Canvas root level...`);
+            // Make sure PlayerUI is rendered on top
+            const siblingCount = parentNode.children.length;
+            playerUINode.setSiblingIndex(siblingCount - 1);
+            console.log(`[Game] Created new Node_PlayerUI at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
+        }
 
-        // Make sure PlayerUI is rendered on top
-        const siblingCount = parentNode.children.length;
-        playerUINode.setSiblingIndex(siblingCount - 1);
-        console.log(`[Game] Node_PlayerUI created at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
+        // 添加或更新 UITransform 和 Widget 组件让它填满整个Canvas
+        if (!playerUINode.getComponent(UITransform)) {
+            playerUINode.addComponent(UITransform);
+        }
 
-        // Create hand container nodes with positions
-        const handNodes = [
-            { name: "BottomHand", x: 0, y: -280 },      // Main player
-            { name: "LeftHand", x: -550, y: 50 },        // Left player
-            { name: "TopLeftHand", x: -300, y: 280 },   // Top left
-            { name: "TopRightHand", x: 300, y: 280 },   // Top right
-            { name: "RightHand", x: 550, y: 50 }         // Right player
-        ];
+        // 必须使用字符串方式获取和添加，类引用在运行时会失败
+        let widget = playerUINode.getComponent('cc.Widget') as any;
+        if (!widget) {
+            widget = playerUINode.addComponent('cc.Widget') as any;
+            console.log('[Game] Added Widget to Node_PlayerUI');
+        }
 
-        handNodes.forEach(config => {
-            const handNode = new Node(config.name);
-            handNode.setPosition(config.x, config.y, 0);
+        // 配置 Widget 填满整个 Canvas
+        widget.isAlignTop = true;
+        widget.isAlignBottom = true;
+        widget.isAlignLeft = true;
+        widget.isAlignRight = true;
+        widget.top = 0;
+        widget.bottom = 0;
+        widget.left = 0;
+        widget.right = 0;
 
-            // Create container child node for cards
-            const container = new Node("Container");
-            handNode.addChild(container);
+        console.log(`[Game] Node_PlayerUI configured with Widget alignment`);
 
-            playerUINode.addChild(handNode);
+        // Create or update hand container nodes with Widget configuration
+        this.createOrUpdateHandNodes(playerUINode);
+
+        return playerUINode;
+    }
+
+    /**
+     * 创建或更新手牌节点的 Widget 配置
+     * 根据游戏模式使用对应的布局配置
+     */
+    private createOrUpdateHandNodes(playerUINode: Node): void {
+        // 默认使用5人布局创建所有可能的节点
+        // 如果是 The Decree 模式，使用4人布局
+        let layoutConfig;
+        if (this._gameMode === 'the_decree') {
+            layoutConfig = PlayerLayoutConfig.getFourPlayerLayout();
+            console.log(`[Game] Using 4-player layout for The Decree mode`);
+        } else {
+            layoutConfig = PlayerLayoutConfig.getFivePlayerLayout();
+            console.log(`[Game] Using 5-player layout`);
+        }
+
+        const activeCount = layoutConfig.filter(c => c.active).length;
+        console.log(`[Game] Applying Widget layout: ${activeCount} active / ${layoutConfig.length} total positions`);
+
+        layoutConfig.forEach(config => {
+            // 查找现有节点或创建新节点
+            let handNode = playerUINode.getChildByName(config.name);
+            if (!handNode) {
+                handNode = new Node(config.name);
+                playerUINode.addChild(handNode);
+                console.log(`[Game] Created new hand node: ${config.name}`);
+            } else {
+                console.log(`[Game] Found existing hand node: ${config.name}, updating Widget`);
+            }
+
+            // 添加 UITransform（如果没有）
+            let uiTransform = handNode.getComponent(UITransform);
+            if (!uiTransform) {
+                uiTransform = handNode.addComponent(UITransform);
+            }
+            // 保持默认锚点 (0.5, 0.5) - Widget 会根据对齐方式自动调整位置
+
+            // 添加或获取 Widget 组件（必须使用字符串方式）
+            let handWidget = handNode.getComponent('cc.Widget') as any;
+            if (!handWidget) {
+                handWidget = handNode.addComponent('cc.Widget') as any;
+                console.log(`[Game] Added Widget to ${config.name}`);
+
+                // 立即验证
+                const verifyWidget = handNode.getComponent('cc.Widget');
+                if (!verifyWidget) {
+                    console.error(`[Game] ERROR: Failed to add Widget to ${config.name}!`);
+                    return;
+                } else {
+                    console.log(`[Game] Widget verified on ${config.name}`);
+                }
+            }
+
+            // 重置所有对齐
+            handWidget.isAlignLeft = false;
+            handWidget.isAlignRight = false;
+            handWidget.isAlignTop = false;
+            handWidget.isAlignBottom = false;
+            handWidget.isAlignHorizontalCenter = false;
+            handWidget.isAlignVerticalCenter = false;
+
+            // 应用 widget 配置
+            const w = config.widget;
+            if (w.alignLeft !== undefined) {
+                handWidget.isAlignLeft = w.alignLeft;
+                if (w.left !== undefined) {
+                    handWidget.left = w.left;
+                }
+            }
+            if (w.alignRight !== undefined) {
+                handWidget.isAlignRight = w.alignRight;
+                if (w.right !== undefined) {
+                    handWidget.right = w.right;
+                }
+            }
+            if (w.alignTop !== undefined) {
+                handWidget.isAlignTop = w.alignTop;
+                if (w.top !== undefined) {
+                    handWidget.top = w.top;
+                }
+            }
+            if (w.alignBottom !== undefined) {
+                handWidget.isAlignBottom = w.alignBottom;
+                if (w.bottom !== undefined) {
+                    handWidget.bottom = w.bottom;
+                    console.log(`[Game] ${config.name} bottom set to ${w.bottom}`);
+                }
+            }
+            if (w.alignHorizontalCenter !== undefined) {
+                handWidget.isAlignHorizontalCenter = w.alignHorizontalCenter;
+            }
+            if (w.alignVerticalCenter !== undefined) {
+                handWidget.isAlignVerticalCenter = w.alignVerticalCenter;
+            }
+
+            // 强制立即更新 Widget 对齐
+            handWidget.updateAlignment();
+            console.log(`[Game] ${config.name} Widget alignment updated, position: (${handNode.position.x}, ${handNode.position.y})`);
+
+            // 延迟检查位置是否被改变
+            this.scheduleOnce(() => {
+                console.log(`[Game] ${config.name} position after 1 second: (${handNode.position.x}, ${handNode.position.y})`);
+            }, 1.0);
+
+            // 设置节点激活状态
+            handNode.active = config.active;
+
+            // 确保有 Container 子节点
+            let container = handNode.getChildByName("Container");
+            if (!container) {
+                container = new Node("Container");
+                container.addComponent(UITransform);
+                handNode.addChild(container);
+            }
         });
 
-        console.log("[Game] Node_PlayerUI structure created with 5 hand positions");
-        return playerUINode;
+        console.log("[Game] All hand positions configured with Widget alignment");
     }
 
     // ==================== Public Accessors ====================

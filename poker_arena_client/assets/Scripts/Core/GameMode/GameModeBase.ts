@@ -223,7 +223,7 @@ export abstract class GameModeBase {
      * @param positions 位置配置数组
      * @protected 子类可以调用此方法来应用自定义配置
      */
-    protected applyPlayerLayout(positions: Array<{ name: string; x: number; y: number; active: boolean }>): void {
+    protected applyPlayerLayout(positions: import('./PlayerLayoutConfig').PlayerPosition[]): void {
         const handsManagerNode = this.game.playerUIManagerNode;
         if (!handsManagerNode) {
             console.warn(`[${this.config.name}] PlayerUIManagerNode not found`);
@@ -236,7 +236,11 @@ export abstract class GameModeBase {
             if (handNode) {
                 handNode.active = config.active;
                 if (config.active) {
-                    handNode.setPosition(config.x, config.y, 0);
+                    // 使用 fallback 坐标（如果有）或保持原位置
+                    // Widget 会在节点添加到场景后自动应用锚点
+                    if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
+                        handNode.setPosition(config.fallbackX, config.fallbackY, 0);
+                    }
                 }
             }
         }
