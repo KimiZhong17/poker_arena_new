@@ -149,21 +149,21 @@ export class PlayerLayoutConfig {
         return [
             {
                 name: 'BottomHand',
-                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 0 },
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 30 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280
             },
             {
                 name: 'LeftHand',
-                widget: { alignLeft: true, alignVerticalCenter: true, left: 0 },
+                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: true,
                 fallbackX: -550,
                 fallbackY: 30
             },
             {
                 name: 'TopLeftHand',
-                widget: { alignTop: true, alignHorizontalCenter: true, top: 50 },
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: 280

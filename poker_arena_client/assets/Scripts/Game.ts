@@ -321,29 +321,13 @@ export class Game extends Component {
             console.log(`[Game] Created new Node_PlayerUI at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
         }
 
-        // 添加或更新 UITransform 和 Widget 组件让它填满整个Canvas
+        // Node_PlayerUI只是一个逻辑容器，不需要Widget
+        // 所有手牌节点（BottomHand、LeftHand等）的Widget会直接对齐Canvas
         if (!playerUINode.getComponent(UITransform)) {
             playerUINode.addComponent(UITransform);
         }
 
-        // 必须使用字符串方式获取和添加，类引用在运行时会失败
-        let widget = playerUINode.getComponent('cc.Widget') as any;
-        if (!widget) {
-            widget = playerUINode.addComponent('cc.Widget') as any;
-            console.log('[Game] Added Widget to Node_PlayerUI');
-        }
-
-        // 配置 Widget 填满整个 Canvas
-        widget.isAlignTop = true;
-        widget.isAlignBottom = true;
-        widget.isAlignLeft = true;
-        widget.isAlignRight = true;
-        widget.top = 0;
-        widget.bottom = 0;
-        widget.left = 0;
-        widget.right = 0;
-
-        console.log(`[Game] Node_PlayerUI configured with Widget alignment`);
+        console.log('[Game] Node_PlayerUI configured as container');
 
         // Create or update hand container nodes with Widget configuration
         this.createOrUpdateHandNodes(playerUINode);
@@ -411,6 +395,11 @@ export class Game extends Component {
             handWidget.isAlignBottom = false;
             handWidget.isAlignHorizontalCenter = false;
             handWidget.isAlignVerticalCenter = false;
+
+            // 手牌Widget直接对齐到Canvas
+            // 因为Node_PlayerUI只是逻辑容器，不影响布局
+            // 直接对齐Canvas确保正确的自适应行为
+            handWidget.target = playerUINode.getParent(); // Canvas节点
 
             // 应用 widget 配置
             const w = config.widget;
