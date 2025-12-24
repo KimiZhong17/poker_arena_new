@@ -23,9 +23,6 @@ export class PlayerUINode extends Component {
     @property(Node)
     public infoPanel: Node = null!;  // 信息面板
 
-    @property(Node)
-    public dealerIndicator: Node = null!;  // 庄家标识
-
     // 信息面板子元素（自动查找）
     private nameLabel: Label | null = null;
     private scoreLabel: Label | null = null;
@@ -90,11 +87,6 @@ export class PlayerUINode extends Component {
             }
         }
 
-        if (!this.dealerIndicator) {
-            this.dealerIndicator = this.node.getChildByName("DealerIndicator");
-            // 庄家标识可选，如果不存在就不创建
-        }
-
         // 查找信息面板子元素
         if (this.infoPanel) {
             this.nameLabel = this.infoPanel.getChildByName("NameLabel")?.getComponent(Label) || null;
@@ -133,7 +125,7 @@ export class PlayerUINode extends Component {
             panel.setPosition(-300, 0, 0);
         } else if (this._playerIndex === 2) {
             // Top player: same Y as hand cards (0), left side
-            panel.setPosition(-300, 0, 0);
+            panel.setPosition(-200, 30, 0);
         } else {
             // Left and right players: below hand
             panel.setPosition(0, -100, 0);
@@ -276,25 +268,6 @@ export class PlayerUINode extends Component {
         }
     }
 
-    // ===== 庄家标识管理 =====
-    /**
-     * 显示庄家标识
-     */
-    public showDealerIndicator(): void {
-        if (this.dealerIndicator) {
-            this.dealerIndicator.active = true;
-        }
-    }
-
-    /**
-     * 隐藏庄家标识
-     */
-    public hideDealerIndicator(): void {
-        if (this.dealerIndicator) {
-            this.dealerIndicator.active = false;
-        }
-    }
-
     // ===== Getters =====
     public getPlayer(): Player {
         return this._player;
@@ -317,11 +290,34 @@ export class PlayerUINode extends Component {
     }
 
     /**
+     * 获取手牌容器的世界坐标（用于 dealer indicator 定位）
+     */
+    public getHandContainerWorldPosition(): { x: number, y: number } {
+        if (this.handContainer) {
+            const worldPos = this.handContainer.getWorldPosition();
+            return { x: worldPos.x, y: worldPos.y };
+        }
+        // 如果没有手牌容器，返回节点自身的世界坐标
+        return this.getWorldPosition();
+    }
+
+    /**
+     * 获取信息面板的世界坐标（用于 dealer indicator 定位）
+     */
+    public getInfoPanelWorldPosition(): { x: number, y: number } {
+        if (this.infoPanel) {
+            const worldPos = this.infoPanel.getWorldPosition();
+            return { x: worldPos.x, y: worldPos.y };
+        }
+        // 如果没有信息面板，返回节点自身的世界坐标
+        return this.getWorldPosition();
+    }
+
+    /**
      * 清除所有UI显示
      */
     public clearAll(): void {
         if (this.nameLabel) this.nameLabel.string = "";
         if (this.scoreLabel) this.scoreLabel.string = "";
-        this.hideDealerIndicator();
     }
 }

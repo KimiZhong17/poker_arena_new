@@ -76,6 +76,15 @@ export class PlayerManager {
     }
 
     /**
+     * 获取玩家的索引位置（在座位顺序中的位置）
+     * @param playerId 玩家ID
+     * @returns 玩家索引，如果不存在返回 -1
+     */
+    public getPlayerIndex(playerId: string): number {
+        return this._playerOrder.indexOf(playerId);
+    }
+
+    /**
      * 获取下一个玩家（顺时针）
      */
     public getNextPlayer(currentPlayerId: string): Player | undefined {

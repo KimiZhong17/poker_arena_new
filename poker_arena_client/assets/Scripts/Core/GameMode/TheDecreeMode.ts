@@ -510,6 +510,26 @@ export class TheDecreeMode extends GameModeBase {
             theDecreePlayer.resetRound();
         }
 
+        // 显示庄家指示器
+        const dealerIndex = this.playerManager.getPlayerIndex(dealerId);
+        if (dealerIndex !== -1 && this.game.playerUIManager) {
+            // 根据玩家数量和位置设置不同的偏移量
+            const playerCount = this.playerManager.getPlayerCount();
+            const dealerOffsets = this.getDealerOffsetsByPlayerCount(playerCount);
+
+            // 设置对应玩家的偏移量
+            if (this.game.playerUIManager.dealerIndicator && dealerIndex < dealerOffsets.length) {
+                const offset = dealerOffsets[dealerIndex];
+                this.game.playerUIManager.dealerIndicator.setOffset(offset.x, offset.y);
+                console.log(`[TheDecree] Set dealer indicator offset for player ${dealerIndex} (${playerCount} players): (${offset.x}, ${offset.y})`);
+            }
+
+            // 第一次显示立即显示，后续有动画
+            const immediate = this.currentRound.roundNumber === 1;
+            this.game.playerUIManager.showDealer(dealerIndex, immediate);
+            console.log(`[TheDecree] Dealer indicator shown for player ${dealerIndex} (round ${this.currentRound.roundNumber})`);
+        }
+
         this.state = GameState.DEALER_CALL;
 
         // Notify UI to update call buttons visibility
@@ -762,6 +782,60 @@ export class TheDecreeMode extends GameModeBase {
             scores.set(player.id, player.score);
         }
         return scores;
+    }
+
+    // ========== Dealer Indicator Offset Configuration ==========
+
+    /**
+     * 获取不同玩家数量下的庄家指示器偏移配置
+     * @param playerCount 玩家数量 (2-5)
+     * @returns 每个玩家位置的偏移量数组
+     */
+    private getDealerOffsetsByPlayerCount(playerCount: number): Array<{ x: number, y: number }> {
+        switch (playerCount) {
+            case 2:
+                // 2人布局：底部 (0) 和 顶部左侧 (1) - 面对面
+                return [
+                    { x: -150, y: 80 },   // Player 0 (bottom) - 左侧偏上
+                    { x: -150, y: -80 },  // Player 1 (top-left) - 左侧偏下
+                ];
+
+            case 3:
+                // 3人布局：底部 (0)、顶部左侧 (1)、顶部右侧 (2) - 三角形
+                return [
+                    { x: -150, y: 80 },   // Player 0 (bottom) - 左侧偏上
+                    { x: 120, y: -50 },   // Player 1 (top-left) - 右侧偏下
+                    { x: -120, y: -50 },  // Player 2 (top-right) - 左侧偏下
+                ];
+
+            case 4:
+                // 4人布局：底部 (0)、左侧 (1)、顶部左侧 (2)、顶部右侧 (3) - 钻石形
+                return [
+                    { x: -300, y: 50 },   // Player 0 (bottom) - 左侧偏上
+                    { x: 80, y: -100 },     // Player 1 (left) - 右侧居中
+                    { x: -200, y: -50 },   // Player 2 (top) - 右侧偏下
+                    { x: -80, y: -100 },  // Player 3 (right) - 左侧偏下
+                ];
+
+            case 5:
+                // 5人布局：底部 (0)、左侧 (1)、顶部左侧 (2)、顶部右侧 (3)、右侧 (4) - 五角形
+                return [
+                    { x: -150, y: 80 },   // Player 0 (bottom) - 左侧偏上
+                    { x: 120, y: 30 },    // Player 1 (left) - 右侧偏上
+                    { x: 150, y: -50 },   // Player 2 (top-left) - 右侧偏下
+                    { x: -150, y: -50 },  // Player 3 (top-right) - 左侧偏下
+                    { x: -120, y: 30 },   // Player 4 (right) - 左侧偏上
+                ];
+
+            default:
+                console.warn(`[TheDecree] Unsupported player count: ${playerCount}, using 4-player offsets`);
+                return [
+                    { x: -150, y: 80 },
+                    { x: 120, y: 0 },
+                    { x: 150, y: -50 },
+                    { x: -150, y: -50 },
+                ];
+        }
     }
 
     // ========== Auto-play Methods ==========

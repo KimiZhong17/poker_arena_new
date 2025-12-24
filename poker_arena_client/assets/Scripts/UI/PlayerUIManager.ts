@@ -3,8 +3,9 @@ import { PlayerUINode } from './PlayerUINode';
 import { Player } from '../Core/Player';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
 import { PlayerPosition } from '../Core/GameMode/PlayerLayoutConfig';
+import { DealerIndicator } from './DealerIndicator';
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 
 /**
  * PlayerUIManager - 管理所有玩家的UI节点
@@ -22,6 +23,10 @@ const { ccclass } = _decorator;
  */
 @ccclass('PlayerUIManager')
 export class PlayerUIManager extends Component {
+    // ===== 庄家指示器引用 =====
+    @property(DealerIndicator)
+    public dealerIndicator: DealerIndicator | null = null;
+
     // ===== 玩家UI节点数组（核心）=====
     private _playerUINodes: PlayerUINode[] = [];
 
@@ -100,7 +105,7 @@ export class PlayerUIManager extends Component {
 
             // 如果节点已经有 Widget 组件，不要手动设置位置（让 Widget 自动管理）
             // 否则使用 fallback 坐标作为初始位置
-            const existingWidget = playerNode.getComponent('cc.Widget');
+            const existingWidget = playerNode.getComponent('cc.Widget') as any;
             console.log(`[PlayerUIManager] ${config.name} checking Widget: ${!!existingWidget}`);
             if (!existingWidget) {
                 // 只有在没有 Widget 的情况下才使用 fallback 坐标
@@ -111,7 +116,9 @@ export class PlayerUIManager extends Component {
             } else {
                 console.log(`[PlayerUIManager] ${config.name} has Widget, position will be managed automatically`);
                 // 强制更新一次 Widget
-                existingWidget.updateAlignment();
+                if (existingWidget.updateAlignment) {
+                    existingWidget.updateAlignment();
+                }
                 console.log(`[PlayerUIManager] ${config.name} Widget updated, position: (${playerNode.position.x}, ${playerNode.position.y})`);
             }
             playerNode.active = config.active;
@@ -191,17 +198,25 @@ export class PlayerUIManager extends Component {
     }
 
     /**
-     * 显示庄家标识
+     * 显示庄家标识（使用独立的 DealerIndicator 组件）
+     * @param dealerIndex 庄家玩家索引
+     * @param immediate 是否立即移动（不使用动画）
      */
-    public showDealer(dealerIndex: number): void {
-        // 先隐藏所有
-        this._playerUINodes.forEach(node => node.hideDealerIndicator());
+    public showDealer(dealerIndex: number, immediate: boolean = false): void {
+        if (!this.dealerIndicator) {
+            console.warn('[PlayerUIManager] DealerIndicator not configured! Please add a DealerIndicator component to the scene.');
+            return;
+        }
 
-        // 显示指定玩家
         const node = this._playerUINodes[dealerIndex];
         if (node) {
-            node.showDealerIndicator();
-            console.log(`[PlayerUIManager] Showing dealer for player ${dealerIndex}`);
+            // 获取 PlayerUINode 的世界坐标
+            const worldPos = node.getWorldPosition();
+            console.log(`[PlayerUIManager] Player ${dealerIndex} node world position: (${worldPos.x}, ${worldPos.y})`);
+            this.dealerIndicator.moveToDealerPosition(dealerIndex, worldPos, immediate);
+            console.log(`[PlayerUIManager] DealerIndicator moved to player ${dealerIndex}`);
+        } else {
+            console.warn(`[PlayerUIManager] Player ${dealerIndex} not found for dealer indicator`);
         }
     }
 
@@ -209,7 +224,9 @@ export class PlayerUIManager extends Component {
      * 隐藏所有庄家标识
      */
     public hideAllDealers(): void {
-        this._playerUINodes.forEach(node => node.hideDealerIndicator());
+        if (this.dealerIndicator) {
+            this.dealerIndicator.hide();
+        }
     }
 
     // ===== 卡牌选择接口 =====
