@@ -369,7 +369,6 @@ export class TheDecreeUIController extends Component {
         if (this.btnCall123Node) {
             this.btnCall123Node.active = false;
             console.log('[TheDecreeUI] Set btnCall123Node.active = false');
-            console.log('[TheDecreeUI] Parent active:', this.btnCall123Node.parent?.active);
         } else {
             // Fallback: hide individual buttons if container not found
             console.log('[TheDecreeUI] No container found, hiding individual buttons');
@@ -395,16 +394,8 @@ export class TheDecreeUIController extends Component {
         console.log('[TheDecreeUI] showCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
 
         if (this.btnCall123Node) {
-            // Make sure parent node is active
-            if (this.btnCall123Node.parent && !this.btnCall123Node.parent.active) {
-                console.log('[TheDecreeUI] Parent node is inactive! Activating parent:', this.btnCall123Node.parent.name);
-                this.btnCall123Node.parent.active = true;
-            }
-
             this.btnCall123Node.active = true;
             console.log('[TheDecreeUI] Set btnCall123Node.active = true');
-            console.log('[TheDecreeUI] After setting - node.active:', this.btnCall123Node.active);
-            console.log('[TheDecreeUI] Parent active:', this.btnCall123Node.parent?.active);
         } else {
             // Fallback: show individual buttons if container not found
             console.log('[TheDecreeUI] No container found, showing individual buttons');

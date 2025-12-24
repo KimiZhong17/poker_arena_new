@@ -250,7 +250,7 @@ export class Game extends Component {
 
         // Auto-find ObjectTheDecreeNode
         if (!this.objectsTheDecreeNode) {
-            this.objectsTheDecreeNode = this.findNodeByName(this.node, 'ObjectTheDecreeNode');
+            this.objectsTheDecreeNode = this.findNodeByName(this.node, 'TheDecree');
             if (this.objectsTheDecreeNode) {
                 console.log('[Game] Auto-found ObjectTheDecreeNode');
             }
@@ -258,7 +258,7 @@ export class Game extends Component {
 
         // Auto-find ObjectGuandanNode
         if (!this.objectsGuandanNode) {
-            this.objectsGuandanNode = this.findNodeByName(this.node, 'ObjectGuandanNode');
+            this.objectsGuandanNode = this.findNodeByName(this.node, 'Guandan');
             if (this.objectsGuandanNode) {
                 console.log('[Game] Auto-found ObjectGuandanNode');
             }
