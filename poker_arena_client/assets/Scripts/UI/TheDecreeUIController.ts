@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Button } from 'cc';
+import { _decorator, Component, Node, Button, Label, Color } from 'cc';
 import { Game } from '../Game';
 const { ccclass, property } = _decorator;
 
@@ -20,10 +20,14 @@ export class TheDecreeUIController extends Component {
     @property(Node)
     public btnCall123Node: Node | null = null;
 
+    @property(Button)
+    public autoPlayToggleButton: Button | null = null;
+
     // Auto-found references (don't need to assign in editor)
     private callOneButton: Button | null = null;
     private callTwoButton: Button | null = null;
     private callThreeButton: Button | null = null;
+    private autoPlayToggleLabel: Label | null = null;
 
     // Temporarily unused - uncomment when needed
     // @property(Button)
@@ -60,13 +64,16 @@ export class TheDecreeUIController extends Component {
     }
 
     start() {
-        // Enable card selection when game starts
-        this.scheduleOnce(() => {
-            this.enableCardSelection();
-        }, 2);
-
         // Initialize button visibility
         this.updateCallButtonsVisibility();
+
+        // Initialize auto-play toggle UI
+        this.scheduleOnce(() => {
+            if (this._game && this._game.theDecreeMode) {
+                const isEnabled = this._game.theDecreeMode.isPlayer0AutoPlayEnabled();
+                this.updateAutoPlayToggleUI(isEnabled);
+            }
+        }, 0.1);
     }
 
     /**
@@ -138,6 +145,16 @@ export class TheDecreeUIController extends Component {
             this.playButton = playButtonNode?.getComponent(Button) || null;
         }
 
+        // Auto-find auto-play toggle button
+        if (!this.autoPlayToggleButton) {
+            const toggleNode = this.node.getChildByName('AutoPlayToggleButton');
+            this.autoPlayToggleButton = toggleNode?.getComponent(Button) || null;
+            if (this.autoPlayToggleButton) {
+                const labelNode = toggleNode?.getChildByName('Label');
+                this.autoPlayToggleLabel = labelNode?.getComponent(Label) || null;
+            }
+        }
+
         // Auto-find Btn_Call123 container node if not assigned
         if (!this.btnCall123Node) {
             this.btnCall123Node = this.node.getChildByName('Btn_Call123');
@@ -179,6 +196,7 @@ export class TheDecreeUIController extends Component {
 
         console.log('[TheDecreeUI] UI elements found:', {
             playButton: !!this.playButton,
+            autoPlayToggleButton: !!this.autoPlayToggleButton,
             btnCall123Node: !!this.btnCall123Node,
             callOneButton: !!this.callOneButton,
             callTwoButton: !!this.callTwoButton,
@@ -194,6 +212,10 @@ export class TheDecreeUIController extends Component {
     private registerButtonEvents(): void {
         if (this.playButton) {
             this.playButton.node.on(Button.EventType.CLICK, this.onPlayButtonClicked, this);
+        }
+
+        if (this.autoPlayToggleButton) {
+            this.autoPlayToggleButton.node.on(Button.EventType.CLICK, this.onAutoPlayToggleClicked, this);
         }
 
         if (this.callOneButton) {
@@ -216,8 +238,9 @@ export class TheDecreeUIController extends Component {
 
     /**
      * Enable card selection for player 0
+     * Can be called externally by TheDecreeMode
      */
-    private enableCardSelection(): void {
+    public enableCardSelection(): void {
         if (!this._game || !this._game.handsManager) {
             console.error('[TheDecreeUI] Cannot enable card selection - game not ready');
             return;
@@ -322,6 +345,47 @@ export class TheDecreeUIController extends Component {
         } else {
             console.error(`[TheDecreeUI] Failed to call ${cardsCount} cards`);
             // this.updateStatusLabel('叫牌失败！', 'error');
+        }
+    }
+
+    /**
+     * Handle auto-play toggle button clicked
+     */
+    private onAutoPlayToggleClicked(): void {
+        if (!this._game || !this._game.theDecreeMode) {
+            console.error('[TheDecreeUI] Cannot toggle auto-play - game not ready');
+            return;
+        }
+
+        const theDecreeMode = this._game.theDecreeMode;
+        const currentState = theDecreeMode.isPlayer0AutoPlayEnabled();
+        const newState = !currentState;
+
+        theDecreeMode.setPlayer0AutoPlay(newState);
+        this.updateAutoPlayToggleUI(newState);
+
+        console.log(`[TheDecreeUI] Auto-play toggled to: ${newState ? 'ON' : 'OFF'}`);
+    }
+
+    /**
+     * Update auto-play toggle button visual state
+     */
+    private updateAutoPlayToggleUI(isEnabled: boolean): void {
+        if (!this.autoPlayToggleButton || !this.autoPlayToggleLabel) {
+            return;
+        }
+
+        // Update label text
+        this.autoPlayToggleLabel.string = isEnabled ? '自动出牌: 开' : '自动出牌: 关';
+
+        // Update button color
+        const targetNode = this.autoPlayToggleButton.node.getChildByName('Background');
+        if (targetNode) {
+            const sprite = targetNode.getComponent('cc.Sprite');
+            if (sprite) {
+                // Green when enabled, red when disabled
+                (sprite as any).color = isEnabled ? new Color(100, 200, 100) : new Color(200, 100, 100);
+            }
         }
     }
 

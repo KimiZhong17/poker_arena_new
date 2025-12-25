@@ -21,6 +21,7 @@ interface RoundState {
     roundWinnerId: string | null;
     roundLoserId: string | null;
     handResults: Map<string, TexasHandResult> | null;  // Hand evaluation results for each player
+    aiPlayersAutoPlayed: boolean;  // Whether AI players have already auto-played this round
 }
 
 /**
@@ -63,6 +64,9 @@ export class TheDecreeMode extends GameModeBase {
     // Auto-play timing
     private stateTimer: number = 0;  // Timer for current state
     private readonly STATE_DELAY = 2.0;  // Delay between states (seconds)
+
+    // Auto-play toggle for player_0
+    private isPlayer0AutoPlay: boolean = false;  // Default: auto-play enabled
 
     constructor(game: Game, config?: GameModeConfig) {
         // 使用提供的config或默认config
@@ -161,15 +165,24 @@ export class TheDecreeMode extends GameModeBase {
 
             case GameState.DEALER_CALL:
                 if (this.stateTimer >= this.STATE_DELAY) {
-                    this.autoDealerCall();
-                    this.stateTimer = 0;
+                    // Only reset timer if auto-play actually executes
+                    const executed = this.autoDealerCall();
+                    if (executed) {
+                        this.stateTimer = 0;
+                    }
                 }
                 break;
 
             case GameState.PLAYER_SELECTION:
                 if (this.stateTimer >= this.STATE_DELAY) {
-                    this.autoPlayerSelection();
-                    this.stateTimer = 0;
+                    // Only auto-play once per round for AI players
+                    if (this.currentRound && !this.currentRound.aiPlayersAutoPlayed) {
+                        const anyAIPlayed = this.autoPlayerSelection();
+                        if (anyAIPlayed) {
+                            this.currentRound.aiPlayersAutoPlayed = true;
+                        }
+                        this.stateTimer = 0;
+                    }
                 }
                 break;
 
@@ -494,6 +507,21 @@ export class TheDecreeMode extends GameModeBase {
     }
 
     /**
+     * Enable card selection for player_0 if needed
+     * Notifies TheDecreeUIController to enable card selection when in manual mode
+     */
+    private enableCardSelectionIfNeeded(): void {
+        if (!this.game.objectsTheDecreeNode) return;
+
+        // Find TheDecreeUIController component
+        const uiController = this.game.objectsTheDecreeNode.getComponent('TheDecreeUIController') as any;
+        if (uiController && typeof uiController.enableCardSelection === 'function') {
+            uiController.enableCardSelection();
+            console.log('[TheDecree] Card selection enabled for player_0');
+        }
+    }
+
+    /**
      * Start a new round with specified dealer
      */
     public startNewRound(dealerId: string): void {
@@ -504,7 +532,8 @@ export class TheDecreeMode extends GameModeBase {
             playerPlays: new Map(),
             roundWinnerId: null,
             roundLoserId: null,
-            handResults: null
+            handResults: null,
+            aiPlayersAutoPlayed: false
         };
 
         // Clear hand type displays from previous round
@@ -554,6 +583,9 @@ export class TheDecreeMode extends GameModeBase {
 
         // Update UI - hide call buttons after dealer makes decision
         this.updateUICallButtonsVisibility();
+
+        // Enable card selection for player_0 if manual mode
+        this.enableCardSelectionIfNeeded();
 
         return true;
     }
@@ -760,6 +792,7 @@ export class TheDecreeMode extends GameModeBase {
         }
     }
 
+    // TODO: Add animation for drawing cards
     private drawCard(): number {
         const card = this.deck.pop();
         if (card === undefined) {
@@ -851,6 +884,23 @@ export class TheDecreeMode extends GameModeBase {
         return this.currentRound.handResults;
     }
 
+    /**
+     * Get auto-play toggle state for player_0
+     * 获取player_0的自动出牌开关状态
+     */
+    public isPlayer0AutoPlayEnabled(): boolean {
+        return this.isPlayer0AutoPlay;
+    }
+
+    /**
+     * Set auto-play toggle state for player_0
+     * 设置player_0的自动出牌开关状态
+     */
+    public setPlayer0AutoPlay(enabled: boolean): void {
+        this.isPlayer0AutoPlay = enabled;
+        console.log(`[TheDecree] Player_0 auto-play ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
     // ========== Dealer Indicator Offset Configuration ==========
 
     /**
@@ -939,13 +989,21 @@ export class TheDecreeMode extends GameModeBase {
 
     /**
      * 自动庄家叫牌（AI决策）
+     * @returns {boolean} 是否执行了自动叫牌
      */
-    private autoDealerCall(): void {
-        if (!this.currentRound) return;
+    private autoDealerCall(): boolean {
+        if (!this.currentRound) return false;
 
         const dealerId = this.currentRound.dealerId;
+
+        // Skip auto-play for player_0 if toggle is disabled
+        if (dealerId === 'player_0' && !this.isPlayer0AutoPlay) {
+            console.log('[TheDecree] Waiting for player_0 to manually call...');
+            return false;
+        }
+
         const dealer = this.playerManager.getPlayer(dealerId);
-        if (!dealer) return;
+        if (!dealer) return false;
 
         // Simple AI: Random choice weighted by hand size
         let cardsToPlay: 1 | 2 | 3;
@@ -963,26 +1021,36 @@ export class TheDecreeMode extends GameModeBase {
 
         console.log(`[TheDecree] Round ${this.currentRound.roundNumber}: Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
         this.dealerCall(cardsToPlay);
+        return true;
     }
 
     /**
      * 自动所有玩家选牌（AI决策）
+     * @returns {boolean} 是否有AI玩家执行了自动出牌
      */
-    private autoPlayerSelection(): void {
-        if (!this.currentRound) return;
+    private autoPlayerSelection(): boolean {
+        if (!this.currentRound) return false;
 
         const cardsToPlay = this.currentRound.cardsToPlay;
         const playerOrder = this.playerManager.getPlayerOrder();
+        let anyAIPlayed = false;
 
         for (const playerId of playerOrder) {
             const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
             if (!player || player.hasPlayed) continue;
+
+            // Skip auto-play for player_0 if toggle is disabled
+            if (playerId === 'player_0' && !this.isPlayer0AutoPlay) {
+                console.log('[TheDecree] Waiting for player_0 to manually select cards...');
+                continue;
+            }
 
             // Simple AI: Just play first N cards
             const selectedCards = player.handCards.slice(0, cardsToPlay);
 
             if (selectedCards.length === cardsToPlay) {
                 this.playCards(selectedCards, playerId);
+                anyAIPlayed = true;
 
                 const cardNames = selectedCards.map((card: number) => {
                     const suit = this.getSuitName(this.getSuit(card));
@@ -993,6 +1061,8 @@ export class TheDecreeMode extends GameModeBase {
                 console.log(`[TheDecree]   ${playerId} plays: [${cardNames}]`);
             }
         }
+
+        return anyAIPlayed;
     }
 
     /**

@@ -361,7 +361,7 @@ export class PlayerHandDisplay extends Component {
 
         // 1. Show stacked card backs (representing the remaining hand cards)
         const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
-        const stackOffset = 3; // Pixel offset for stacking effect
+        const stackOffset = 2; // Pixel offset for stacking effect
 
         for (let i = 0; i < maxStackDisplay; i++) {
             const cardNode = this.createCardNode(0, false); // 0 = back only
