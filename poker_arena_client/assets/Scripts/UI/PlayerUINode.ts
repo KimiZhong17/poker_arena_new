@@ -26,6 +26,7 @@ export class PlayerUINode extends Component {
     // 信息面板子元素（自动查找）
     private nameLabel: Label | null = null;
     private scoreLabel: Label | null = null;
+    private handTypeLabel: Label | null = null;  // 牌型显示标签
     private avatarSprite: Sprite | null = null;
 
     // ===== 数据绑定 =====
@@ -91,6 +92,7 @@ export class PlayerUINode extends Component {
         if (this.infoPanel) {
             this.nameLabel = this.infoPanel.getChildByName("NameLabel")?.getComponent(Label) || null;
             this.scoreLabel = this.infoPanel.getChildByName("ScoreLabel")?.getComponent(Label) || null;
+            this.handTypeLabel = this.infoPanel.getChildByName("HandTypeLabel")?.getComponent(Label) || null;
             this.avatarSprite = this.infoPanel.getChildByName("Avatar")?.getComponent(Sprite) || null;
         }
     }
@@ -145,6 +147,15 @@ export class PlayerUINode extends Component {
         scoreLabelComp.fontSize = 18;
         scoreLabel.setPosition(0, -25, 0);
         panel.addChild(scoreLabel);
+
+        // HandType label (for showing poker hand type)
+        const handTypeLabel = new Node("HandTypeLabel");
+        const handTypeLabelComp = handTypeLabel.addComponent(Label);
+        handTypeLabel.addComponent(UITransform);
+        handTypeLabelComp.fontSize = 16;
+        handTypeLabelComp.color = new cc.Color(255, 215, 0, 255); // Gold color
+        handTypeLabel.setPosition(0, -50, 0);
+        panel.addChild(handTypeLabel);
 
         // Avatar 可选
         const avatar = new Node("Avatar");
@@ -221,6 +232,34 @@ export class PlayerUINode extends Component {
     public setAvatar(spriteFrame: SpriteFrame): void {
         if (this.avatarSprite) {
             this.avatarSprite.spriteFrame = spriteFrame;
+        }
+    }
+
+    /**
+     * 设置牌型显示文本
+     * @param handTypeText 牌型文本（如"同花 +9"）
+     * @param color 可选的颜色（十六进制字符串，如 "#FFD700"）
+     */
+    public setHandType(handTypeText: string, color?: string): void {
+        if (this.handTypeLabel) {
+            this.handTypeLabel.string = handTypeText;
+            if (color) {
+                // Parse hex color string to Color
+                const hexColor = color.replace('#', '');
+                const r = parseInt(hexColor.substring(0, 2), 16);
+                const g = parseInt(hexColor.substring(2, 4), 16);
+                const b = parseInt(hexColor.substring(4, 6), 16);
+                this.handTypeLabel.color = new cc.Color(r, g, b, 255);
+            }
+        }
+    }
+
+    /**
+     * 清除牌型显示
+     */
+    public clearHandType(): void {
+        if (this.handTypeLabel) {
+            this.handTypeLabel.string = "";
         }
     }
 

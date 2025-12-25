@@ -198,6 +198,28 @@ export class PlayerUIManager extends Component {
     }
 
     /**
+     * 更新玩家牌型显示
+     * @param playerIndex 玩家索引
+     * @param handTypeText 牌型文本
+     * @param color 可选的颜色
+     */
+    public updatePlayerHandType(playerIndex: number, handTypeText: string, color?: string): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.setHandType(handTypeText, color);
+        }
+    }
+
+    /**
+     * 清除所有玩家的牌型显示
+     */
+    public clearAllHandTypes(): void {
+        for (const node of this._playerUINodes) {
+            node.clearHandType();
+        }
+    }
+
+    /**
      * 显示庄家标识（使用独立的 DealerIndicator 组件）
      * @param dealerIndex 庄家玩家索引
      * @param immediate 是否立即移动（不使用动画）

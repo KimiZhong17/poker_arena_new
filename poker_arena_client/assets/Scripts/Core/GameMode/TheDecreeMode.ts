@@ -1,5 +1,6 @@
 import { GameModeBase, GameModeConfig } from "./GameModeBase";
 import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from "./TexasHoldEmEvaluator";
+import { HandTypeHelper } from "./HandTypeHelper";
 import { CardSuit, CardPoint } from "../../Card/CardConst";
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
@@ -19,6 +20,7 @@ interface RoundState {
     playerPlays: Map<string, number[]>;  // Cards played by each player
     roundWinnerId: string | null;
     roundLoserId: string | null;
+    handResults: Map<string, TexasHandResult> | null;  // Hand evaluation results for each player
 }
 
 /**
@@ -501,8 +503,12 @@ export class TheDecreeMode extends GameModeBase {
             cardsToPlay: 0,
             playerPlays: new Map(),
             roundWinnerId: null,
-            roundLoserId: null
+            roundLoserId: null,
+            handResults: null
         };
+
+        // Clear hand type displays from previous round
+        this.clearHandTypeDisplays();
 
         // Reset player states
         for (const player of this.playerManager.getAllPlayers()) {
@@ -565,6 +571,9 @@ export class TheDecreeMode extends GameModeBase {
             const result = TexasHoldEmEvaluator.evaluate(allCards);
             results.set(playerId, result);
         }
+
+        // Store hand results in current round
+        this.currentRound.handResults = results;
 
         // Find winner and loser
         let winnerId: string = "";
@@ -629,6 +638,42 @@ export class TheDecreeMode extends GameModeBase {
 
         // Update score display in real-time
         this.updateAllScoresDisplay();
+
+        // Display hand types for all players
+        this.displayHandTypes(results);
+    }
+
+    /**
+     * Display hand types for all players in UI
+     * 在 UI 中显示所有玩家的牌型
+     */
+    private displayHandTypes(results: Map<string, TexasHandResult>): void {
+        if (!this.game.playerUIManager) return;
+
+        const winnerId = this.currentRound?.roundWinnerId;
+
+        for (const [playerId, result] of results) {
+            const playerIndex = this.playerManager.getPlayerIndex(playerId);
+            if (playerIndex === -1) continue;
+
+            const isWinner = playerId === winnerId;
+            const handTypeText = HandTypeHelper.formatWithScore(result.type, isWinner);
+            const color = HandTypeHelper.getDisplayColor(result.type);
+
+            this.game.playerUIManager.updatePlayerHandType(playerIndex, handTypeText, color);
+        }
+
+        console.log('[TheDecree] Hand types displayed for all players');
+    }
+
+    /**
+     * Clear hand type displays (called when starting a new round)
+     * 清除牌型显示（在开始新回合时调用）
+     */
+    private clearHandTypeDisplays(): void {
+        if (this.game.playerUIManager) {
+            this.game.playerUIManager.clearAllHandTypes();
+        }
     }
 
     // ========== Refill ==========
@@ -782,6 +827,28 @@ export class TheDecreeMode extends GameModeBase {
             scores.set(player.id, player.score);
         }
         return scores;
+    }
+
+    /**
+     * Get hand result for a specific player in current round
+     * 获取指定玩家在当前回合的牌型结果
+     */
+    public getPlayerHandResult(playerId: string): TexasHandResult | null {
+        if (!this.currentRound || !this.currentRound.handResults) {
+            return null;
+        }
+        return this.currentRound.handResults.get(playerId) || null;
+    }
+
+    /**
+     * Get all hand results for current round
+     * 获取当前回合所有玩家的牌型结果
+     */
+    public getAllHandResults(): Map<string, TexasHandResult> | null {
+        if (!this.currentRound) {
+            return null;
+        }
+        return this.currentRound.handResults;
     }
 
     // ========== Dealer Indicator Offset Configuration ==========
