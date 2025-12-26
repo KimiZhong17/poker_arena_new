@@ -1,9 +1,9 @@
-import { GameModeBase } from "./GameModeBase";
+import { GameModeClientBase } from "./GameModeClientBase";
 
 /**
  * Guandan game mode implementation
  */
-export class GuandanMode extends GameModeBase {
+export class GuandanMode extends GameModeClientBase {
     private currentLevelRank: number = 3; // Start from 3
     private playerHands: Map<string, number[]> = new Map();
     private lastPlay: { playerId: string; cards: number[] } | null = null;

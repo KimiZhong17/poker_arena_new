@@ -1,4 +1,4 @@
-import { CardSuit, CardPoint } from "../../Card/CardConst";
+import { CardSuit, CardPoint } from "./CardConst";
 
 /**
  * Texas Hold'em hand types (sorted by strength)

@@ -1,7 +1,7 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
 import { SceneManager } from './Manager/SceneManager';
 import { UserManager } from './Manager/UserManager';
-import { GameModeFactory } from './Core/GameMode/GameModeFactory';
+import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
 
 const { ccclass, property } = _decorator;
 
@@ -129,7 +129,7 @@ export class Hall extends Component {
         }
 
         // Validate that the game mode exists in factory
-        const factory = GameModeFactory.getInstance();
+        const factory = GameModeClientFactory.getInstance();
         if (!factory.hasMode(gameModeId)) {
             console.error(`[Hall] Game mode not registered: ${gameModeId}`);
             return;

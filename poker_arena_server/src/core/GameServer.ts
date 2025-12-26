@@ -264,32 +264,63 @@ export class GameServer {
             return;
         }
 
-        // 广播游戏开始
-        const event: GameStartEvent = {
-            players: room.getPlayersInfo()
-        };
-
-        room.broadcast(ServerMessageType.GAME_START, event);
-
         console.log(`[GameServer] Game started in room ${room.id}`);
-
-        // TODO: 初始化游戏逻辑（发牌等）
     }
 
     /**
      * 处理庄家叫牌
      */
     private handleDealerCall(socket: Socket, data: DealerCallRequest): void {
-        // TODO: 实现庄家叫牌逻辑
-        console.log(`[GameServer] Dealer call: ${data.cardsToPlay} cards`);
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+            return;
+        }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        // Verify player ID matches
+        if (data.playerId !== player.id) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Player ID mismatch');
+            return;
+        }
+
+        // Handle dealer call in room
+        const success = room.handleDealerCall(player.id, data.cardsToPlay);
+
+        console.log(`[GameServer] Player ${player.name} dealer call: ${data.cardsToPlay} cards (${success ? 'success' : 'failed'})`);
     }
 
     /**
      * 处理玩家出牌
      */
     private handlePlayCards(socket: Socket, data: PlayCardsRequest): void {
-        // TODO: 实现玩家出牌逻辑
-        console.log(`[GameServer] Player played ${data.cards.length} cards`);
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+            return;
+        }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        // Verify player ID matches
+        if (data.playerId !== player.id) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Player ID mismatch');
+            return;
+        }
+
+        // Handle play cards in room
+        const success = room.handlePlayCards(player.id, data.cards);
+
+        console.log(`[GameServer] Player ${player.name} played ${data.cards.length} cards (${success ? 'success' : 'failed'})`);
     }
 
     // ==================== 连接管理 ====================

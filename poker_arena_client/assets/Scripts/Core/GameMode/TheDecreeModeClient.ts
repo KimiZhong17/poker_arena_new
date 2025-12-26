@@ -1,0 +1,373 @@
+import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
+import { Game } from "../../Game";
+import { PlayerInfo } from "../Player";
+import {
+    DealCardsEvent,
+    CommunityCardsEvent,
+    DealerSelectedEvent,
+    DealerCalledEvent,
+    PlayerPlayedEvent,
+    ShowdownEvent,
+    RoundEndEvent,
+    GameOverEvent
+} from '../../Network/Messages';
+
+/**
+ * The Decree game mode - Network/Client version
+ * 网络版未定之数游戏模式（客户端）
+ *
+ * 职责：
+ * - 监听服务器事件并更新 UI
+ * - 不包含任何游戏逻辑（逻辑在服务器）
+ * - 通过 NetworkClient 发送玩家操作到服务器
+ */
+export class TheDecreeModeClient extends GameModeClientBase {
+    private communityCards: number[] = [];
+    private dealerId: string = '';
+    private currentRoundNumber: number = 0;
+    private cardsToPlay: number = 0;
+
+    constructor(game: Game, config?: GameModeConfig) {
+        const defaultConfig: GameModeConfig = {
+            id: "the_decree",
+            name: "TheDecree",
+            displayName: "未定之数",
+            minPlayers: 2,
+            maxPlayers: 4,
+            deckCount: 1,
+            initialHandSize: 5,
+            description: "Network multiplayer poker game"
+        };
+
+        super(game, config || defaultConfig);
+    }
+
+    // ==================== 生命周期方法 ====================
+
+    public onEnter(): void {
+        console.log('[TheDecreeModeClient] Entering game mode');
+        this.isActive = true;
+
+        // 调整玩家布局
+        this.adjustPlayerLayout();
+
+        // 显示 UI
+        this.showUI();
+
+        // 注册网络事件监听器
+        this.registerNetworkEvents();
+
+        console.log('[TheDecreeModeClient] Waiting for server events...');
+    }
+
+    public onExit(): void {
+        console.log('[TheDecreeModeClient] Exiting game mode');
+        this.isActive = false;
+
+        // 注销网络事件监听器
+        this.unregisterNetworkEvents();
+
+        // 隐藏 UI
+        this.hideUI();
+    }
+
+    public cleanup(): void {
+        console.log('[TheDecreeModeClient] Cleaning up');
+        super.cleanup();
+        this.unregisterNetworkEvents();
+    }
+
+    // ==================== UI 控制 ====================
+
+    public showUI(): void {
+        console.log('[TheDecreeModeClient] Showing UI');
+
+        if (this.game.objectsTheDecreeNode) {
+            this.game.objectsTheDecreeNode.active = true;
+        }
+
+        if (this.game.communityCardsNode) {
+            this.game.communityCardsNode.active = true;
+        }
+
+        if (this.game.objectsGuandanNode) {
+            this.game.objectsGuandanNode.active = false;
+        }
+    }
+
+    public hideUI(): void {
+        console.log('[TheDecreeModeClient] Hiding UI');
+
+        if (this.game.objectsTheDecreeNode) {
+            this.game.objectsTheDecreeNode.active = false;
+        }
+
+        if (this.game.communityCardsNode) {
+            this.game.communityCardsNode.active = false;
+        }
+    }
+
+    // ==================== 网络事件监听 ====================
+
+    private registerNetworkEvents(): void {
+        const network = this.game.networkClient;
+        if (!network) {
+            console.error('[TheDecreeModeClient] Network client not available');
+            return;
+        }
+
+        // 绑定事件处理器到 this
+        network.on('deal_cards', this.onDealCards.bind(this));
+        network.on('community_cards', this.onCommunityCards.bind(this));
+        network.on('dealer_selected', this.onDealerSelected.bind(this));
+        network.on('dealer_called', this.onDealerCalled.bind(this));
+        network.on('player_played', this.onPlayerPlayed.bind(this));
+        network.on('showdown', this.onShowdown.bind(this));
+        network.on('round_end', this.onRoundEnd.bind(this));
+        network.on('game_over', this.onGameOver.bind(this));
+
+        console.log('[TheDecreeModeClient] Network events registered');
+    }
+
+    private unregisterNetworkEvents(): void {
+        const network = this.game.networkClient;
+        if (!network) return;
+
+        network.off('deal_cards', this.onDealCards);
+        network.off('community_cards', this.onCommunityCards);
+        network.off('dealer_selected', this.onDealerSelected);
+        network.off('dealer_called', this.onDealerCalled);
+        network.off('player_played', this.onPlayerPlayed);
+        network.off('showdown', this.onShowdown);
+        network.off('round_end', this.onRoundEnd);
+        network.off('game_over', this.onGameOver);
+
+        console.log('[TheDecreeModeClient] Network events unregistered');
+    }
+
+    // ==================== 事件处理器 ====================
+
+    private onDealCards(data: DealCardsEvent): void {
+        console.log('[TheDecreeModeClient] Deal cards received:', data);
+
+        // 服务器发送的是当前玩家的手牌
+        // 更新 PlayerUIManager 显示手牌
+        if (this.game.playerUIManager) {
+            // TODO: 需要从 playerId 映射到 playerIndex
+            // 暂时先简单处理
+            console.log('[TheDecreeModeClient] Updating hand cards for player');
+        }
+    }
+
+    private onCommunityCards(data: CommunityCardsEvent): void {
+        console.log('[TheDecreeModeClient] Community cards received:', data);
+        this.communityCards = data.cards;
+
+        // 显示公共牌
+        this.displayCommunityCards();
+    }
+
+    private onDealerSelected(data: DealerSelectedEvent): void {
+        console.log('[TheDecreeModeClient] Dealer selected:', data);
+        this.dealerId = data.dealerId;
+        this.currentRoundNumber = data.roundNumber;
+
+        // 显示庄家指示器
+        // TODO: 从 dealerId 映射到 playerIndex
+        console.log(`[TheDecreeModeClient] Round ${this.currentRoundNumber}, dealer: ${this.dealerId}`);
+    }
+
+    private onDealerCalled(data: DealerCalledEvent): void {
+        console.log('[TheDecreeModeClient] Dealer called:', data);
+        this.cardsToPlay = data.cardsToPlay;
+
+        // 如果当前玩家是庄家，隐藏叫牌按钮
+        // 如果当前玩家不是庄家，启用选牌功能
+        const network = this.game.networkClient;
+        if (network && network.getPlayerId() !== data.dealerId) {
+            // 启用选牌 UI
+            console.log(`[TheDecreeModeClient] Waiting for player to select ${this.cardsToPlay} cards`);
+        }
+    }
+
+    private onPlayerPlayed(data: PlayerPlayedEvent): void {
+        console.log('[TheDecreeModeClient] Player played:', data);
+
+        // 更新 UI 显示其他玩家已出牌（不显示具体牌面）
+        // TODO: 更新玩家状态指示
+    }
+
+    private onShowdown(data: ShowdownEvent): void {
+        console.log('[TheDecreeModeClient] Showdown:', data);
+
+        // 显示所有玩家的牌型和结果
+        for (const result of data.results) {
+            console.log(`Player ${result.playerId}: ${result.handTypeName} (${result.score} points)${result.isWinner ? ' WINNER!' : ''}`);
+        }
+
+        // TODO: 更新 UI 显示牌型
+    }
+
+    private onRoundEnd(data: RoundEndEvent): void {
+        console.log('[TheDecreeModeClient] Round end:', data);
+
+        // 更新所有玩家的分数
+        // TODO: 更新分数显示
+    }
+
+    private onGameOver(data: GameOverEvent): void {
+        console.log('[TheDecreeModeClient] Game over:', data);
+        console.log(`Winner: ${data.winnerId} with ${data.scores[data.winnerId]} points`);
+
+        // 切换到结束阶段
+        // TODO: 通知 PlayingStage 游戏结束
+    }
+
+    // ==================== UI 辅助方法 ====================
+
+    private displayCommunityCards(): void {
+        console.log('[TheDecreeModeClient] Displaying community cards:', this.communityCards);
+
+        // TODO: 使用 PokerFactory 创建并显示公共牌
+        // 参考 TheDecreeMode.displayCommunityCards()
+    }
+
+    // ==================== 游戏逻辑接口（空实现，逻辑在服务器）====================
+
+    public initGame(playerInfos: PlayerInfo[]): void {
+        console.log('[TheDecreeModeClient] initGame called with', playerInfos.length, 'players');
+        // 不需要初始化游戏逻辑，等待服务器事件
+    }
+
+    public dealCards(): void {
+        console.log('[TheDecreeModeClient] dealCards called - waiting for server');
+        // 不需要发牌，服务器会发送 DEAL_CARDS 事件
+    }
+
+    public isValidPlay(cards: number[], playerId: string): boolean {
+        // 客户端不做验证，服务器会验证
+        return true;
+    }
+
+    public playCards(cards: number[], playerId: string): boolean {
+        console.log('[TheDecreeModeClient] playCards called - sending to server');
+
+        // 发送到服务器
+        const network = this.game.networkClient;
+        if (network) {
+            network.playCards(cards);
+            return true;
+        }
+
+        return false;
+    }
+
+    public isGameOver(): boolean {
+        // 服务器会发送 GAME_OVER 事件
+        return false;
+    }
+
+    public getCurrentLevelRank(): number {
+        return 0;
+    }
+
+    // ==================== 公共方法供 UI 调用 ====================
+
+    /**
+     * 庄家叫牌（由 UI 调用）
+     */
+    public dealerCall(cardsToPlay: 1 | 2 | 3): void {
+        console.log('[TheDecreeModeClient] Dealer calling', cardsToPlay, 'cards');
+
+        const network = this.game.networkClient;
+        if (network) {
+            network.dealerCall(cardsToPlay);
+        }
+    }
+
+    /**
+     * 获取当前要出的牌数
+     */
+    public getCardsToPlay(): number {
+        return this.cardsToPlay;
+    }
+
+    /**
+     * 获取当前庄家 ID
+     */
+    public getDealerId(): string {
+        return this.dealerId;
+    }
+
+    /**
+     * 检查当前玩家是否是庄家
+     */
+    public isCurrentPlayerDealer(): boolean {
+        const network = this.game.networkClient;
+        return network ? network.getPlayerId() === this.dealerId : false;
+    }
+
+    // ==================== Legacy 兼容方法（供 Game.ts 调用）====================
+    // 这些方法在网络版中大多返回空值或默认值，因为游戏逻辑在服务器端
+
+    /**
+     * 获取公共牌（客户端版本）
+     */
+    public getCommunityCards(): number[] {
+        return [...this.communityCards];
+    }
+
+    /**
+     * 获取玩家信息（网络版不支持）
+     */
+    public getPlayer(playerId: string): any | undefined {
+        console.warn('[TheDecreeModeClient] getPlayer() not supported in network mode');
+        return undefined;
+    }
+
+    /**
+     * 获取分数（网络版暂不支持）
+     */
+    public getScores(): Map<string, number> {
+        console.warn('[TheDecreeModeClient] getScores() not supported in network mode');
+        return new Map();
+    }
+
+    /**
+     * 获取游戏状态（网络版暂不支持）
+     */
+    public getState(): string {
+        console.warn('[TheDecreeModeClient] getState() not supported in network mode');
+        return 'unknown';
+    }
+
+    /**
+     * 获取当前回合信息（网络版暂不支持）
+     */
+    public getCurrentRound(): any | null {
+        console.warn('[TheDecreeModeClient] getCurrentRound() not supported in network mode');
+        return null;
+    }
+
+    /**
+     * 选择首庄（网络版不支持，由服务器处理）
+     */
+    public selectFirstDealer(revealedCards: Map<string, number>): string {
+        console.warn('[TheDecreeModeClient] selectFirstDealer() not supported in network mode');
+        return '';
+    }
+
+    /**
+     * 开始新回合（网络版不支持，由服务器处理）
+     */
+    public startNewRound(dealerId: string): void {
+        console.warn('[TheDecreeModeClient] startNewRound() not supported in network mode - controlled by server');
+    }
+
+    /**
+     * 补牌（网络版不支持，由服务器处理）
+     */
+    public refillHands(): void {
+        console.warn('[TheDecreeModeClient] refillHands() not supported in network mode - controlled by server');
+    }
+}

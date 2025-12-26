@@ -18,7 +18,7 @@ export interface GameModeConfig {
 }
 
 /**
- * Base class for all game modes
+ * Base class for all client-side game modes
  *
  * 重构后的职责：
  * - 定义游戏模式的生命周期接口
@@ -27,11 +27,11 @@ export interface GameModeConfig {
  * - 通过 Game 访问 PlayerUIManager（UI层）
  *
  * 架构：
- * GameMode (协调者)
+ * GameModeClientBase (协调者)
  * ├── PlayerManager (数据层，子类管理)
  * └── PlayerUIManager (UI层，从 Game 访问)
  */
-export abstract class GameModeBase {
+export abstract class GameModeClientBase {
     protected game: Game;
     protected config: GameModeConfig;
     protected isActive: boolean = false;

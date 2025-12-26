@@ -3,15 +3,16 @@ import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
 import { SceneManager } from './Manager/SceneManager';
-import { GameModeFactory } from './Core/GameMode/GameModeFactory';
-import { GameModeBase } from './Core/GameMode/GameModeBase';
-import { TheDecreeMode } from './Core/GameMode/TheDecreeMode';
+import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
+import { GameModeClientBase } from './Core/GameMode/GameModeClientBase';
+import { TheDecreeModeClient } from './Core/GameMode/TheDecreeModeClient';
 import { GameStage } from './Core/GameStage';
 import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
 import { PlayerLayoutConfig } from './Core/GameMode/PlayerLayoutConfig';
+import { NetworkClient } from './Network/NetworkClient';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -46,10 +47,14 @@ export class Game extends Component {
     // Managers
     public stageManager: StageManager = null!;
     private _gameController: GameController = null!;
-    private _playerUIManager: PlayerUIManager = null!
+    private _playerUIManager: PlayerUIManager = null!;
+
+    // Network
+    public networkClient: NetworkClient | null = null;
+    private isOnlineMode: boolean = false;
 
     // Legacy game mode instance (used by legacy methods)
-    private _theDecreeMode: TheDecreeMode | null = null;
+    private _theDecreeMode: TheDecreeModeClient | null = null;
 
     // Resources
     private _pokerBundle: AssetManager.Bundle = null;
@@ -68,12 +73,16 @@ export class Game extends Component {
         const transitionData = sceneManager.getTransitionData<{
             roomId: string;
             gameMode: string;
+            isOnlineMode?: boolean;
         }>();
 
         this._gameMode = transitionData.gameMode || 'guandan';
         this._roomId = transitionData.roomId || 'default_room';
 
-        console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}`);
+        // Check if this is online mode (roomId from server)
+        this.isOnlineMode = transitionData.isOnlineMode || false;
+
+        console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}, Online Mode: ${this.isOnlineMode}`);
 
         // Initialize GameController
         if (this.gameControllerNode) {
@@ -144,10 +153,15 @@ export class Game extends Component {
         // 3. Initialize player UI manager (will be used by GameModes)
         this.initializePlayerUIManager();
 
-        // 4. Create and setup Stage Manager
+        // 4. Initialize network client if online mode
+        if (this.isOnlineMode) {
+            this.initializeNetworkClient();
+        }
+
+        // 5. Create and setup Stage Manager
         this.createStageManager();
 
-        // 5. Enter Ready Stage
+        // 6. Enter Ready Stage
         console.log("[Game] All systems initialized, entering Ready stage");
         this.stageManager.switchToStage(GameStage.READY);
     }
@@ -172,6 +186,20 @@ export class Game extends Component {
         }
 
         console.log("[Game] PlayerUIManager component created (will init with player data later)");
+    }
+
+    /**
+     * Initialize network client for online mode
+     */
+    private initializeNetworkClient(): void {
+        console.log("[Game] Initializing network client...");
+
+        // TODO: Get server URL from config
+        const serverUrl = 'http://localhost:3000';
+        this.networkClient = new NetworkClient(serverUrl);
+
+        // Connect to server (will happen in Ready stage or Lobby)
+        console.log("[Game] Network client created (not connected yet)");
     }
 
     /**
@@ -226,6 +254,12 @@ export class Game extends Component {
     onDestroy(): void {
         if (this.stageManager) {
             this.stageManager.cleanup();
+        }
+
+        // Disconnect network client if connected
+        if (this.networkClient) {
+            this.networkClient.disconnect();
+            this.networkClient = null;
         }
     }
 
@@ -480,7 +514,7 @@ export class Game extends Component {
     /**
      * Get The Decree mode instance
      */
-    public get theDecreeMode(): TheDecreeMode | null {
+    public get theDecreeMode(): TheDecreeModeClient | null {
         return this._theDecreeMode;
     }
 

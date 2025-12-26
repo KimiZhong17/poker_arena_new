@@ -1,6 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { PlayerSession } from './PlayerSession';
 import { ServerMessageType } from '../types/Messages';
+import { TheDecreeMode, GameState as TheDecreeGameState, TheDecreeEventCallbacks } from '../game/the_decree/TheDecreeMode';
+import { TexasHandResult } from '../game/the_decree/TexasHoldEmEvaluator';
+import { HandTypeHelper } from '../game/the_decree/HandTypeHelper';
 
 /**
  * 房间状态
@@ -27,8 +30,8 @@ export class GameRoom {
     private createdAt: number = Date.now();
     private lastActivityAt: number = Date.now();
 
-    // 游戏相关（将来会被 TheDecreeGameMode 替代）
-    private gameState: any = null;
+    // 游戏实例
+    private theDecreeGame: TheDecreeMode | null = null;
 
     constructor(gameMode: string, maxPlayers: number) {
         this.id = uuidv4().substring(0, 8);
@@ -205,7 +208,10 @@ export class GameRoom {
         this.state = RoomState.PLAYING;
         console.log(`[Room ${this.id}] Game started with ${this.players.size} players`);
 
-        // TODO: 初始化游戏逻辑（TheDecreeGameMode）
+        // Initialize TheDecree game
+        if (this.gameMode === 'the_decree') {
+            this.initTheDecreeGame();
+        }
 
         return true;
     }
@@ -223,5 +229,208 @@ export class GameRoom {
         }
 
         this.state = RoomState.WAITING;
+
+        // Cleanup game
+        if (this.theDecreeGame) {
+            this.theDecreeGame.cleanup();
+            this.theDecreeGame = null;
+        }
+    }
+
+    // ==================== TheDecree Game Integration ====================
+
+    /**
+     * Initialize TheDecree game with event callbacks
+     */
+    private initTheDecreeGame(): void {
+        const callbacks: TheDecreeEventCallbacks = {
+            onGameStarted: (communityCards) => {
+                console.log(`[Room ${this.id}] Game started, community cards dealt`);
+
+                // Broadcast community cards to all players
+                this.broadcast(ServerMessageType.COMMUNITY_CARDS, {
+                    cards: communityCards
+                });
+            },
+
+            onPlayerDealt: (playerId, cards) => {
+                // Send private hand cards to each player
+                this.sendToPlayer(playerId, ServerMessageType.DEAL_CARDS, {
+                    playerId,
+                    handCards: cards
+                });
+            },
+
+            onFirstDealerSelected: (dealerId, revealedCards) => {
+                console.log(`[Room ${this.id}] First dealer: ${dealerId}`);
+
+                this.broadcast(ServerMessageType.DEALER_SELECTED, {
+                    dealerId,
+                    roundNumber: 1
+                });
+            },
+
+            onNewRound: (roundNumber, dealerId) => {
+                console.log(`[Room ${this.id}] Round ${roundNumber} started, dealer: ${dealerId}`);
+
+                this.broadcast(ServerMessageType.DEALER_SELECTED, {
+                    dealerId,
+                    roundNumber
+                });
+            },
+
+            onDealerCall: (dealerId, cardsToPlay) => {
+                console.log(`[Room ${this.id}] Dealer ${dealerId} calls ${cardsToPlay} cards`);
+
+                this.broadcast(ServerMessageType.DEALER_CALLED, {
+                    dealerId,
+                    cardsToPlay
+                });
+            },
+
+            onPlayerPlayed: (playerId, cardCount) => {
+                console.log(`[Room ${this.id}] Player ${playerId} played ${cardCount} cards`);
+
+                // Broadcast to other players (don't reveal cards)
+                this.broadcast(ServerMessageType.PLAYER_PLAYED, {
+                    playerId,
+                    cardCount
+                });
+            },
+
+            onShowdown: (results) => {
+                console.log(`[Room ${this.id}] Showdown`);
+
+                // Build showdown results
+                const showdownResults = Array.from(results.entries()).map(([playerId, result]) => {
+                    const player = this.theDecreeGame?.getPlayer(playerId);
+                    return {
+                        playerId,
+                        cards: player?.playedCards || [],
+                        handType: result.type,
+                        handTypeName: HandTypeHelper.getChineseName(result.type),
+                        score: HandTypeHelper.getScore(result.type),
+                        isWinner: playerId === this.theDecreeGame?.getCurrentRound()?.roundWinnerId
+                    };
+                });
+
+                this.broadcast(ServerMessageType.SHOWDOWN, {
+                    results: showdownResults
+                });
+            },
+
+            onRoundEnd: (winnerId, loserId, scores) => {
+                console.log(`[Room ${this.id}] Round end - Winner: ${winnerId}, Loser: ${loserId}`);
+
+                // Convert Map to object for JSON serialization
+                const scoresObj: { [key: string]: number } = {};
+                scores.forEach((score, playerId) => {
+                    scoresObj[playerId] = score;
+                });
+
+                this.broadcast(ServerMessageType.ROUND_END, {
+                    winnerId,
+                    loserId,
+                    scores: scoresObj
+                });
+            },
+
+            onHandsRefilled: (deckSize) => {
+                console.log(`[Room ${this.id}] Hands refilled, deck: ${deckSize} cards`);
+
+                // Send updated hand cards to each player
+                if (this.theDecreeGame) {
+                    for (const player of this.theDecreeGame.getAllPlayers()) {
+                        this.sendToPlayer(player.id, ServerMessageType.DEAL_CARDS, {
+                            playerId: player.id,
+                            handCards: player.handCards
+                        });
+                    }
+                }
+            },
+
+            onGameOver: (winnerId, scores, totalRounds) => {
+                console.log(`[Room ${this.id}] Game over - Winner: ${winnerId}`);
+
+                const scoresObj: { [key: string]: number } = {};
+                scores.forEach((score, playerId) => {
+                    scoresObj[playerId] = score;
+                });
+
+                this.broadcast(ServerMessageType.GAME_OVER, {
+                    winnerId,
+                    scores: scoresObj,
+                    totalRounds
+                });
+
+                // End game after a delay
+                setTimeout(() => this.endGame(), 5000);
+            }
+        };
+
+        // Create game instance
+        this.theDecreeGame = new TheDecreeMode(undefined, callbacks);
+
+        // Initialize game with player info
+        const playerInfos = this.getPlayersInfo();
+        this.theDecreeGame.initGame(playerInfos);
+
+        // Start game
+        this.theDecreeGame.startGame();
+
+        // Broadcast game start
+        this.broadcast(ServerMessageType.GAME_START, {
+            players: playerInfos
+        });
+    }
+
+    /**
+     * Handle dealer call action
+     */
+    public handleDealerCall(playerId: string, cardsToPlay: 1 | 2 | 3): boolean {
+        if (!this.theDecreeGame) return false;
+
+        const success = this.theDecreeGame.dealerCall(playerId, cardsToPlay);
+        if (!success) {
+            this.sendToPlayer(playerId, ServerMessageType.ERROR, {
+                code: 'INVALID_ACTION',
+                message: 'Invalid dealer call'
+            });
+        }
+
+        return success;
+    }
+
+    /**
+     * Handle player play cards action
+     */
+    public handlePlayCards(playerId: string, cards: number[]): boolean {
+        if (!this.theDecreeGame) return false;
+
+        const success = this.theDecreeGame.playCards(cards, playerId);
+        if (!success) {
+            this.sendToPlayer(playerId, ServerMessageType.ERROR, {
+                code: 'INVALID_PLAY',
+                message: 'Invalid card play'
+            });
+        }
+
+        return success;
+    }
+
+    /**
+     * Get current game state
+     */
+    public getGameState(): any {
+        if (!this.theDecreeGame) return null;
+
+        const currentRound = this.theDecreeGame.getCurrentRound();
+        return {
+            state: this.theDecreeGame.getState(),
+            roundNumber: currentRound?.roundNumber || 0,
+            dealerId: currentRound?.dealerId,
+            cardsToPlay: currentRound?.cardsToPlay,
+            deckSize: this.theDecreeGame.getDeckSize()
+        };
     }
 }

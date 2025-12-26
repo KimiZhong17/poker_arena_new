@@ -2,8 +2,8 @@ import { Node } from 'cc';
 import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { GameStage } from '../GameStage';
-import { GameModeBase } from '../GameMode/GameModeBase';
-import { TheDecreeMode } from '../GameMode/TheDecreeMode';
+import { GameModeClientBase } from '../GameMode/GameModeClientBase';
+import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';
 import { GuandanMode } from '../GameMode/GuandanMode';
 
 /**
@@ -25,7 +25,7 @@ import { GuandanMode } from '../GameMode/GuandanMode';
  */
 export class PlayingStage extends GameStageBase {
     // 当前游戏模式
-    private currentGameMode: GameModeBase | null = null;
+    private currentGameMode: GameModeClientBase | null = null;
 
     // 游戏模式名称（从配置读取）
     private gameModeName: string;
@@ -162,15 +162,15 @@ export class PlayingStage extends GameStageBase {
     }
 
     /**
-     * 创建The Decree游戏模式
+     * 创建The Decree游戏模式（网络版）
      */
-    private createTheDecreeMode(): GameModeBase | null {
+    private createTheDecreeMode(): GameModeClientBase | null {
         try {
             // 创建配置
             const config = {
                 id: 'the_decree',
                 name: 'TheDecree',
-                displayName: '天命之战',
+                displayName: '未定之数',
                 minPlayers: 2,
                 maxPlayers: 4,
                 deckCount: 1,
@@ -178,8 +178,8 @@ export class PlayingStage extends GameStageBase {
                 description: 'Texas Hold\'em inspired poker game'
             };
 
-            // 创建实例（使用新的构造函数签名）
-            const mode = new TheDecreeMode(this.game, config);
+            // 创建实例（网络版）
+            const mode = new TheDecreeModeClient(this.game, config);
 
             // 将模式引用传递给 Game（用于遗留方法）
             // @ts-ignore - accessing private property
@@ -187,7 +187,7 @@ export class PlayingStage extends GameStageBase {
 
             return mode;
         } catch (error) {
-            console.error('[PlayingStage] Failed to create TheDecreeMode:', error);
+            console.error('[PlayingStage] Failed to create TheDecreeModeClient:', error);
             return null;
         }
     }
@@ -195,7 +195,7 @@ export class PlayingStage extends GameStageBase {
     /**
      * 创建Guandan游戏模式
      */
-    private createGuandanMode(): GameModeBase | null {
+    private createGuandanMode(): GameModeClientBase | null {
         try {
             // 创建配置
             const config = {
@@ -247,7 +247,7 @@ export class PlayingStage extends GameStageBase {
     /**
      * 获取当前游戏模式
      */
-    public getCurrentGameMode(): GameModeBase | null {
+    public getCurrentGameMode(): GameModeClientBase | null {
         return this.currentGameMode;
     }
 

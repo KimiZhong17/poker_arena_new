@@ -1,32 +1,32 @@
-import { GameModeBase } from "./GameModeBase";
+import { GameModeClientBase } from "./GameModeClientBase";
 import { GuandanMode } from "./GuandanMode";
-import { TheDecreeMode } from "./TheDecreeMode";
+import { TheDecreeModeClient } from "./TheDecreeModeClient";
 
 /**
- * Game mode factory - creates game mode instances
+ * Client-side game mode factory - creates game mode instances
  */
-export class GameModeFactory {
-    private static instance: GameModeFactory;
-    private registeredModes: Map<string, () => GameModeBase> = new Map();
+export class GameModeClientFactory {
+    private static instance: GameModeClientFactory;
+    private registeredModes: Map<string, () => GameModeClientBase> = new Map();
 
     private constructor() {
         this.registerDefaultModes();
     }
 
-    public static getInstance(): GameModeFactory {
-        if (!GameModeFactory.instance) {
-            GameModeFactory.instance = new GameModeFactory();
+    public static getInstance(): GameModeClientFactory {
+        if (!GameModeClientFactory.instance) {
+            GameModeClientFactory.instance = new GameModeClientFactory();
         }
-        return GameModeFactory.instance;
+        return GameModeClientFactory.instance;
     }
 
     /**
      * Register default game modes
      */
     private registerDefaultModes(): void {
-        // Register The Decree mode
+        // Register The Decree mode (network/client version)
         this.registeredModes.set('the_decree', () => {
-            return new TheDecreeMode();
+            return new TheDecreeModeClient();
         });
 
         // Register Guandan mode
@@ -38,7 +38,7 @@ export class GameModeFactory {
     /**
      * Create a game mode instance by ID
      */
-    public createGameMode(modeId: string): GameModeBase {
+    public createGameMode(modeId: string): GameModeClientBase {
         const creator = this.registeredModes.get(modeId);
 
         if (!creator) {
@@ -51,7 +51,7 @@ export class GameModeFactory {
     /**
      * Register a custom game mode
      */
-    public registerMode(modeId: string, creator: () => GameModeBase): void {
+    public registerMode(modeId: string, creator: () => GameModeClientBase): void {
         this.registeredModes.set(modeId, creator);
     }
 
