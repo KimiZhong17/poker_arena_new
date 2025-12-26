@@ -1,13 +1,14 @@
 import { GameModeClientBase } from "./GameModeClientBase";
 import { GuandanMode } from "./GuandanMode";
 import { TheDecreeModeClient } from "./TheDecreeModeClient";
+import { Game } from "../../Game";
 
 /**
  * Client-side game mode factory - creates game mode instances
  */
 export class GameModeClientFactory {
     private static instance: GameModeClientFactory;
-    private registeredModes: Map<string, () => GameModeClientBase> = new Map();
+    private registeredModes: Map<string, (game: Game) => GameModeClientBase> = new Map();
 
     private constructor() {
         this.registerDefaultModes();
@@ -25,33 +26,33 @@ export class GameModeClientFactory {
      */
     private registerDefaultModes(): void {
         // Register The Decree mode (network/client version)
-        this.registeredModes.set('the_decree', () => {
-            return new TheDecreeModeClient();
+        this.registeredModes.set('the_decree', (game: Game) => {
+            return new TheDecreeModeClient(game);
         });
 
         // Register Guandan mode
-        this.registeredModes.set('guandan', () => {
-            return new GuandanMode();
+        this.registeredModes.set('guandan', (game: Game) => {
+            return new GuandanMode(game);
         });
     }
 
     /**
      * Create a game mode instance by ID
      */
-    public createGameMode(modeId: string): GameModeClientBase {
+    public createGameMode(modeId: string, game: Game): GameModeClientBase {
         const creator = this.registeredModes.get(modeId);
 
         if (!creator) {
             throw new Error(`Game mode '${modeId}' not found`);
         }
 
-        return creator();
+        return creator(game);
     }
 
     /**
      * Register a custom game mode
      */
-    public registerMode(modeId: string, creator: () => GameModeClientBase): void {
+    public registerMode(modeId: string, creator: (game: Game) => GameModeClientBase): void {
         this.registeredModes.set(modeId, creator);
     }
 

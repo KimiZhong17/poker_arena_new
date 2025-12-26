@@ -1,7 +1,7 @@
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
 import { Player, PlayerInfo } from "../Player";
-import { PlayerManager } from "../PlayerManager";
+import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 
 /**
  * Game mode configuration
@@ -23,18 +23,26 @@ export interface GameModeConfig {
  * 重构后的职责：
  * - 定义游戏模式的生命周期接口
  * - 提供 PlayerUIManager 初始化的通用方法
+ * - 提供网络事件管理的通用框架（注册/注销/处理）
  * - 子类负责创建和管理 PlayerManager（数据层）
  * - 通过 Game 访问 PlayerUIManager（UI层）
  *
  * 架构：
  * GameModeClientBase (协调者)
  * ├── PlayerManager (数据层，子类管理)
- * └── PlayerUIManager (UI层，从 Game 访问)
+ * ├── PlayerUIManager (UI层，从 Game 访问)
+ * └── NetworkClient (网络层，从 Game 访问)
  */
 export abstract class GameModeClientBase {
     protected game: Game;
     protected config: GameModeConfig;
     protected isActive: boolean = false;
+
+    // 网络事件处理器存储（用于注销）
+    protected networkEventHandlers: Map<string, Function> = new Map();
+
+    // 玩家 ID 映射 (playerId -> playerIndex)
+    protected playerIdToIndexMap: Map<string, number> = new Map();
 
     constructor(game: Game, config: GameModeConfig) {
         this.game = game;
@@ -291,5 +299,158 @@ export abstract class GameModeClientBase {
      */
     public isGameModeActive(): boolean {
         return this.isActive;
+    }
+
+    // ==================== 网络功能（通用方法）====================
+
+    /**
+     * 检查是否为网络模式
+     */
+    protected isNetworkMode(): boolean {
+        return this.game.networkClient !== null && this.game.networkClient.getIsConnected();
+    }
+
+    /**
+     * 获取网络客户端（带检查）
+     */
+    protected getNetworkClient() {
+        const network = this.game.networkClient;
+        if (!network) {
+            console.error(`[${this.config.name}] Network client not available`);
+            return null;
+        }
+        if (!network.getIsConnected()) {
+            console.error(`[${this.config.name}] Network client not connected`);
+            return null;
+        }
+        return network;
+    }
+
+    /**
+     * 注册网络事件（通用框架）
+     * 子类调用此方法注册事件，基类负责管理和注销
+     */
+    protected registerNetworkEvent(eventName: string, handler: Function): void {
+        const network = this.game.networkClient;
+        if (!network) {
+            console.warn(`[${this.config.name}] Cannot register event '${eventName}': Network client not available`);
+            return;
+        }
+
+        // 绑定 this 上下文
+        const boundHandler = handler.bind(this);
+
+        // 存储处理器用于注销
+        this.networkEventHandlers.set(eventName, boundHandler);
+
+        // 注册到网络客户端
+        network.on(eventName, boundHandler);
+
+        console.log(`[${this.config.name}] Registered network event: ${eventName}`);
+    }
+
+    /**
+     * 批量注册网络事件
+     */
+    protected registerNetworkEvents(events: { [eventName: string]: Function }): void {
+        for (const [eventName, handler] of Object.entries(events)) {
+            this.registerNetworkEvent(eventName, handler);
+        }
+    }
+
+    /**
+     * 注销所有网络事件
+     * 在 onExit() 和 cleanup() 中自动调用
+     */
+    protected unregisterAllNetworkEvents(): void {
+        const network = this.game.networkClient;
+        if (!network) return;
+
+        for (const [eventName, handler] of this.networkEventHandlers) {
+            network.off(eventName, handler);
+            console.log(`[${this.config.name}] Unregistered network event: ${eventName}`);
+        }
+
+        this.networkEventHandlers.clear();
+    }
+
+    /**
+     * 设置玩家 ID 映射
+     * @param playerInfos 玩家信息数组（按 seatIndex 排序）
+     */
+    protected setupPlayerIdMapping(playerInfos: Array<{ id: string, seatIndex: number }>): void {
+        this.playerIdToIndexMap.clear();
+        for (const playerInfo of playerInfos) {
+            this.playerIdToIndexMap.set(playerInfo.id, playerInfo.seatIndex);
+        }
+        console.log(`[${this.config.name}] Player ID mapping setup:`, Array.from(this.playerIdToIndexMap.entries()));
+    }
+
+    /**
+     * 从 playerId 获取 playerIndex
+     */
+    protected getPlayerIndex(playerId: string): number {
+        const index = this.playerIdToIndexMap.get(playerId);
+        if (index === undefined) {
+            console.warn(`[${this.config.name}] Player ID not found in mapping: ${playerId}`);
+            return -1;
+        }
+        return index;
+    }
+
+    /**
+     * 发送网络请求（通用方法）
+     * 子类可以使用此方法发送请求到服务器
+     */
+    protected sendNetworkRequest(eventName: string, data: any): boolean {
+        const network = this.getNetworkClient();
+        if (!network) {
+            return false;
+        }
+
+        console.log(`[${this.config.name}] Sending network request: ${eventName}`, data);
+        return network.send(eventName, data);
+    }
+
+    // ==================== 游戏特定网络请求（The Decree 游戏）====================
+
+    /**
+     * 庄家叫牌请求
+     * @param cardsToPlay 要出的牌数（1、2或3）
+     */
+    protected sendDealerCallRequest(cardsToPlay: 1 | 2 | 3): boolean {
+        const network = this.getNetworkClient();
+        if (!network) {
+            return false;
+        }
+
+        const request: DealerCallRequest = {
+            roomId: network.getRoomId(),
+            playerId: network.getPlayerId(),
+            cardsToPlay
+        };
+
+        console.log(`[${this.config.name}] Dealer calling ${cardsToPlay} cards`);
+        return network.send(ClientMessageType.DEALER_CALL, request);
+    }
+
+    /**
+     * 玩家出牌请求
+     * @param cards 要出的牌
+     */
+    protected sendPlayCardsRequest(cards: number[]): boolean {
+        const network = this.getNetworkClient();
+        if (!network) {
+            return false;
+        }
+
+        const request: PlayCardsRequest = {
+            roomId: network.getRoomId(),
+            playerId: network.getPlayerId(),
+            cards
+        };
+
+        console.log(`[${this.config.name}] Playing cards:`, cards);
+        return network.send(ClientMessageType.PLAY_CARDS, request);
     }
 }

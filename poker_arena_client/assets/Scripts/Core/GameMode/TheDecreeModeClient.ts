@@ -54,8 +54,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 显示 UI
         this.showUI();
 
-        // 注册网络事件监听器
-        this.registerNetworkEvents();
+        // 注册网络事件监听器（使用基类方法）
+        this.setupNetworkEvents();
 
         console.log('[TheDecreeModeClient] Waiting for server events...');
     }
@@ -64,8 +64,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Exiting game mode');
         this.isActive = false;
 
-        // 注销网络事件监听器
-        this.unregisterNetworkEvents();
+        // 注销网络事件监听器（使用基类方法）
+        this.unregisterAllNetworkEvents();
 
         // 隐藏 UI
         this.hideUI();
@@ -74,7 +74,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     public cleanup(): void {
         console.log('[TheDecreeModeClient] Cleaning up');
         super.cleanup();
-        this.unregisterNetworkEvents();
+        this.unregisterAllNetworkEvents();
     }
 
     // ==================== UI 控制 ====================
@@ -109,40 +109,20 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     // ==================== 网络事件监听 ====================
 
-    private registerNetworkEvents(): void {
-        const network = this.game.networkClient;
-        if (!network) {
-            console.error('[TheDecreeModeClient] Network client not available');
-            return;
-        }
-
-        // 绑定事件处理器到 this
-        network.on('deal_cards', this.onDealCards.bind(this));
-        network.on('community_cards', this.onCommunityCards.bind(this));
-        network.on('dealer_selected', this.onDealerSelected.bind(this));
-        network.on('dealer_called', this.onDealerCalled.bind(this));
-        network.on('player_played', this.onPlayerPlayed.bind(this));
-        network.on('showdown', this.onShowdown.bind(this));
-        network.on('round_end', this.onRoundEnd.bind(this));
-        network.on('game_over', this.onGameOver.bind(this));
-
-        console.log('[TheDecreeModeClient] Network events registered');
-    }
-
-    private unregisterNetworkEvents(): void {
-        const network = this.game.networkClient;
-        if (!network) return;
-
-        network.off('deal_cards', this.onDealCards);
-        network.off('community_cards', this.onCommunityCards);
-        network.off('dealer_selected', this.onDealerSelected);
-        network.off('dealer_called', this.onDealerCalled);
-        network.off('player_played', this.onPlayerPlayed);
-        network.off('showdown', this.onShowdown);
-        network.off('round_end', this.onRoundEnd);
-        network.off('game_over', this.onGameOver);
-
-        console.log('[TheDecreeModeClient] Network events unregistered');
+    /**
+     * 设置网络事件（使用基类的批量注册方法）
+     */
+    protected setupNetworkEvents(): void {
+        this.registerNetworkEvents({
+            'deal_cards': this.onDealCards,
+            'community_cards': this.onCommunityCards,
+            'dealer_selected': this.onDealerSelected,
+            'dealer_called': this.onDealerCalled,
+            'player_played': this.onPlayerPlayed,
+            'showdown': this.onShowdown,
+            'round_end': this.onRoundEnd,
+            'game_over': this.onGameOver
+        });
     }
 
     // ==================== 事件处理器 ====================
@@ -172,9 +152,12 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.dealerId = data.dealerId;
         this.currentRoundNumber = data.roundNumber;
 
-        // 显示庄家指示器
-        // TODO: 从 dealerId 映射到 playerIndex
-        console.log(`[TheDecreeModeClient] Round ${this.currentRoundNumber}, dealer: ${this.dealerId}`);
+        // 显示庄家指示器（使用基类的 getPlayerIndex）
+        const dealerIndex = this.getPlayerIndex(data.dealerId);
+        if (dealerIndex !== -1 && this.game.playerUIManager) {
+            this.game.playerUIManager.showDealer(dealerIndex);
+            console.log(`[TheDecreeModeClient] Round ${this.currentRoundNumber}, dealer: ${this.dealerId} (index: ${dealerIndex})`);
+        }
     }
 
     private onDealerCalled(data: DealerCalledEvent): void {
@@ -252,14 +235,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
     public playCards(cards: number[], playerId: string): boolean {
         console.log('[TheDecreeModeClient] playCards called - sending to server');
 
-        // 发送到服务器
-        const network = this.game.networkClient;
-        if (network) {
-            network.playCards(cards);
-            return true;
-        }
-
-        return false;
+        // 使用基类的发送方法
+        return this.sendPlayCardsRequest(cards);
     }
 
     public isGameOver(): boolean {
@@ -279,10 +256,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
     public dealerCall(cardsToPlay: 1 | 2 | 3): void {
         console.log('[TheDecreeModeClient] Dealer calling', cardsToPlay, 'cards');
 
-        const network = this.game.networkClient;
-        if (network) {
-            network.dealerCall(cardsToPlay);
-        }
+        // 使用基类的发送方法
+        this.sendDealerCallRequest(cardsToPlay);
     }
 
     /**
@@ -303,7 +278,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
      * 检查当前玩家是否是庄家
      */
     public isCurrentPlayerDealer(): boolean {
-        const network = this.game.networkClient;
+        const network = this.getNetworkClient();
         return network ? network.getPlayerId() === this.dealerId : false;
     }
 

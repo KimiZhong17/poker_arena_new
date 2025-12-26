@@ -3,8 +3,6 @@ import {
     ServerMessageType,
     CreateRoomRequest,
     JoinRoomRequest,
-    DealerCallRequest,
-    PlayCardsRequest,
     RoomCreatedEvent,
     RoomJoinedEvent,
     PlayerJoinedEvent,
@@ -264,39 +262,18 @@ export class NetworkClient {
     }
 
     /**
-     * 庄家叫牌
+     * 通用发送方法 - 发送任意消息到服务器
+     * @param messageType 消息类型
+     * @param data 消息数据
      */
-    public dealerCall(cardsToPlay: 1 | 2 | 3): void {
+    public send(messageType: string, data: any): boolean {
         if (!this.socket || !this.isConnected) {
             console.error('[NetworkClient] Not connected to server');
-            return;
+            return false;
         }
 
-        const request: DealerCallRequest = {
-            roomId: this.roomId,
-            playerId: this.playerId,
-            cardsToPlay
-        };
-
-        this.socket.emit(ClientMessageType.DEALER_CALL, request);
-    }
-
-    /**
-     * 玩家出牌
-     */
-    public playCards(cards: number[]): void {
-        if (!this.socket || !this.isConnected) {
-            console.error('[NetworkClient] Not connected to server');
-            return;
-        }
-
-        const request: PlayCardsRequest = {
-            roomId: this.roomId,
-            playerId: this.playerId,
-            cards
-        };
-
-        this.socket.emit(ClientMessageType.PLAY_CARDS, request);
+        this.socket.emit(messageType, data);
+        return true;
     }
 
     /**
