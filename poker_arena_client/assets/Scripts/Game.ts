@@ -11,7 +11,7 @@ import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
-import { PlayerLayoutConfig } from './Core/GameMode/PlayerLayoutConfig';
+import { PlayerLayoutConfig } from './UI/PlayerLayoutConfig';
 import { NetworkClient } from './Network/NetworkClient';
 const { ccclass, property } = _decorator;
 
@@ -24,13 +24,7 @@ export class Game extends Component {
     @property(Node)
     public playerUIManagerNode: Node = null!;
 
-    // Game mode specific containers
-    @property(Node)
-    public objectsGuandanNode: Node = null!;
-
-    @property(Node)
-    public objectsTheDecreeNode: Node = null!;
-
+    // Stage nodes
     @property(Node)
     public nodeReadyStage: Node = null!;
 
@@ -39,10 +33,6 @@ export class Game extends Component {
 
     @property(Node)
     public nodeEndStage: Node = null!;
-
-    // Specific UI/Gameplay nodes (optional - can access via children)
-    @property(Node)
-    public communityCardsNode: Node = null!;
     
     // Managers
     public stageManager: StageManager = null!;
@@ -274,29 +264,8 @@ export class Game extends Component {
             this.nodeReadyStage = this.findNodeByName(this.node, 'Node_ReadyStage');
         }
 
-        // Auto-find CommunityCardsNode (may be nested deep)
-        if (!this.communityCardsNode) {
-            this.communityCardsNode = this.findNodeByName(this.node, 'CommunityCardsNode');
-            if (this.communityCardsNode) {
-                console.log('[Game] Auto-found CommunityCardsNode');
-            }
-        }
-
-        // Auto-find ObjectTheDecreeNode
-        if (!this.objectsTheDecreeNode) {
-            this.objectsTheDecreeNode = this.findNodeByName(this.node, 'TheDecree');
-            if (this.objectsTheDecreeNode) {
-                console.log('[Game] Auto-found ObjectTheDecreeNode');
-            }
-        }
-
-        // Auto-find ObjectGuandanNode
-        if (!this.objectsGuandanNode) {
-            this.objectsGuandanNode = this.findNodeByName(this.node, 'Guandan');
-            if (this.objectsGuandanNode) {
-                console.log('[Game] Auto-found ObjectGuandanNode');
-            }
-        }
+        // Note: Game mode specific nodes (TheDecree, Guandan, CommunityCards)
+        // are now managed by their respective GameModeClient classes
     }
 
     /**

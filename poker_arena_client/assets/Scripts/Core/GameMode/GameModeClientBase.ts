@@ -1,5 +1,5 @@
 import { Game } from "../../Game";
-import { PlayerLayoutConfig } from "./PlayerLayoutConfig";
+import { PlayerLayoutConfig } from "../../UI/PlayerLayoutConfig";
 import { Player, PlayerInfo } from "../Player";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 
@@ -231,7 +231,7 @@ export abstract class GameModeClientBase {
      * @param positions 位置配置数组
      * @protected 子类可以调用此方法来应用自定义配置
      */
-    protected applyPlayerLayout(positions: import('./PlayerLayoutConfig').PlayerPosition[]): void {
+    protected applyPlayerLayout(positions: import('../../UI/PlayerLayoutConfig').PlayerPosition[]): void {
         const handsManagerNode = this.game.playerUIManagerNode;
         if (!handsManagerNode) {
             console.warn(`[${this.config.name}] PlayerUIManagerNode not found`);

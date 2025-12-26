@@ -1,6 +1,7 @@
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
 import { PlayerInfo } from "../Player";
+import { Node } from "cc";
 import {
     DealCardsEvent,
     CommunityCardsEvent,
@@ -18,14 +19,20 @@ import {
  *
  * 职责：
  * - 监听服务器事件并更新 UI
+ * - 管理游戏模式特定的 UI 节点（communityCardsNode 等）
  * - 不包含任何游戏逻辑（逻辑在服务器）
  * - 通过 NetworkClient 发送玩家操作到服务器
  */
 export class TheDecreeModeClient extends GameModeClientBase {
+    // 游戏状态数据（从服务器同步）
     private communityCards: number[] = [];
     private dealerId: string = '';
     private currentRoundNumber: number = 0;
     private cardsToPlay: number = 0;
+
+    // UI 节点（游戏模式特定）
+    private theDecreeContainerNode: Node | null = null;
+    private communityCardsNode: Node | null = null;
 
     constructor(game: Game, config?: GameModeConfig) {
         const defaultConfig: GameModeConfig = {
@@ -48,6 +55,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Entering game mode');
         this.isActive = true;
 
+        // 查找并缓存游戏模式特定的节点
+        this.findModeSpecificNodes();
+
         // 调整玩家布局
         this.adjustPlayerLayout();
 
@@ -69,6 +79,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 隐藏 UI
         this.hideUI();
+
+        // 清除节点引用
+        this.theDecreeContainerNode = null;
+        this.communityCardsNode = null;
     }
 
     public cleanup(): void {
@@ -77,33 +91,78 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.unregisterAllNetworkEvents();
     }
 
+    // ==================== 节点查找 ====================
+
+    /**
+     * 查找游戏模式特定的节点
+     */
+    private findModeSpecificNodes(): void {
+        // 查找 TheDecree 容器节点
+        this.theDecreeContainerNode = this.findNodeByName(this.game.node, 'TheDecree');
+        if (this.theDecreeContainerNode) {
+            console.log('[TheDecreeModeClient] Found TheDecree container node');
+        } else {
+            console.warn('[TheDecreeModeClient] TheDecree container node not found');
+        }
+
+        // 查找公共牌节点
+        this.communityCardsNode = this.findNodeByName(this.game.node, 'CommunityCardsNode');
+        if (this.communityCardsNode) {
+            console.log('[TheDecreeModeClient] Found CommunityCardsNode');
+        } else {
+            console.warn('[TheDecreeModeClient] CommunityCardsNode not found');
+        }
+    }
+
+    /**
+     * 递归查找节点
+     */
+    private findNodeByName(root: Node, name: string): Node | null {
+        if (root.name === name) {
+            return root;
+        }
+
+        for (const child of root.children) {
+            const found = this.findNodeByName(child, name);
+            if (found) {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     // ==================== UI 控制 ====================
 
     public showUI(): void {
         console.log('[TheDecreeModeClient] Showing UI');
 
-        if (this.game.objectsTheDecreeNode) {
-            this.game.objectsTheDecreeNode.active = true;
+        // 显示 TheDecree 容器
+        if (this.theDecreeContainerNode) {
+            this.theDecreeContainerNode.active = true;
         }
 
-        if (this.game.communityCardsNode) {
-            this.game.communityCardsNode.active = true;
+        // 显示公共牌节点
+        if (this.communityCardsNode) {
+            this.communityCardsNode.active = true;
         }
 
-        if (this.game.objectsGuandanNode) {
-            this.game.objectsGuandanNode.active = false;
+        // 隐藏其他游戏模式的节点（如果存在）
+        const guandanNode = this.findNodeByName(this.game.node, 'Guandan');
+        if (guandanNode) {
+            guandanNode.active = false;
         }
     }
 
     public hideUI(): void {
         console.log('[TheDecreeModeClient] Hiding UI');
 
-        if (this.game.objectsTheDecreeNode) {
-            this.game.objectsTheDecreeNode.active = false;
+        if (this.theDecreeContainerNode) {
+            this.theDecreeContainerNode.active = false;
         }
 
-        if (this.game.communityCardsNode) {
-            this.game.communityCardsNode.active = false;
+        if (this.communityCardsNode) {
+            this.communityCardsNode.active = false;
         }
     }
 
@@ -219,6 +278,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     public initGame(playerInfos: PlayerInfo[]): void {
         console.log('[TheDecreeModeClient] initGame called with', playerInfos.length, 'players');
+
+        // 设置玩家 ID 映射
+        this.setupPlayerIdMapping(playerInfos);
+
         // 不需要初始化游戏逻辑，等待服务器事件
     }
 

@@ -24,129 +24,126 @@ export interface PlayerInfo {
 }
 
 /**
- * Player - 玩家游戏状态基类
- * 玩家的"游戏数据"
+ * Player - 客户端玩家数据容器（简化版）
  *
  * 设计原则：
- * - 只包含数据和数据操作
- * - 不包含游戏规则逻辑（规则在 GameMode 中）
+ * - 纯数据容器，用于 UI 绑定
+ * - 数据由服务器同步，客户端只读或简单更新
+ * - 不包含游戏逻辑（逻辑在服务器）
  * - 不包含 UI 逻辑（UI 在 PlayerUINode 中）
- * - 可以被子类扩展（如 TheDecreePlayer）
+ *
+ * 架构说明：
+ * - 服务器：完整的 Player 类 + 游戏逻辑
+ * - 客户端：轻量级 Player 类，仅用于数据绑定和显示
  */
 export class Player {
-    // 基础信息（来自 PlayerInfo）
-    protected _info: PlayerInfo;
+    // 基础信息（来自服务器）
+    public readonly id: string;
+    public name: string;
+    public avatar?: string;
+    public seatIndex: number;
+    public isReady: boolean;
+    public isHost: boolean;
 
-    // 游戏状态（所有玩法通用）
-    protected _handCards: number[] = [];      // 手牌
-    protected _score: number = 0;             // 分数
-    protected _state: PlayerState = PlayerState.WAITING;
-    protected _isDealer: boolean = false;     // 是否是庄家
+    // 游戏状态（由服务器同步）
+    public handCards: number[] = [];
+    public score: number = 0;
+    public state: PlayerState = PlayerState.WAITING;
+    public isDealer: boolean = false;
 
     constructor(info: PlayerInfo) {
-        this._info = info;
+        this.id = info.id;
+        this.name = info.name;
+        this.avatar = info.avatar;
+        this.seatIndex = info.seatIndex;
+        this.isReady = info.isReady;
+        this.isHost = info.isHost;
     }
 
-    // ==================== 基础信息访问器 ====================
-
-    get id(): string {
-        return this._info.id;
-    }
-
-    get name(): string {
-        return this._info.name;
-    }
-
-    get avatar(): string | undefined {
-        return this._info.avatar;
-    }
-
-    get seatIndex(): number {
-        return this._info.seatIndex;
-    }
-
-    get isReady(): boolean {
-        return this._info.isReady;
-    }
-
-    get isHost(): boolean {
-        return this._info.isHost;
-    }
-
-    /**
-     * 获取 PlayerInfo（只读）
-     */
-    get info(): Readonly<PlayerInfo> {
-        return this._info;
-    }
-
-    // ==================== 游戏状态访问器 ====================
-
-    get handCards(): number[] {
-        return this._handCards;
-    }
-
-    get score(): number {
-        return this._score;
-    }
-
-    set score(value: number) {
-        this._score = value;
-    }
-
-    get state(): PlayerState {
-        return this._state;
-    }
-
-    set state(value: PlayerState) {
-        this._state = value;
-    }
-
-    get isDealer(): boolean {
-        return this._isDealer;
-    }
-
-    set isDealer(value: boolean) {
-        this._isDealer = value;
-    }
+    // ==================== 便捷访问器 ====================
 
     get cardCount(): number {
-        return this._handCards.length;
+        return this.handCards.length;
     }
 
-    // ==================== 手牌数据操作（纯数据，无逻辑）====================
+    get info(): PlayerInfo {
+        return {
+            id: this.id,
+            name: this.name,
+            avatar: this.avatar,
+            seatIndex: this.seatIndex,
+            isReady: this.isReady,
+            isHost: this.isHost
+        };
+    }
+
+    // ==================== 数据更新方法（服务器同步调用）====================
 
     /**
-     * Set hand cards (usually after dealing)
+     * 设置手牌（服务器发牌后调用）
      */
     public setHandCards(cards: number[]): void {
-        this._handCards = [...cards];
+        this.handCards = [...cards];
     }
 
     /**
-     * Add cards to hand
+     * 添加手牌（服务器补牌后调用）
      */
     public addCards(cards: number[]): void {
-        this._handCards.push(...cards);
+        this.handCards.push(...cards);
     }
 
     /**
-     * Remove cards from hand (after playing)
+     * 移除手牌（玩家出牌后调用）
      */
     public removeCards(cards: number[]): void {
-        cards.forEach(card => {
-            const index = this._handCards.indexOf(card);
+        for (const card of cards) {
+            const index = this.handCards.indexOf(card);
             if (index !== -1) {
-                this._handCards.splice(index, 1);
+                this.handCards.splice(index, 1);
             }
-        });
+        }
     }
 
     /**
-     * Check if player has specific cards
+     * 更新分数（服务器回合结束后调用）
+     */
+    public updateScore(score: number): void {
+        this.score = score;
+    }
+
+    /**
+     * 重置游戏状态（新游戏开始时调用）
+     */
+    public reset(): void {
+        this.handCards = [];
+        this.score = 0;
+        this.state = PlayerState.WAITING;
+        this.isDealer = false;
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 检查玩家是否有手牌
+     */
+    public hasCardsInHand(): boolean {
+        return this.handCards.length > 0;
+    }
+
+    /**
+     * 检查玩家是否已完成（无手牌）
+     */
+    public isFinished(): boolean {
+        return this.handCards.length === 0;
+    }
+
+    /**
+     * 检查玩家是否拥有指定的牌
+     * （用于单机模式的验证逻辑）
      */
     public hasCards(cards: number[]): boolean {
-        const handCopy = [...this._handCards];
+        const handCopy = [...this.handCards];
         for (const card of cards) {
             const index = handCopy.indexOf(card);
             if (index === -1) {
@@ -158,18 +155,13 @@ export class Player {
     }
 
     /**
-     * Clear all cards
+     * 排序手牌（按点数和花色）
+     * （用于单机模式的手牌显示）
+     *
+     * @param _levelRank 当前关卡等级（保留参数以兼容接口，暂未使用）
      */
-    public clearCards(): void {
-        this._handCards = [];
-    }
-
-    /**
-     * Sort hand cards by point value first, then by suit
-     * Jokers are sorted to the end (rightmost)
-     */
-    public sortCards(levelRank: number = 0): void {
-        this._handCards.sort((a, b) => {
+    public sortCards(_levelRank: number = 0): void {
+        this.handCards.sort((a, b) => {
             const suitA = a & 0xF0;
             const suitB = b & 0xF0;
             const pointA = a & 0x0F;
@@ -196,99 +188,10 @@ export class Player {
         });
     }
 
-    // ==================== 分数操作 ====================
-
     /**
-     * 更新分数（增加或减少）
-     */
-    public updateScore(delta: number): void {
-        this._score += delta;
-    }
-
-    /**
-     * 重置分数
-     */
-    public resetScore(): void {
-        this._score = 0;
-    }
-
-    // ==================== 状态查询 ====================
-
-    /**
-     * Check if player has finished (no cards left)
-     */
-    public isFinished(): boolean {
-        return this._handCards.length === 0;
-    }
-
-    /**
-     * Check if player has cards
-     */
-    public hasCardsInHand(): boolean {
-        return this._handCards.length > 0;
-    }
-
-    // ==================== 重置方法 ====================
-
-    /**
-     * Reset player state for new game
-     * 重置游戏状态，但保留 PlayerInfo
-     */
-    public reset(): void {
-        this._handCards = [];
-        this._score = 0;
-        this._state = PlayerState.WAITING;
-        this._isDealer = false;
-    }
-
-    // ==================== 调试方法 ====================
-
-    /**
-     * Get player info as string for debugging
+     * 调试输出
      */
     public toString(): string {
-        return `Player[${this._info.id}] ${this._info.name} - Seat: ${this._info.seatIndex}, Cards: ${this._handCards.length}, Score: ${this._score}, State: ${PlayerState[this._state]}`;
-    }
-}
-
-/**
- * TheDecreePlayer - TheDecree 模式的玩家
- * 扩展基类，添加特定玩法的数据
- */
-export class TheDecreePlayer extends Player {
-    // TheDecree 特有数据
-    private _playedCards: number[] = [];      // 本轮出的牌
-    private _hasPlayed: boolean = false;       // 是否已出牌
-
-    get playedCards(): number[] {
-        return this._playedCards;
-    }
-
-    get hasPlayed(): boolean {
-        return this._hasPlayed;
-    }
-
-    /**
-     * 标记玩家已出牌
-     */
-    public playCards(cards: number[]): void {
-        this._playedCards = [...cards];
-        this._hasPlayed = true;
-    }
-
-    /**
-     * 重置本轮状态
-     */
-    public resetRound(): void {
-        this._playedCards = [];
-        this._hasPlayed = false;
-    }
-
-    /**
-     * 重置游戏（覆盖基类，同时重置 TheDecree 特有状态）
-     */
-    public override reset(): void {
-        super.reset();
-        this.resetRound();
+        return `Player[${this.id}] ${this.name} - Seat: ${this.seatIndex}, Cards: ${this.handCards.length}, Score: ${this.score}`;
     }
 }

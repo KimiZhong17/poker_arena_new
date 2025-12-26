@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerUINode } from './PlayerUINode';
 import { Player } from '../Core/Player';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
-import { PlayerPosition } from '../Core/GameMode/PlayerLayoutConfig';
+import { PlayerPosition } from './PlayerLayoutConfig';
 import { DealerIndicator } from './DealerIndicator';
 
 const { ccclass, property } = _decorator;
