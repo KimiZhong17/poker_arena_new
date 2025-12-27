@@ -20,15 +20,12 @@ import {
     ErrorEvent
 } from './Messages';
 
-// 简单的 Socket.IO 客户端实现（使用原生 WebSocket）
-declare const io: any;
+// 导入 Socket.IO 浏览器构建版本
+import io from 'socket.io-client/dist/socket.io.js';
 
 /**
  * 网络客户端
  * 管理与服务器的 Socket.IO 连接
- *
- * 注意：需要在 index.html 中引入 socket.io-client CDN：
- * <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
  */
 export class NetworkClient {
     private socket: any = null;
@@ -53,14 +50,6 @@ export class NetworkClient {
     public connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             try {
-                // 检查 socket.io 是否已加载
-                if (typeof io === 'undefined') {
-                    const error = new Error('Socket.IO client not loaded. Please include socket.io-client in index.html');
-                    console.error('[NetworkClient]', error.message);
-                    reject(error);
-                    return;
-                }
-
                 this.socket = io(this.serverUrl, {
                     transports: ['websocket'],
                     reconnection: true,
@@ -189,7 +178,11 @@ export class NetworkClient {
         });
 
         this.socket.on(ServerMessageType.ERROR, (data: ErrorEvent) => {
-            console.error('[NetworkClient] Server error:', data);
+            console.error('[NetworkClient] Server error:', {
+                code: data.code,
+                message: data.message,
+                fullData: data
+            });
             this.emit('error', data);
         });
 

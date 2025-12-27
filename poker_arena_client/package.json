@@ -3,5 +3,9 @@
   "uuid": "98547648-7274-4fce-a16d-5a467ae61150",
   "creator": {
     "version": "3.8.7"
+  },
+  "dependencies": {
+    "socket-io": "^1.0.0",
+    "socket.io-client": "^4.8.3"
   }
 }

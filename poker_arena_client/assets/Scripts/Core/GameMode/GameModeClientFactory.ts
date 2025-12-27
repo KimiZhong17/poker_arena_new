@@ -1,5 +1,4 @@
 import { GameModeClientBase } from "./GameModeClientBase";
-import { GuandanMode } from "./GuandanMode";
 import { TheDecreeModeClient } from "./TheDecreeModeClient";
 import { Game } from "../../Game";
 

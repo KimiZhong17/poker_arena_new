@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "8ce651a5-e3f2-458a-99c2-bf8aafa79567",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "8ce651a5-e3f2-458a-99c2-bf8aafa79567@6c48a",
+      "displayName": "RoomPanel",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "8ce651a5-e3f2-458a-99c2-bf8aafa79567",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "8ce651a5-e3f2-458a-99c2-bf8aafa79567@f9941",
+      "displayName": "RoomPanel",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 0,
+        "offsetY": 0,
+        "trimX": 81,
+        "trimY": 89,
+        "width": 1038,
+        "height": 718,
+        "rawWidth": 1200,
+        "rawHeight": 896,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -519,
+            -359,
+            0,
+            519,
+            -359,
+            0,
+            -519,
+            359,
+            0,
+            519,
+            359,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            81,
+            807,
+            1119,
+            807,
+            81,
+            89,
+            1119,
+            89
+          ],
+          "nuv": [
+            0.0675,
+            0.09933035714285714,
+            0.9325,
+            0.09933035714285714,
+            0.0675,
+            0.9006696428571429,
+            0.9325,
+            0.9006696428571429
+          ],
+          "minPos": [
+            -519,
+            -359,
+            0
+          ],
+          "maxPos": [
+            519,
+            359,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "8ce651a5-e3f2-458a-99c2-bf8aafa79567@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "hasAlpha": true,
+    "fixAlphaTransparencyArtifacts": false,
+    "redirect": "8ce651a5-e3f2-458a-99c2-bf8aafa79567@6c48a"
+  }
+}

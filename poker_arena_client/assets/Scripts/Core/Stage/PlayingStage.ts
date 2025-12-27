@@ -4,7 +4,6 @@ import { Game } from '../../Game';
 import { GameStage } from '../GameStage';
 import { GameModeClientBase } from '../GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';
-import { GuandanMode } from '../GameMode/GuandanMode';
 
 /**
  * 游玩阶段
@@ -148,8 +147,8 @@ export class PlayingStage extends GameStageBase {
         // 注意：这里需要根据实际的游戏模式类来实现
         if (this.gameModeName === 'the_decree') {
             this.currentGameMode = this.createTheDecreeMode();
-        } else if (this.gameModeName === 'guandan') {
-            this.currentGameMode = this.createGuandanMode();
+        // } else if (this.gameModeName === 'guandan') {
+        //     this.currentGameMode = this.createGuandanMode();
         } else {
             console.error(`[PlayingStage] Unknown game mode: ${this.gameModeName}`);
             // 默认使用TheDecree
@@ -192,32 +191,32 @@ export class PlayingStage extends GameStageBase {
         }
     }
 
-    /**
-     * 创建Guandan游戏模式
-     */
-    private createGuandanMode(): GameModeClientBase | null {
-        try {
-            // 创建配置
-            const config = {
-                id: 'guandan',
-                name: 'Guandan',
-                displayName: '掼蛋',
-                minPlayers: 4,
-                maxPlayers: 5,
-                deckCount: 3,
-                initialHandSize: 31,
-                description: 'Popular Chinese card game'
-            };
+    // /**
+    //  * 创建Guandan游戏模式
+    //  */
+    // private createGuandanMode(): GameModeClientBase | null {
+    //     try {
+    //         // 创建配置
+    //         const config = {
+    //             id: 'guandan',
+    //             name: 'Guandan',
+    //             displayName: '掼蛋',
+    //             minPlayers: 4,
+    //             maxPlayers: 5,
+    //             deckCount: 3,
+    //             initialHandSize: 31,
+    //             description: 'Popular Chinese card game'
+    //         };
 
-            // 创建实例
-            const mode = new GuandanMode(this.game, config);
-            return mode;
-        } catch (error) {
-            console.error('[PlayingStage] Failed to create GuandanMode:', error);
-            console.warn('[PlayingStage] GuandanMode not implemented yet, using TheDecree as fallback');
-            return this.createTheDecreeMode();
-        }
-    }
+    //         // 创建实例
+    //         const mode = new GuandanMode(this.game, config);
+    //         return mode;
+    //     } catch (error) {
+    //         console.error('[PlayingStage] Failed to create GuandanMode:', error);
+    //         console.warn('[PlayingStage] GuandanMode not implemented yet, using TheDecree as fallback');
+    //         return this.createTheDecreeMode();
+    //     }
+    // }
 
     // ==================== 公共接口 ====================
 

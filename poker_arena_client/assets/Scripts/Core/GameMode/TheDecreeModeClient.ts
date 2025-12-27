@@ -30,6 +30,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
     private currentRoundNumber: number = 0;
     private cardsToPlay: number = 0;
 
+    // 自动出牌设置（仅用于 player_0）
+    private isPlayer0AutoPlay: boolean = true;
+
     // UI 节点（游戏模式特定）
     private theDecreeContainerNode: Node | null = null;
     private communityCardsNode: Node | null = null;
@@ -343,6 +346,21 @@ export class TheDecreeModeClient extends GameModeClientBase {
     public isCurrentPlayerDealer(): boolean {
         const network = this.getNetworkClient();
         return network ? network.getPlayerId() === this.dealerId : false;
+    }
+
+    /**
+     * 获取 player_0 自动出牌状态
+     */
+    public isPlayer0AutoPlayEnabled(): boolean {
+        return this.isPlayer0AutoPlay;
+    }
+
+    /**
+     * 设置 player_0 自动出牌状态
+     */
+    public setPlayer0AutoPlay(enabled: boolean): void {
+        this.isPlayer0AutoPlay = enabled;
+        console.log(`[TheDecreeModeClient] Player_0 auto-play ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     // ==================== Legacy 兼容方法（供 Game.ts 调用）====================

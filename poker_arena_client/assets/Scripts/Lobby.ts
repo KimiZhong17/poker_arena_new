@@ -1,6 +1,12 @@
-import { _decorator, Component, Button, Label, EditBox } from 'cc';
+// 必须在最前面导入 polyfills
+import './polyfills';
+
+import { _decorator, Component, Button, Label, EditBox, Node } from 'cc';
 import { SceneManager } from './Manager/SceneManager';
 import { UserManager } from './Manager/UserManager';
+import { NetworkManager } from './Manager/NetworkManager';
+import { NetworkClient } from './Network/NetworkClient';
+import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
 
 const { ccclass, property } = _decorator;
 
@@ -25,8 +31,18 @@ export class Lobby extends Component {
     @property(Label)
     statusLabel: Label = null!;
 
+    // RoomPanel 相关
+    @property(Node)
+    roomPanel: Node = null!;
+
+    // RoomPanel 子节点（自动查找）
+    private roomPanelInput: EditBox | null = null;
+    private btnConfirm: Button | null = null;
+    private btnClose: Button | null = null;
+
     private userManager: UserManager = null!;
     private sceneManager: SceneManager = null!;
+    private networkClient: NetworkClient | null = null;
     private currentGameMode: string = '';
 
     start() {
@@ -56,6 +72,12 @@ export class Lobby extends Component {
 
         console.log(`[Lobby] Game mode: ${this.currentGameMode}`);
 
+        // 初始化网络客户端
+        this.initNetworkClient();
+
+        // 自动查找 RoomPanel 子节点
+        this.autoFindRoomPanelElements();
+
         this.setupUI();
         this.setupButtons();
     }
@@ -69,6 +91,91 @@ export class Lobby extends Component {
         // Clear room ID input
         if (this.roomIdInput) {
             this.roomIdInput.string = '';
+        }
+
+        // 初始隐藏 RoomPanel
+        this.hideRoomPanel();
+    }
+
+    /**
+     * 初始化网络客户端
+     */
+    private initNetworkClient(): void {
+        const serverUrl = 'http://localhost:3000'; // TODO: 从配置读取
+
+        // 使用 NetworkManager 获取全局单例 NetworkClient
+        const networkManager = NetworkManager.getInstance();
+        this.networkClient = networkManager.getClient(serverUrl);
+
+        // 如果已经连接，直接设置事件监听
+        if (this.networkClient.getIsConnected()) {
+            console.log('[Lobby] Already connected to server');
+            this.setupNetworkEvents();
+            return;
+        }
+
+        // 连接到服务器
+        this.networkClient.connect()
+            .then(() => {
+                console.log('[Lobby] Connected to server');
+                this.setupNetworkEvents();
+            })
+            .catch((error) => {
+                console.error('[Lobby] Failed to connect to server:', error);
+                this.showStatus('连接服务器失败');
+            });
+    }
+
+    /**
+     * 设置网络事件监听
+     */
+    private setupNetworkEvents(): void {
+        if (!this.networkClient) return;
+
+        // 监听房间创建成功
+        this.networkClient.on('room_created', this.onRoomCreated.bind(this));
+
+        // 监听房间加入成功
+        this.networkClient.on('room_joined', this.onRoomJoined.bind(this));
+
+        // 监听错误
+        this.networkClient.on('error', this.onNetworkError.bind(this));
+    }
+
+    /**
+     * 自动查找 RoomPanel 子节点
+     */
+    private autoFindRoomPanelElements(): void {
+        if (!this.roomPanel) {
+            console.error('[Lobby] roomPanel not assigned!');
+            return;
+        }
+
+        // 查找输入框
+        const inputNode = this.roomPanel.getChildByName('RoomIdInput');
+        this.roomPanelInput = inputNode?.getComponent(EditBox) || null;
+
+        // 查找确认按钮
+        const confirmNode = this.roomPanel.getChildByName('btn_confirm');
+        this.btnConfirm = confirmNode?.getComponent(Button) || null;
+
+        // 查找关闭按钮
+        const closeNode = this.roomPanel.getChildByName('btn_close');
+        this.btnClose = closeNode?.getComponent(Button) || null;
+
+        console.log('[Lobby] RoomPanel elements found:', {
+            roomPanelInput: !!this.roomPanelInput,
+            btnConfirm: !!this.btnConfirm,
+            btnClose: !!this.btnClose
+        });
+
+        // 注册 RoomPanel 按钮事件
+        if (this.btnConfirm) {
+            this.btnConfirm.node.on(Button.EventType.CLICK, this.onRoomPanelConfirmClicked, this);
+        }
+
+        if (this.btnClose) {
+            this.btnClose.node.on(Button.EventType.CLICK, this.onRoomPanelCloseClicked, this);
         }
     }
 
@@ -91,7 +198,7 @@ export class Lobby extends Component {
 
     /**
      * Handle create room button click
-     * For now, directly go to GameRoom scene
+     * Create a room via network
      */
     private onCreateRoomClicked(): void {
         console.log('[Lobby] Create room clicked');
@@ -103,24 +210,23 @@ export class Lobby extends Component {
             return;
         }
 
-        // Generate a simple room ID (timestamp-based)
-        const roomId = `room_${Date.now()}`;
-        console.log(`[Lobby] Created room: ${roomId}`);
+        if (!this.networkClient || !this.networkClient.getIsConnected()) {
+            console.error('[Lobby] Network client not connected');
+            this.showStatus('未连接到服务器');
+            return;
+        }
 
-        // TODO: In future, create actual room with RoomManager
-        // For now, just navigate to game scene
-        this.sceneManager.goToGame({
-            roomId: roomId,
-            gameMode: this.currentGameMode
-        });
+        // 通过网络创建房间
+        console.log('[Lobby] Creating room via network...');
+        this.networkClient.createRoom(user.username, 'the_decree', 4);
     }
 
     /**
      * Handle join room button click
-     * Join a room by entering room ID
+     * Show room panel to enter room ID
      */
     private onJoinRoomClicked(): void {
-        console.log('[Lobby] Join room clicked');
+        console.log('[Lobby] Join room button clicked');
 
         const user = this.userManager.getCurrentUser();
         if (!user) {
@@ -129,23 +235,8 @@ export class Lobby extends Component {
             return;
         }
 
-        // Get room ID from input
-        const roomId = this.roomIdInput?.string?.trim();
-
-        if (!roomId) {
-            console.warn('[Lobby] No room ID entered');
-            this.showStatus('Please enter a room ID');
-            return;
-        }
-
-        console.log(`[Lobby] Attempting to join room: ${roomId}`);
-
-        // TODO: In future, validate room exists with RoomManager
-        // For now, just navigate to game scene with the entered room ID
-        this.sceneManager.goToGame({
-            roomId: roomId,
-            gameMode: this.currentGameMode
-        });
+        // 显示房间面板
+        this.showRoomPanel();
     }
 
     /**
@@ -154,6 +245,143 @@ export class Lobby extends Component {
     private onBackClicked(): void {
         console.log('[Lobby] Back clicked');
         this.sceneManager.goToHall();
+    }
+
+    // ==================== RoomPanel 相关方法 ====================
+
+    /**
+     * 显示 RoomPanel
+     */
+    private showRoomPanel(): void {
+        if (this.roomPanel) {
+            this.roomPanel.active = true;
+
+            // 清空输入框
+            if (this.roomPanelInput) {
+                this.roomPanelInput.string = '';
+            }
+
+            console.log('[Lobby] RoomPanel shown');
+        }
+    }
+
+    /**
+     * 隐藏 RoomPanel
+     */
+    private hideRoomPanel(): void {
+        if (this.roomPanel) {
+            this.roomPanel.active = false;
+            console.log('[Lobby] RoomPanel hidden');
+        }
+    }
+
+    /**
+     * RoomPanel 确认按钮点击
+     */
+    private onRoomPanelConfirmClicked(): void {
+        console.log('[Lobby] RoomPanel confirm clicked');
+
+        // 获取输入的房间号
+        const roomId = this.roomPanelInput?.string?.trim() || '';
+
+        // 验证房间号格式（4位数字）
+        if (!this.validateRoomId(roomId)) {
+            console.error('[Lobby] Invalid room ID format');
+            this.showStatus('请输入4位数字房间号');
+            return;
+        }
+
+        // 检查网络连接
+        if (!this.networkClient || !this.networkClient.getIsConnected()) {
+            console.error('[Lobby] Network client not connected');
+            this.showStatus('未连接到服务器');
+            return;
+        }
+
+        // 获取玩家名称
+        const user = this.userManager.getCurrentUser();
+        if (!user) {
+            console.error('[Lobby] No user logged in');
+            this.showStatus('用户未登录');
+            return;
+        }
+
+        // 发送加入房间请求
+        console.log(`[Lobby] Joining room: ${roomId}`);
+        this.networkClient.joinRoom(roomId, user.username);
+    }
+
+    /**
+     * RoomPanel 关闭按钮点击
+     */
+    private onRoomPanelCloseClicked(): void {
+        console.log('[Lobby] RoomPanel close clicked');
+        this.hideRoomPanel();
+    }
+
+    /**
+     * 验证房间号格式（4位数字）
+     */
+    private validateRoomId(roomId: string): boolean {
+        const regex = /^\d{4}$/;
+        return regex.test(roomId);
+    }
+
+    // ==================== 网络事件处理 ====================
+
+    /**
+     * 房间创建成功
+     */
+    private onRoomCreated(data: RoomCreatedEvent): void {
+        console.log('[Lobby] Room created successfully:', data);
+
+        // 跳转到游戏场景
+        this.sceneManager.goToGame({
+            roomId: data.roomId,
+            gameMode: this.currentGameMode
+        });
+    }
+
+    /**
+     * 房间加入成功
+     */
+    private onRoomJoined(data: RoomJoinedEvent): void {
+        console.log('[Lobby] Successfully joined room:', data);
+
+        // 隐藏面板
+        this.hideRoomPanel();
+
+        // 跳转到游戏场景
+        this.sceneManager.goToGame({
+            roomId: data.roomId,
+            gameMode: this.currentGameMode
+        });
+    }
+
+    /**
+     * 网络错误处理
+     */
+    private onNetworkError(error: ErrorEvent): void {
+        console.error('[Lobby] Network error:', error);
+
+        // 根据错误码显示友好提示
+        let errorMessage = '操作失败';
+
+        switch (error.code) {
+            case 'ROOM_NOT_FOUND':
+                errorMessage = '房间不存在';
+                break;
+            case 'ROOM_FULL':
+                errorMessage = '房间已满';
+                break;
+            case 'INTERNAL_ERROR':
+                errorMessage = '服务器错误';
+                break;
+            default:
+                errorMessage = error.message || '未知错误';
+        }
+
+        this.showStatus(errorMessage);
     }
 
     /**
@@ -182,6 +410,24 @@ export class Lobby extends Component {
         }
         if (this.backButton?.node && this.backButton.isValid) {
             this.backButton.node.off(Button.EventType.CLICK, this.onBackClicked, this);
+        }
+
+        // Clean up RoomPanel event listeners
+        if (this.btnConfirm?.node && this.btnConfirm.isValid) {
+            this.btnConfirm.node.off(Button.EventType.CLICK, this.onRoomPanelConfirmClicked, this);
+        }
+        if (this.btnClose?.node && this.btnClose.isValid) {
+            this.btnClose.node.off(Button.EventType.CLICK, this.onRoomPanelCloseClicked, this);
+        }
+
+        // Clean up network event listeners
+        if (this.networkClient) {
+            this.networkClient.off('room_created', this.onRoomCreated.bind(this));
+            this.networkClient.off('room_joined', this.onRoomJoined.bind(this));
+            this.networkClient.off('error', this.onNetworkError.bind(this));
+
+            // 不要断开连接！NetworkManager 会管理连接的生命周期
+            // this.networkClient.disconnect();
         }
     }
 }

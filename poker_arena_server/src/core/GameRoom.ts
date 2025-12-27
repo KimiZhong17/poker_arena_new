@@ -34,9 +34,19 @@ export class GameRoom {
     private theDecreeGame: TheDecreeMode | null = null;
 
     constructor(gameMode: string, maxPlayers: number) {
-        this.id = uuidv4().substring(0, 8);
+        // 生成4位随机数字作为房间号
+        this.id = this.generateRoomId();
         this.gameMode = gameMode;
         this.maxPlayers = maxPlayers;
+    }
+
+    /**
+     * 生成4位数字房间号
+     */
+    private generateRoomId(): string {
+        // 生成 1000-9999 之间的随机数
+        const roomNumber = Math.floor(1000 + Math.random() * 9000);
+        return roomNumber.toString();
     }
 
     /**
