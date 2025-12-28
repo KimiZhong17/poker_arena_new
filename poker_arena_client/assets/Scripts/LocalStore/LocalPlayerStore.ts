@@ -1,297 +1,197 @@
-import { IdGenerator } from '../Utils/IdGenerator';
-
 /**
- * 本地玩家数据结构
+ * Player state enumeration
  */
-export interface LocalPlayerData {
-    // 本地用户基本信息
-    username: string;
-    nickname: string;
-    avatar?: string;
-    level: number;
-    exp: number;
-
-    // 认证相关
-    isGuest: boolean;
-    token?: string;
-
-    // 游客专属：客户端生成的唯一ID
-    // 格式: guest_xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    guestId?: string;
-
-    // 当前房间内的玩家ID（服务器分配）
-    // 注意：这个ID只在当前房间内有效，离开房间后会清空
-    currentRoomPlayerId?: string;
+export enum PlayerState {
+    WAITING = 0,        // Waiting for game to start
+    PLAYING = 1,        // In game
+    IDLE = 2,           // Idle (not current turn)
+    THINKING = 3,       // Thinking (current turn)
+    PASSED = 4,         // Passed this round
+    FINISHED = 5        // Finished (no cards left)
 }
 
 /**
- * LocalPlayerStore - 本地玩家状态存储
- *
- * 职责：
- * - 管理本地玩家的基本信息（用户名、昵称、等级等）
- * - 处理本地认证状态（登录/游客登录/登出）
- * - 持久化用户数据到 localStorage
- * - 存储当前选择的游戏模式
- * - 临时存储服务器分配的房间玩家ID
- *
- * 注意：
- * - 不负责房间管理（由 RoomStateStore 负责）
- * - 不负责网络通信（由 NetworkClient 负责）
+ * Player info in room
+ * 玩家的"身份信息"（登录/房间相关）
  */
-export class LocalPlayerStore {
-    private static instance: LocalPlayerStore;
+export interface PlayerInfo {
+    id: string;           // 唯一标识（可以是网络ID）
+    name: string;         // 用户名
+    avatar?: string;      // 头像URL
+    isReady: boolean;     // 是否准备（房间中）
+    isHost: boolean;      // 是否房主
+    seatIndex: number;    // 座位索引
+}
 
-    private playerData: LocalPlayerData | null = null;
-    private isLoggedIn: boolean = false;
-    private selectedGameMode: string | null = null;
+/**
+ * Player - 客户端玩家数据容器（简化版）
+ *
+ * 设计原则：
+ * - 纯数据容器，用于 UI 绑定
+ * - 数据由服务器同步，客户端只读或简单更新
+ * - 不包含游戏逻辑（逻辑在服务器）
+ * - 不包含 UI 逻辑（UI 在 PlayerUINode 中）
+ *
+ * 架构说明：
+ * - 服务器：完整的 Player 类 + 游戏逻辑
+ * - 客户端：轻量级 Player 类，仅用于数据绑定和显示
+ */
+export class Player {
+    // 基础信息（来自服务器）
+    public readonly id: string;
+    public name: string;
+    public avatar?: string;
+    public seatIndex: number;
+    public isReady: boolean;
+    public isHost: boolean;
 
-    private constructor() {
-        this.loadFromStorage();
+    // 游戏状态（由服务器同步）
+    public handCards: number[] = [];
+    public score: number = 0;
+    public state: PlayerState = PlayerState.WAITING;
+    public isDealer: boolean = false;
+
+    constructor(info: PlayerInfo) {
+        this.id = info.id;
+        this.name = info.name;
+        this.avatar = info.avatar;
+        this.seatIndex = info.seatIndex;
+        this.isReady = info.isReady;
+        this.isHost = info.isHost;
     }
 
-    public static getInstance(): LocalPlayerStore {
-        if (!LocalPlayerStore.instance) {
-            LocalPlayerStore.instance = new LocalPlayerStore();
-        }
-        return LocalPlayerStore.instance;
+    // ==================== 便捷访问器 ====================
+
+    get cardCount(): number {
+        return this.handCards.length;
     }
 
-    // ==================== 认证相关 ====================
-
-    /**
-     * 用户名密码登录
-     * TODO: 替换为真实的 API 调用
-     */
-    public async login(username: string, password: string): Promise<boolean> {
-        // TODO: Call real authentication API
-        await this.delay(500);
-
-        this.playerData = {
-            username: username,
-            nickname: username,
-            level: 1,
-            exp: 0,
-            isGuest: false
+    get info(): PlayerInfo {
+        return {
+            id: this.id,
+            name: this.name,
+            avatar: this.avatar,
+            seatIndex: this.seatIndex,
+            isReady: this.isReady,
+            isHost: this.isHost
         };
+    }
 
-        this.isLoggedIn = true;
-        this.saveToStorage();
+    // ==================== 数据更新方法（服务器同步调用）====================
 
-        console.log(`[LocalPlayerStore] User logged in: ${username}`);
-        return true;
+    /**
+     * 设置手牌（服务器发牌后调用）
+     */
+    public setHandCards(cards: number[]): void {
+        this.handCards = [...cards];
     }
 
     /**
-     * 游客登录
-     * 使用UUID生成全局唯一的游客ID，避免冲突
+     * 添加手牌（服务器补牌后调用）
      */
-    public async loginAsGuest(): Promise<boolean> {
-        await this.delay(300);
-
-        // 生成全局唯一的游客ID
-        const guestId = IdGenerator.generateGuestId();
-        // 生成友好的显示名称（从UUID提取短ID）
-        const displayName = IdGenerator.generateGuestDisplayName(guestId);
-
-        this.playerData = {
-            username: guestId,          // 使用完整UUID作为username（唯一标识）
-            nickname: displayName,       // 使用友好名称作为昵称（显示）
-            level: 1,
-            exp: 0,
-            isGuest: true,
-            guestId: guestId            // 保存完整的游客ID
-        };
-
-        this.isLoggedIn = true;
-        // 游客不保存到 localStorage
-
-        console.log(`[LocalPlayerStore] Guest logged in: ${guestId} (显示名: ${displayName})`);
-        return true;
+    public addCards(cards: number[]): void {
+        this.handCards.push(...cards);
     }
 
     /**
-     * 登出
+     * 移除手牌（玩家出牌后调用）
      */
-    public logout(): void {
-        this.playerData = null;
-        this.isLoggedIn = false;
-        this.selectedGameMode = null;
-        this.clearStorage();
-
-        console.log('[LocalPlayerStore] User logged out');
-    }
-
-    /**
-     * 检查是否已登录
-     */
-    public isUserLoggedIn(): boolean {
-        return this.isLoggedIn && this.playerData !== null;
-    }
-
-    // ==================== 玩家数据访问 ====================
-
-    /**
-     * 获取完整的玩家数据
-     */
-    public getPlayerData(): LocalPlayerData | null {
-        return this.playerData;
-    }
-
-    /**
-     * 获取用户名
-     */
-    public getUsername(): string {
-        return this.playerData?.username || 'Guest';
-    }
-
-    /**
-     * 获取昵称
-     */
-    public getNickname(): string {
-        return this.playerData?.nickname || 'Guest';
-    }
-
-    /**
-     * 获取当前房间内的玩家ID（服务器分配）
-     * 如果不在房间内，返回 null
-     */
-    public getCurrentRoomPlayerId(): string | null {
-        return this.playerData?.currentRoomPlayerId || null;
-    }
-
-    /**
-     * 是否是游客
-     */
-    public isGuest(): boolean {
-        return this.playerData?.isGuest || false;
-    }
-
-    // ==================== 玩家数据更新 ====================
-
-    /**
-     * 更新玩家基本信息
-     */
-    public updatePlayerData(data: Partial<LocalPlayerData>): void {
-        if (!this.playerData) {
-            console.warn('[LocalPlayerStore] Cannot update: no player data');
-            return;
-        }
-
-        this.playerData = {
-            ...this.playerData,
-            ...data
-        };
-
-        // 只有非游客才保存到 localStorage
-        if (!this.playerData.isGuest) {
-            this.saveToStorage();
-        }
-
-        console.log('[LocalPlayerStore] Player data updated:', data);
-    }
-
-    /**
-     * 设置当前房间内的玩家ID（服务器分配）
-     * 当加入/创建房间成功时调用
-     */
-    public setCurrentRoomPlayerId(playerId: string): void {
-        if (!this.playerData) {
-            console.warn('[LocalPlayerStore] Cannot set room player ID: no player data');
-            return;
-        }
-
-        this.playerData.currentRoomPlayerId = playerId;
-        console.log(`[LocalPlayerStore] Room player ID set: ${playerId}`);
-    }
-
-    /**
-     * 清除当前房间玩家ID
-     * 当离开房间时调用
-     */
-    public clearCurrentRoomPlayerId(): void {
-        if (this.playerData) {
-            this.playerData.currentRoomPlayerId = undefined;
-            console.log('[LocalPlayerStore] Room player ID cleared');
-        }
-    }
-
-    // ==================== 游戏模式选择 ====================
-
-    /**
-     * 设置选择的游戏模式
-     */
-    public setSelectedGameMode(gameModeId: string): void {
-        this.selectedGameMode = gameModeId;
-        console.log(`[LocalPlayerStore] Selected game mode: ${gameModeId}`);
-    }
-
-    /**
-     * 获取选择的游戏模式
-     */
-    public getSelectedGameMode(): string | null {
-        return this.selectedGameMode;
-    }
-
-    /**
-     * 清除游戏模式选择
-     */
-    public clearSelectedGameMode(): void {
-        this.selectedGameMode = null;
-    }
-
-    // ==================== 本地存储 ====================
-
-    /**
-     * 保存到 localStorage
-     */
-    private saveToStorage(): void {
-        if (!this.playerData) return;
-
-        try {
-            // 不保存 currentRoomPlayerId（临时数据）
-            const dataToSave = { ...this.playerData };
-            delete dataToSave.currentRoomPlayerId;
-
-            localStorage.setItem('poker_arena_player', JSON.stringify(dataToSave));
-            localStorage.setItem('poker_arena_logged_in', 'true');
-        } catch (error) {
-            console.error('[LocalPlayerStore] Failed to save to storage:', error);
-        }
-    }
-
-    /**
-     * 从 localStorage 加载
-     */
-    private loadFromStorage(): void {
-        try {
-            const playerData = localStorage.getItem('poker_arena_player');
-            const loggedIn = localStorage.getItem('poker_arena_logged_in');
-
-            if (playerData && loggedIn === 'true') {
-                this.playerData = JSON.parse(playerData);
-                this.isLoggedIn = true;
-                console.log('[LocalPlayerStore] Loaded from storage:', this.playerData?.username);
+    public removeCards(cards: number[]): void {
+        for (const card of cards) {
+            const index = this.handCards.indexOf(card);
+            if (index !== -1) {
+                this.handCards.splice(index, 1);
             }
-        } catch (error) {
-            console.error('[LocalPlayerStore] Failed to load from storage:', error);
         }
     }
 
     /**
-     * 清除 localStorage
+     * 更新分数（服务器回合结束后调用）
      */
-    private clearStorage(): void {
-        try {
-            localStorage.removeItem('poker_arena_player');
-            localStorage.removeItem('poker_arena_logged_in');
-        } catch (error) {
-            console.error('[LocalPlayerStore] Failed to clear storage:', error);
-        }
+    public updateScore(score: number): void {
+        this.score = score;
     }
 
-    // ==================== 工具方法 ====================
+    /**
+     * 重置游戏状态（新游戏开始时调用）
+     */
+    public reset(): void {
+        this.handCards = [];
+        this.score = 0;
+        this.state = PlayerState.WAITING;
+        this.isDealer = false;
+    }
 
-    private delay(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 检查玩家是否有手牌
+     */
+    public hasCardsInHand(): boolean {
+        return this.handCards.length > 0;
+    }
+
+    /**
+     * 检查玩家是否已完成（无手牌）
+     */
+    public isFinished(): boolean {
+        return this.handCards.length === 0;
+    }
+
+    /**
+     * 检查玩家是否拥有指定的牌
+     * （用于单机模式的验证逻辑）
+     */
+    public hasCards(cards: number[]): boolean {
+        const handCopy = [...this.handCards];
+        for (const card of cards) {
+            const index = handCopy.indexOf(card);
+            if (index === -1) {
+                return false;
+            }
+            handCopy.splice(index, 1);
+        }
+        return true;
+    }
+
+    /**
+     * 排序手牌（按点数和花色）
+     * （用于单机模式的手牌显示）
+     *
+     * @param _levelRank 当前关卡等级（保留参数以兼容接口，暂未使用）
+     */
+    public sortCards(_levelRank: number = 0): void {
+        this.handCards.sort((a, b) => {
+            const suitA = a & 0xF0;
+            const suitB = b & 0xF0;
+            const pointA = a & 0x0F;
+            const pointB = b & 0x0F;
+
+            // Jokers (suit 0x40) always go to the end
+            const isJokerA = suitA === 0x40;
+            const isJokerB = suitB === 0x40;
+
+            if (isJokerA && !isJokerB) return 1;
+            if (!isJokerA && isJokerB) return -1;
+
+            // Both are jokers: sort by point (Black Joker 0x01 < Red Joker 0x02)
+            if (isJokerA && isJokerB) {
+                return pointA - pointB;
+            }
+
+            // Neither are jokers: sort by point first, then by suit
+            if (pointA !== pointB) {
+                return pointA - pointB;
+            }
+
+            return suitA - suitB;
+        });
+    }
+
+    /**
+     * 调试输出
+     */
+    public toString(): string {
+        return `Player[${this.id}] ${this.name} - Seat: ${this.seatIndex}, Cards: ${this.handCards.length}, Score: ${this.score}`;
     }
 }

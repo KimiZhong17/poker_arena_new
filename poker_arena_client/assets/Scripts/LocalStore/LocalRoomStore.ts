@@ -42,6 +42,7 @@ export interface RoomData {
 export class LocalRoomStore {
     private static instance: LocalRoomStore;
     private currentRoom: RoomData | null = null;
+    private myPlayerIdInRoom: string | null = null;  // 当前用户在房间内的玩家ID（服务器分配）
 
     private constructor() {}
 
@@ -143,7 +144,54 @@ export class LocalRoomStore {
      */
     public clearCurrentRoom(): void {
         this.currentRoom = null;
+        this.myPlayerIdInRoom = null;  // 同时清空玩家ID
         console.log('[RoomStateStore] Current room cleared');
+    }
+
+    // ==================== 当前用户玩家ID管理 ====================
+
+    /**
+     * 设置当前用户在房间内的玩家ID（服务器分配）
+     * 当加入/创建房间成功时调用
+     */
+    public setMyPlayerId(playerId: string): void {
+        this.myPlayerIdInRoom = playerId;
+        console.log(`[LocalRoomStore] My player ID set: ${playerId}`);
+    }
+
+    /**
+     * 获取当前用户在房间内的玩家ID
+     * 如果不在房间内，返回 null
+     */
+    public getMyPlayerId(): string | null {
+        return this.myPlayerIdInRoom;
+    }
+
+    /**
+     * 清除当前用户的房间玩家ID
+     * 当离开房间时调用
+     */
+    public clearMyPlayerId(): void {
+        this.myPlayerIdInRoom = null;
+        console.log('[LocalRoomStore] My player ID cleared');
+    }
+
+    /**
+     * 获取当前用户在房间中的玩家信息
+     * 如果不在房间内或找不到，返回 null
+     */
+    public getMyPlayerInfo(): PlayerInfo | null {
+        if (!this.currentRoom || !this.myPlayerIdInRoom) {
+            return null;
+        }
+        return this.currentRoom.players.find(p => p.id === this.myPlayerIdInRoom) || null;
+    }
+
+    /**
+     * 检查当前用户是否是房主
+     */
+    public isMyPlayerHost(): boolean {
+        return this.currentRoom?.hostId === this.myPlayerIdInRoom;
     }
 
     /**

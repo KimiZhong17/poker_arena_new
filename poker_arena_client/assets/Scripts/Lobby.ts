@@ -5,7 +5,7 @@ import { _decorator, Component, Button, Label, EditBox, Node } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { RoomService } from './Services/RoomService';
-import { LocalPlayerStore } from './LocalStore/LocalPlayerStore';
+import { LocalUserStore } from './LocalStore/LocalUserStore';
 import { NetworkManager } from './Network/NetworkManager';
 import { NetworkClient } from './Network/NetworkClient';
 import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
@@ -45,7 +45,7 @@ export class Lobby extends Component {
 
     private authService: AuthService = null!;
     private roomService: RoomService = null!;
-    private localPlayerStore: LocalPlayerStore = null!;
+    private localUserStore: LocalUserStore = null!;
     private sceneManager: SceneManager = null!;
     private networkClient: NetworkClient | null = null;
     private currentGameMode: string = '';
@@ -53,7 +53,7 @@ export class Lobby extends Component {
     start() {
         this.authService = AuthService.getInstance();
         this.roomService = RoomService.getInstance();
-        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.localUserStore = LocalUserStore.getInstance();
         this.sceneManager = SceneManager.getInstance();
 
         // Check if user is logged in
@@ -68,8 +68,8 @@ export class Lobby extends Component {
             gameMode: string;
         }>();
 
-        // Get game mode from transition data or LocalPlayerStore
-        this.currentGameMode = transitionData.gameMode || this.localPlayerStore.getSelectedGameMode() || '';
+        // Get game mode from transition data or LocalUserStore
+        this.currentGameMode = transitionData.gameMode || this.localUserStore.getSelectedGameMode() || '';
 
         if (!this.currentGameMode) {
             console.error('[Lobby] No game mode selected');
@@ -329,10 +329,7 @@ export class Lobby extends Component {
     private onRoomCreated(data: RoomCreatedEvent): void {
         console.log('[Lobby] Room created successfully:', data);
 
-        // 保存服务器分配的玩家ID到 LocalPlayerStore
-        this.localPlayerStore.setCurrentRoomPlayerId(data.playerId);
-
-        // 保存房间信息到 RoomStateStore
+        // 保存房间信息到 LocalRoomStore
         const localRoomStore = LocalRoomStore.getInstance();
         const roomData: RoomData = {
             id: data.roomId,
@@ -353,8 +350,10 @@ export class Lobby extends Component {
         };
 
         localRoomStore.setCurrentRoom(roomData);
-        console.log('[Lobby] Room data saved to RoomStateStore:', roomData);
-        console.log('[Lobby] Player ID saved to LocalPlayerStore:', data.playerId);
+        // 保存服务器分配的玩家ID到 LocalRoomStore
+        localRoomStore.setMyPlayerId(data.playerId);
+        console.log('[Lobby] Room data saved to LocalRoomStore:', roomData);
+        console.log('[Lobby] Player ID saved to LocalRoomStore:', data.playerId);
 
         // 跳转到游戏场景（在线模式）
         this.sceneManager.goToGame({
@@ -370,10 +369,7 @@ export class Lobby extends Component {
     private onRoomJoined(data: RoomJoinedEvent): void {
         console.log('[Lobby] Successfully joined room:', data);
 
-        // 保存服务器分配的玩家ID到 LocalPlayerStore
-        this.localPlayerStore.setCurrentRoomPlayerId(data.playerId);
-
-        // 保存房间信息到 RoomStateStore
+        // 保存房间信息到 LocalRoomStore
         const localRoomStore = LocalRoomStore.getInstance();
         const myPlayerInfo = data.players.find(p => p.id === data.playerId);
         const roomData: RoomData = {
@@ -389,8 +385,10 @@ export class Lobby extends Component {
         };
 
         localRoomStore.setCurrentRoom(roomData);
-        console.log('[Lobby] Room data saved to RoomStateStore:', roomData);
-        console.log('[Lobby] Player ID saved to LocalPlayerStore:', { id: data.playerId, isHost: myPlayerInfo?.isHost });
+        // 保存服务器分配的玩家ID到 LocalRoomStore
+        localRoomStore.setMyPlayerId(data.playerId);
+        console.log('[Lobby] Room data saved to LocalRoomStore:', roomData);
+        console.log('[Lobby] Player ID saved to LocalRoomStore:', { id: data.playerId, isHost: myPlayerInfo?.isHost });
 
         // 隐藏面板
         this.hideRoomPanel();

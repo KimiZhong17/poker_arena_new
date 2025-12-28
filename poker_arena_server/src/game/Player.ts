@@ -4,6 +4,7 @@
 export interface PlayerInfo {
     id: string;
     name: string;
+    avatar?: string;      // 添加 avatar 字段以与客户端统一
     seatIndex: number;
     isReady: boolean;
     isHost: boolean;
@@ -16,6 +17,7 @@ export interface PlayerInfo {
 export class Player {
     public id: string;
     public name: string;
+    public avatar?: string;       // 添加 avatar 字段
     public seatIndex: number;
     public isReady: boolean;
     public isHost: boolean;
@@ -25,6 +27,7 @@ export class Player {
     constructor(info: PlayerInfo) {
         this.id = info.id;
         this.name = info.name;
+        this.avatar = info.avatar;    // 初始化 avatar
         this.seatIndex = info.seatIndex;
         this.isReady = info.isReady;
         this.isHost = info.isHost;
@@ -70,6 +73,7 @@ export class Player {
         return {
             id: this.id,
             name: this.name,
+            avatar: this.avatar,      // 包含 avatar 字段
             seatIndex: this.seatIndex,
             isReady: this.isReady,
             isHost: this.isHost

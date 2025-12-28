@@ -12,7 +12,7 @@ import {
     RoundEndEvent,
     GameOverEvent
 } from '../../Network/Messages';
-import { LocalPlayerStore } from '../../LocalStore/LocalPlayerStore';
+import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 
 /**
  * The Decree game mode - Network/Client version
@@ -229,8 +229,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 如果当前玩家是庄家，隐藏叫牌按钮
         // 如果当前玩家不是庄家，启用选牌功能
-        const localPlayerStore = LocalPlayerStore.getInstance();
-        const currentPlayerId = localPlayerStore.getCurrentRoomPlayerId();
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
 
         if (currentPlayerId && currentPlayerId !== data.dealerId) {
             // 启用选牌 UI
@@ -347,8 +347,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
      * 检查当前玩家是否是庄家
      */
     public isCurrentPlayerDealer(): boolean {
-        const localPlayerStore = LocalPlayerStore.getInstance();
-        const currentPlayerId = localPlayerStore.getCurrentRoomPlayerId();
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
         return currentPlayerId ? currentPlayerId === this.dealerId : false;
     }
 

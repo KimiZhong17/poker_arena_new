@@ -1,5 +1,5 @@
 import { NetworkClient } from '../Network/NetworkClient';
-import { LocalPlayerStore } from '../LocalStore/LocalPlayerStore';
+import { LocalUserStore } from '../LocalStore/LocalUserStore';
 
 /**
  * AuthService - 认证服务
@@ -7,19 +7,19 @@ import { LocalPlayerStore } from '../LocalStore/LocalPlayerStore';
  * 职责：
  * - 处理所有认证相关的网络请求
  * - 管理用户登录/登出流程
- * - 成功后更新 LocalPlayerStore
+ * - 成功后更新 LocalUserStore
  *
  * 注意：
- * - 不负责本地状态存储（由 LocalPlayerStore 负责）
+ * - 不负责本地状态存储（由 LocalUserStore 负责）
  * - 不负责底层网络连接（由 NetworkClient 负责）
  */
 export class AuthService {
     private static instance: AuthService;
     private networkClient: NetworkClient | null = null;
-    private localPlayerStore: LocalPlayerStore;
+    private localUserStore: LocalUserStore;
 
     private constructor() {
-        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.localUserStore = LocalUserStore.getInstance();
     }
 
     public static getInstance(): AuthService {
@@ -49,7 +49,7 @@ export class AuthService {
             await this.delay(500);
 
             // 登录成功后更新本地状态
-            this.localPlayerStore.updatePlayerData({
+            this.localUserStore.updateUserData({
                 username: username,
                 nickname: username,
                 isGuest: false
@@ -71,12 +71,12 @@ export class AuthService {
         console.log('[AuthService] Guest login');
 
         try {
-            // LocalPlayerStore 会生成UUID，确保唯一性
-            const success = await this.localPlayerStore.loginAsGuest();
+            // LocalUserStore 会生成UUID，确保唯一性
+            const success = await this.localUserStore.loginAsGuest();
 
             if (success) {
-                const guestId = this.localPlayerStore.getUsername();
-                const displayName = this.localPlayerStore.getNickname();
+                const guestId = this.localUserStore.getUsername();
+                const displayName = this.localUserStore.getNickname();
                 console.log(`[AuthService] Guest login successful: ${guestId} (显示: ${displayName})`);
                 return true;
             } else {
@@ -103,7 +103,7 @@ export class AuthService {
         }
 
         // 清理本地玩家数据
-        this.localPlayerStore.logout();
+        this.localUserStore.logout();
 
         console.log('[AuthService] Logout complete');
     }
@@ -112,14 +112,14 @@ export class AuthService {
      * 检查是否已登录
      */
     public isLoggedIn(): boolean {
-        return this.localPlayerStore.isUserLoggedIn();
+        return this.localUserStore.isUserLoggedIn();
     }
 
     /**
      * 获取当前用户名
      */
     public getUsername(): string {
-        return this.localPlayerStore.getUsername();
+        return this.localUserStore.getUsername();
     }
 
     // ==================== 工具方法 ====================

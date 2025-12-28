@@ -2,7 +2,7 @@ import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "../../UI/PlayerLayoutConfig";
 import { Player, PlayerInfo } from "../Player";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
-import { LocalPlayerStore } from "../../LocalStore/LocalPlayerStore";
+import { LocalUserStore } from "../../LocalStore/LocalUserStore";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
 
 /**
@@ -426,10 +426,9 @@ export abstract class GameModeClientBase {
             return false;
         }
 
-        const localPlayerStore = LocalPlayerStore.getInstance();
         const localRoomStore = LocalRoomStore.getInstance();
 
-        const playerId = localPlayerStore.getCurrentRoomPlayerId();
+        const playerId = localRoomStore.getMyPlayerId();
         const currentRoom = localRoomStore.getCurrentRoom();
 
         if (!playerId || !currentRoom) {
@@ -457,10 +456,9 @@ export abstract class GameModeClientBase {
             return false;
         }
 
-        const localPlayerStore = LocalPlayerStore.getInstance();
         const localRoomStore = LocalRoomStore.getInstance();
 
-        const playerId = localPlayerStore.getCurrentRoomPlayerId();
+        const playerId = localRoomStore.getMyPlayerId();
         const currentRoom = localRoomStore.getCurrentRoom();
 
         if (!playerId || !currentRoom) {

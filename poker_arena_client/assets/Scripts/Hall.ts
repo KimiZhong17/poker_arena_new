@@ -1,7 +1,7 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
-import { LocalPlayerStore } from './LocalStore/LocalPlayerStore';
+import { LocalUserStore } from './LocalStore/LocalUserStore';
 import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
 
 const { ccclass, property } = _decorator;
@@ -36,7 +36,7 @@ export class Hall extends Component {
     welcomeLabel: Label = null!;
 
     private authService: AuthService = null!;
-    private localPlayerStore: LocalPlayerStore = null!;
+    private localUserStore: LocalUserStore = null!;
     private sceneManager: SceneManager = null!;
 
     // Game mode information
@@ -59,7 +59,7 @@ export class Hall extends Component {
 
     start() {
         this.authService = AuthService.getInstance();
-        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.localUserStore = LocalUserStore.getInstance();
         this.sceneManager = SceneManager.getInstance();
 
         // Check if user is logged in
@@ -138,8 +138,8 @@ export class Hall extends Component {
             return;
         }
 
-        // Store selected game mode in LocalPlayerStore
-        this.localPlayerStore.setSelectedGameMode(gameModeId);
+        // Store selected game mode in LocalUserStore
+        this.localUserStore.setSelectedGameMode(gameModeId);
 
         console.log(`[Hall] Navigating to lobby for game mode: ${modeInfo.displayName}`);
 

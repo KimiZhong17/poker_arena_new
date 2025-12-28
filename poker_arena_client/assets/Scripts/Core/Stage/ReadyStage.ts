@@ -2,7 +2,7 @@ import { Button, Label, Node, Color } from 'cc';
 import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { LocalRoomStore } from '../../LocalStore/LocalRoomStore';
-import { LocalPlayerStore } from '../../LocalStore/LocalPlayerStore';
+import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
 
@@ -40,7 +40,7 @@ export class ReadyStage extends GameStageBase {
 
     // 管理器引用
     private localRoomStore: LocalRoomStore;
-    private localPlayerStore: LocalPlayerStore;
+    private localUserStore: LocalUserStore;
     private roomService: RoomService;
 
     // 本地玩家信息
@@ -56,7 +56,7 @@ export class ReadyStage extends GameStageBase {
     constructor(game: Game, rootNode: Node | null = null) {
         super(game, rootNode);
         this.localRoomStore = LocalRoomStore.getInstance();
-        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.localUserStore = LocalUserStore.getInstance();
         this.roomService = RoomService.getInstance();
     }
 
@@ -94,7 +94,7 @@ export class ReadyStage extends GameStageBase {
      */
     private initLocalPlayerInfo(): void {
         const currentRoom = this.localRoomStore.getCurrentRoom();
-        const currentPlayerId = this.localPlayerStore.getCurrentRoomPlayerId();
+        const currentPlayerId = this.localRoomStore.getMyPlayerId();
 
         if (currentPlayerId) {
             this.localPlayerId = currentPlayerId;

@@ -1,5 +1,5 @@
 import { NetworkClient } from '../Network/NetworkClient';
-import { LocalPlayerStore } from '../LocalStore/LocalPlayerStore';
+import { LocalUserStore } from '../LocalStore/LocalUserStore';
 import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
 import { 
     ClientMessageType, 
@@ -14,12 +14,12 @@ import { EventCenter, GameEvents } from '../Utils/EventCenter';
 
 export class RoomService {
     private static instance: RoomService;
-    private localPlayerStore: LocalPlayerStore;
+    private localUserStore: LocalUserStore;
     private localRoomStore: LocalRoomStore;
     private serverUrl: string = 'http://localhost:3000'; 
 
     private constructor() {
-        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.localUserStore = LocalUserStore.getInstance();
         this.localRoomStore = LocalRoomStore.getInstance();
         this.initNetworkListeners();
     }
@@ -73,8 +73,8 @@ export class RoomService {
             createdAt: Date.now()
         });
 
-        // 2. 存入 LocalPlayerStore
-        this.localPlayerStore.setCurrentRoomPlayerId(data.myPlayerIdInRoom);
+        // 2. 存储当前用户在房间内的玩家ID
+        this.localRoomStore.setMyPlayerId(data.myPlayerIdInRoom);
 
         // 3. 发出事件通知 UI
         EventCenter.emit(GameEvents.UI_NAVIGATE_TO_GAME);
@@ -91,7 +91,7 @@ export class RoomService {
     };
 
     private onPlayerLeft = (data: PlayerLeftEvent) => {
-        const myRoomId = this.localPlayerStore.getCurrentRoomPlayerId();
+        const myRoomId = this.localRoomStore.getMyPlayerId();
         if (data.playerId === myRoomId) {
             this.handleLocalLeave();
         } else {
@@ -108,9 +108,8 @@ export class RoomService {
     // ==================== 基础逻辑与业务接口 ====================
 
     private handleLocalLeave(): void {
-        // 1. 清空 Store
+        // 1. 清空 Store（clearCurrentRoom 会同时清空 myPlayerIdInRoom）
         this.localRoomStore.clearCurrentRoom();
-        this.localPlayerStore.clearCurrentRoomPlayerId();
 
         // 2. 发出事件通知 UI (可能需要导航回大厅)
         EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
@@ -125,7 +124,7 @@ export class RoomService {
     public createRoom(gameMode: string, maxPlayers: number): void {
         const client = this.getNetworkClient();
         if (client) client.send(ClientMessageType.CREATE_ROOM, { 
-            playerName: this.localPlayerStore.getUsername(), 
+            playerName: this.localUserStore.getUsername(), 
             gameMode: gameMode as 'the_decree', 
             maxPlayers 
         });
@@ -135,7 +134,7 @@ export class RoomService {
         const client = this.getNetworkClient();
         if (client) client.send(ClientMessageType.JOIN_ROOM, { 
             roomId, 
-            playerName: this.localPlayerStore.getUsername() 
+            playerName: this.localUserStore.getUsername() 
         });
     }
 
@@ -158,8 +157,7 @@ export class RoomService {
     }
 
     public isHost(): boolean {
-        const room = this.localRoomStore.getCurrentRoom();
-        return room?.hostId === this.localPlayerStore.getCurrentRoomPlayerId();
+        return this.localRoomStore.isMyPlayerHost();
     }
 
     public getCurrentRoomId(): string | null {
