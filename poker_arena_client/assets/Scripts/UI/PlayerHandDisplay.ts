@@ -1,7 +1,7 @@
 import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3 } from 'cc';
 import { Poker, CardClickCallback } from './Poker';
 import { PokerFactory } from './PokerFactory';
-import { Player } from '../Core/Player';
+import { Player } from '../LocalStore/LocalPlayerStore';
 const { ccclass, property } = _decorator;
 
 /**

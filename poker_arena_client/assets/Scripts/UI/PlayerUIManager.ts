@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
 import { PlayerUINode } from './PlayerUINode';
-import { Player } from '../Core/Player';
+import { Player } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
 import { PlayerPosition } from './PlayerLayoutConfig';
 import { DealerIndicator } from './DealerIndicator';

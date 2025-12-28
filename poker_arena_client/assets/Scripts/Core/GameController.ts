@@ -1,5 +1,5 @@
 import { _decorator, Component } from 'cc';
-import { Player, PlayerState } from './Player';
+import { Player, PlayerState } from '../LocalStore/LocalPlayerStore';
 import { Dealer } from '../Card/Dealer';
 import { HandEvaluator, HandResult, HandType } from '../Card/HandEvaluator';
 
@@ -105,7 +105,13 @@ export class GameController extends Component {
         const count = Math.min(playerNames.length, this._config.playerCount);
 
         for (let i = 0; i < count; i++) {
-            const player = new Player(i, playerNames[i], i);
+            const player = new Player({
+                id: `player_${i}`,
+                name: playerNames[i],
+                seatIndex: i,
+                isReady: false,
+                isHost: i === 0
+            });
             this._players.push(player);
         }
 

@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Prefab, SpriteFrame, Label, Sprite, UITransform } from 'cc';
 import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
-import { Player } from '../Core/Player';
+import { Player } from '../LocalStore/LocalPlayerStore';
 
 const { ccclass, property } = _decorator;
 

@@ -114,8 +114,7 @@ export class Lobby extends Component {
         const networkManager = NetworkManager.getInstance();
         this.networkClient = networkManager.getClient(serverUrl);
 
-        // 设置 RoomService 的网络客户端
-        this.roomService.setNetworkClient(this.networkClient);
+        // RoomService 会自己通过 NetworkManager 获取客户端，不需要手动设置
 
         // 如果已经连接，直接设置事件监听
         if (this.networkClient.getIsConnected()) {

@@ -1,8 +1,7 @@
 import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "../../UI/PlayerLayoutConfig";
-import { Player, PlayerInfo } from "../Player";
+import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
-import { LocalUserStore } from "../../LocalStore/LocalUserStore";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
 
 /**

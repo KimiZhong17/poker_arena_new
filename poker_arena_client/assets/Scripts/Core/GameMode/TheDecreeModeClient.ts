@@ -1,6 +1,6 @@
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
-import { PlayerInfo } from "../Player";
+import { PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { Node } from "cc";
 import {
     DealCardsEvent,
