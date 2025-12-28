@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
-import { SceneManager } from './Manager/SceneManager';
-import { UserManager } from './Manager/UserManager';
+import { SceneManager } from './SceneManager';
+import { AuthService } from './Services/AuthService';
 
 const { ccclass, property } = _decorator;
 
@@ -18,15 +18,15 @@ export class Login extends Component {
     @property(Label)
     errorLabel: Label = null!;
 
-    private userManager: UserManager = null!;
+    private authService: AuthService = null!;
     private sceneManager: SceneManager = null!;
 
     start() {
-        this.userManager = UserManager.getInstance();
+        this.authService = AuthService.getInstance();
         this.sceneManager = SceneManager.getInstance();
 
         // Check if already logged in
-        if (this.userManager.isUserLoggedIn()) {
+        if (this.authService.isLoggedIn()) {
             this.sceneManager.goToHall();
             return;
         }
@@ -62,7 +62,7 @@ export class Login extends Component {
         }
 
         try {
-            const success = await this.userManager.loginAsGuest();
+            const success = await this.authService.loginAsGuest();
 
             if (success) {
                 this.sceneManager.goToHall();

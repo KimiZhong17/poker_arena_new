@@ -1,12 +1,15 @@
 // 必须在最前面导入 polyfills
-import './polyfills';
+import './Utils/polyfills';
 
 import { _decorator, Component, Button, Label, EditBox, Node } from 'cc';
-import { SceneManager } from './Manager/SceneManager';
-import { UserManager } from './Manager/UserManager';
-import { NetworkManager } from './Manager/NetworkManager';
+import { SceneManager } from './SceneManager';
+import { AuthService } from './Services/AuthService';
+import { RoomService } from './Services/RoomService';
+import { LocalPlayerStore } from './LocalStore/LocalPlayerStore';
+import { NetworkManager } from './Network/NetworkManager';
 import { NetworkClient } from './Network/NetworkClient';
 import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
+import { LocalRoomStore, RoomData, RoomState } from './LocalStore/LocalRoomStore';
 
 const { ccclass, property } = _decorator;
 
@@ -40,17 +43,21 @@ export class Lobby extends Component {
     private btnConfirm: Button | null = null;
     private btnClose: Button | null = null;
 
-    private userManager: UserManager = null!;
+    private authService: AuthService = null!;
+    private roomService: RoomService = null!;
+    private localPlayerStore: LocalPlayerStore = null!;
     private sceneManager: SceneManager = null!;
     private networkClient: NetworkClient | null = null;
     private currentGameMode: string = '';
 
     start() {
-        this.userManager = UserManager.getInstance();
+        this.authService = AuthService.getInstance();
+        this.roomService = RoomService.getInstance();
+        this.localPlayerStore = LocalPlayerStore.getInstance();
         this.sceneManager = SceneManager.getInstance();
 
         // Check if user is logged in
-        if (!this.userManager.isUserLoggedIn()) {
+        if (!this.authService.isLoggedIn()) {
             console.warn('[Lobby] User not logged in, redirecting to login');
             this.sceneManager.goToLogin();
             return;
@@ -61,8 +68,8 @@ export class Lobby extends Component {
             gameMode: string;
         }>();
 
-        // Get game mode from transition data or UserManager
-        this.currentGameMode = transitionData.gameMode || this.userManager.getSelectedGameMode() || '';
+        // Get game mode from transition data or LocalPlayerStore
+        this.currentGameMode = transitionData.gameMode || this.localPlayerStore.getSelectedGameMode() || '';
 
         if (!this.currentGameMode) {
             console.error('[Lobby] No game mode selected');
@@ -106,6 +113,9 @@ export class Lobby extends Component {
         // 使用 NetworkManager 获取全局单例 NetworkClient
         const networkManager = NetworkManager.getInstance();
         this.networkClient = networkManager.getClient(serverUrl);
+
+        // 设置 RoomService 的网络客户端
+        this.roomService.setNetworkClient(this.networkClient);
 
         // 如果已经连接，直接设置事件监听
         if (this.networkClient.getIsConnected()) {
@@ -198,27 +208,20 @@ export class Lobby extends Component {
 
     /**
      * Handle create room button click
-     * Create a room via network
+     * Create a room via RoomService
      */
     private onCreateRoomClicked(): void {
         console.log('[Lobby] Create room clicked');
 
-        const user = this.userManager.getCurrentUser();
-        if (!user) {
+        if (!this.authService.isLoggedIn()) {
             console.error('[Lobby] No user logged in');
             this.showStatus('Error: User not logged in');
             return;
         }
 
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[Lobby] Network client not connected');
-            this.showStatus('未连接到服务器');
-            return;
-        }
-
-        // 通过网络创建房间
-        console.log('[Lobby] Creating room via network...');
-        this.networkClient.createRoom(user.username, 'the_decree', 4);
+        // 通过 RoomService 创建房间
+        console.log('[Lobby] Creating room via RoomService...');
+        this.roomService.createRoom(this.currentGameMode, 4);
     }
 
     /**
@@ -228,8 +231,7 @@ export class Lobby extends Component {
     private onJoinRoomClicked(): void {
         console.log('[Lobby] Join room button clicked');
 
-        const user = this.userManager.getCurrentUser();
-        if (!user) {
+        if (!this.authService.isLoggedIn()) {
             console.error('[Lobby] No user logged in');
             this.showStatus('Error: User not logged in');
             return;
@@ -291,24 +293,16 @@ export class Lobby extends Component {
             return;
         }
 
-        // 检查网络连接
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[Lobby] Network client not connected');
-            this.showStatus('未连接到服务器');
-            return;
-        }
-
-        // 获取玩家名称
-        const user = this.userManager.getCurrentUser();
-        if (!user) {
+        // 检查是否已登录
+        if (!this.authService.isLoggedIn()) {
             console.error('[Lobby] No user logged in');
             this.showStatus('用户未登录');
             return;
         }
 
-        // 发送加入房间请求
+        // 通过 RoomService 加入房间
         console.log(`[Lobby] Joining room: ${roomId}`);
-        this.networkClient.joinRoom(roomId, user.username);
+        this.roomService.joinRoom(roomId);
     }
 
     /**
@@ -335,10 +329,38 @@ export class Lobby extends Component {
     private onRoomCreated(data: RoomCreatedEvent): void {
         console.log('[Lobby] Room created successfully:', data);
 
-        // 跳转到游戏场景
+        // 保存服务器分配的玩家ID到 LocalPlayerStore
+        this.localPlayerStore.setCurrentRoomPlayerId(data.playerId);
+
+        // 保存房间信息到 RoomStateStore
+        const localRoomStore = LocalRoomStore.getInstance();
+        const roomData: RoomData = {
+            id: data.roomId,
+            name: `Room ${data.roomId}`,
+            gameModeId: this.currentGameMode,
+            state: RoomState.WAITING,
+            hostId: data.playerId,
+            players: [{
+                id: data.playerId,
+                name: data.playerName,
+                isReady: false,
+                isHost: true,
+                seatIndex: 0
+            }],
+            maxPlayers: 4,
+            isPrivate: false,
+            createdAt: Date.now()
+        };
+
+        localRoomStore.setCurrentRoom(roomData);
+        console.log('[Lobby] Room data saved to RoomStateStore:', roomData);
+        console.log('[Lobby] Player ID saved to LocalPlayerStore:', data.playerId);
+
+        // 跳转到游戏场景（在线模式）
         this.sceneManager.goToGame({
             roomId: data.roomId,
-            gameMode: this.currentGameMode
+            gameMode: this.currentGameMode,
+            isOnlineMode: true  // 标记为在线模式
         });
     }
 
@@ -348,13 +370,36 @@ export class Lobby extends Component {
     private onRoomJoined(data: RoomJoinedEvent): void {
         console.log('[Lobby] Successfully joined room:', data);
 
+        // 保存服务器分配的玩家ID到 LocalPlayerStore
+        this.localPlayerStore.setCurrentRoomPlayerId(data.playerId);
+
+        // 保存房间信息到 RoomStateStore
+        const localRoomStore = LocalRoomStore.getInstance();
+        const myPlayerInfo = data.players.find(p => p.id === data.playerId);
+        const roomData: RoomData = {
+            id: data.roomId,
+            name: `Room ${data.roomId}`,
+            gameModeId: this.currentGameMode,
+            state: RoomState.WAITING,
+            hostId: data.players.find(p => p.isHost)?.id || data.players[0]?.id || '',
+            players: data.players,
+            maxPlayers: 4,
+            isPrivate: false,
+            createdAt: Date.now()
+        };
+
+        localRoomStore.setCurrentRoom(roomData);
+        console.log('[Lobby] Room data saved to RoomStateStore:', roomData);
+        console.log('[Lobby] Player ID saved to LocalPlayerStore:', { id: data.playerId, isHost: myPlayerInfo?.isHost });
+
         // 隐藏面板
         this.hideRoomPanel();
 
-        // 跳转到游戏场景
+        // 跳转到游戏场景（在线模式）
         this.sceneManager.goToGame({
             roomId: data.roomId,
-            gameMode: this.currentGameMode
+            gameMode: this.currentGameMode,
+            isOnlineMode: true  // 标记为在线模式
         });
     }
 

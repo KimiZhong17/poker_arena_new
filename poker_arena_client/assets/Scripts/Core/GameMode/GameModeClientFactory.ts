@@ -29,10 +29,10 @@ export class GameModeClientFactory {
             return new TheDecreeModeClient(game);
         });
 
-        // Register Guandan mode
-        this.registeredModes.set('guandan', (game: Game) => {
-            return new GuandanMode(game);
-        });
+        // // Register Guandan mode
+        // this.registeredModes.set('guandan', (game: Game) => {
+        //     return new GuandanMode(game);
+        // });
     }
 
     /**

@@ -26,16 +26,20 @@ import io from 'socket.io-client/dist/socket.io.js';
 /**
  * 网络客户端
  * 管理与服务器的 Socket.IO 连接
+ *
+ * 职责：
+ * - 管理 WebSocket 连接
+ * - 发送/接收消息
+ * - 事件分发
+ *
+ * 注意：
+ * - 不存储业务数据（玩家信息、房间信息等）
+ * - 数据由 LocalPlayerStore 和 LocalRoomStore 管理
  */
 export class NetworkClient {
     private socket: any = null;
     private serverUrl: string;
     private isConnected: boolean = false;
-
-    // 玩家信息
-    public playerId: string = '';
-    public playerName: string = '';
-    public roomId: string = '';
 
     // 事件回调
     private eventHandlers: Map<string, Function[]> = new Map();
@@ -103,16 +107,11 @@ export class NetworkClient {
         // 房间相关
         this.socket.on(ServerMessageType.ROOM_CREATED, (data: RoomCreatedEvent) => {
             console.log('[NetworkClient] Room created:', data);
-            this.playerId = data.playerId;
-            this.playerName = data.playerName;
-            this.roomId = data.roomId;
             this.emit('room_created', data);
         });
 
         this.socket.on(ServerMessageType.ROOM_JOINED, (data: RoomJoinedEvent) => {
             console.log('[NetworkClient] Room joined:', data);
-            this.playerId = data.playerId;
-            this.roomId = data.roomId;
             this.emit('room_joined', data);
         });
 
@@ -238,8 +237,6 @@ export class NetworkClient {
         }
 
         this.socket.emit(ClientMessageType.LEAVE_ROOM);
-        this.roomId = '';
-        this.playerId = '';
     }
 
     /**
@@ -252,6 +249,19 @@ export class NetworkClient {
         }
 
         this.socket.emit(ClientMessageType.READY);
+    }
+
+    /**
+     * 开始游戏（仅房主可调用）
+     */
+    public startGame(): void {
+        if (!this.socket || !this.isConnected) {
+            console.error('[NetworkClient] Not connected to server');
+            return;
+        }
+
+        console.log('[NetworkClient] Sending start game request');
+        this.socket.emit(ClientMessageType.START_GAME);
     }
 
     /**
@@ -326,19 +336,5 @@ export class NetworkClient {
      */
     public getIsConnected(): boolean {
         return this.isConnected;
-    }
-
-    /**
-     * 获取玩家ID
-     */
-    public getPlayerId(): string {
-        return this.playerId;
-    }
-
-    /**
-     * 获取房间ID
-     */
-    public getRoomId(): string {
-        return this.roomId;
     }
 }

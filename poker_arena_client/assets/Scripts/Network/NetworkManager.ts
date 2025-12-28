@@ -1,4 +1,4 @@
-import { NetworkClient } from '../Network/NetworkClient';
+import { NetworkClient } from './NetworkClient';
 
 /**
  * 网络管理器（单例）

@@ -14,6 +14,7 @@ export enum ClientMessageType {
     JOIN_ROOM = 'join_room',
     LEAVE_ROOM = 'leave_room',
     READY = 'ready',
+    START_GAME = 'start_game',
 
     // 游戏操作
     DEALER_CALL = 'dealer_call',

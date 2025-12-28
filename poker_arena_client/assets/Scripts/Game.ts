@@ -2,17 +2,18 @@ import { _decorator, AssetManager, assetManager, Component, Node, Prefab, Sprite
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
-import { SceneManager } from './Manager/SceneManager';
+import { SceneManager } from './SceneManager';
 import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
 import { GameModeClientBase } from './Core/GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from './Core/GameMode/TheDecreeModeClient';
-import { GameStage } from './Core/GameStage';
+import { GameStage } from './Core/Stage/StageManager';
 import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
 import { PlayerLayoutConfig } from './UI/PlayerLayoutConfig';
 import { NetworkClient } from './Network/NetworkClient';
+import { NetworkManager } from './Network/NetworkManager';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -180,16 +181,21 @@ export class Game extends Component {
 
     /**
      * Initialize network client for online mode
+     * 使用 NetworkManager 获取全局单例，确保与 Lobby 使用同一个连接
      */
     private initializeNetworkClient(): void {
         console.log("[Game] Initializing network client...");
 
-        // TODO: Get server URL from config
-        const serverUrl = 'http://localhost:3000';
-        this.networkClient = new NetworkClient(serverUrl);
+        // 使用 NetworkManager 获取全局单例 NetworkClient
+        const serverUrl = 'http://localhost:3000';  // TODO: Get from config
+        const networkManager = NetworkManager.getInstance();
+        this.networkClient = networkManager.getClient(serverUrl);
 
-        // Connect to server (will happen in Ready stage or Lobby)
-        console.log("[Game] Network client created (not connected yet)");
+        if (this.networkClient.getIsConnected()) {
+            console.log("[Game] Using existing connected network client");
+        } else {
+            console.log("[Game] Network client not connected, will connect in Ready stage");
+        }
     }
 
     /**

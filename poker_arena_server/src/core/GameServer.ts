@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import { GameRoom } from './GameRoom';
 import { PlayerSession } from './PlayerSession';
 import { ServerConfig } from '../config/ServerConfig';
+import { IdValidator } from '../utils/IdValidator';
 import {
     ClientMessageType,
     ServerMessageType,
@@ -103,6 +104,26 @@ export class GameServer {
      */
     private handleCreateRoom(socket: Socket, data: CreateRoomRequest): void {
         try {
+            // 验证玩家名称
+            if (!IdValidator.isValidPlayerName(data.playerName)) {
+                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
+                console.warn(`[GameServer] Invalid player name: ${data.playerName}`);
+                return;
+            }
+
+            // 净化玩家名称
+            const sanitizedName = IdValidator.sanitizePlayerName(data.playerName);
+
+            // 如果是游客ID格式，验证其合法性
+            if (data.playerName.startsWith('guest_')) {
+                if (!IdValidator.isValidGuestId(data.playerName)) {
+                    this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
+                    console.warn(`[GameServer] Invalid guest ID format: ${data.playerName}`);
+                    return;
+                }
+                console.log(`[GameServer] Guest ID validated: ${data.playerName}`);
+            }
+
             // 检查房间数量限制
             if (this.rooms.size >= ServerConfig.MAX_ROOMS) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Server is full');
@@ -113,8 +134,8 @@ export class GameServer {
             const room = new GameRoom(data.gameMode, data.maxPlayers);
             this.rooms.set(room.id, room);
 
-            // 创建玩家会话
-            const player = new PlayerSession(socket, data.playerName);
+            // 创建玩家会话（使用净化后的名称）
+            const player = new PlayerSession(socket, sanitizedName);
             this.players.set(socket.id, player);
 
             // 玩家加入房间
@@ -132,7 +153,7 @@ export class GameServer {
 
             socket.emit(ServerMessageType.ROOM_CREATED, response);
 
-            console.log(`[GameServer] Room created: ${room.id} by ${data.playerName}`);
+            console.log(`[GameServer] Room created: ${room.id} by ${sanitizedName}`);
         } catch (error) {
             console.error('[GameServer] Error creating room:', error);
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to create room');
@@ -144,6 +165,26 @@ export class GameServer {
      */
     private handleJoinRoom(socket: Socket, data: JoinRoomRequest): void {
         try {
+            // 验证玩家名称
+            if (!IdValidator.isValidPlayerName(data.playerName)) {
+                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
+                console.warn(`[GameServer] Invalid player name: ${data.playerName}`);
+                return;
+            }
+
+            // 净化玩家名称
+            const sanitizedName = IdValidator.sanitizePlayerName(data.playerName);
+
+            // 如果是游客ID格式，验证其合法性
+            if (data.playerName.startsWith('guest_')) {
+                if (!IdValidator.isValidGuestId(data.playerName)) {
+                    this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
+                    console.warn(`[GameServer] Invalid guest ID format: ${data.playerName}`);
+                    return;
+                }
+                console.log(`[GameServer] Guest ID validated: ${data.playerName}`);
+            }
+
             const room = this.rooms.get(data.roomId);
 
             if (!room) {
@@ -156,8 +197,8 @@ export class GameServer {
                 return;
             }
 
-            // 创建玩家会话
-            const player = new PlayerSession(socket, data.playerName);
+            // 创建玩家会话（使用净化后的名称）
+            const player = new PlayerSession(socket, sanitizedName);
             this.players.set(socket.id, player);
 
             // 玩家加入房间
@@ -182,7 +223,7 @@ export class GameServer {
 
             room.broadcast(ServerMessageType.PLAYER_JOINED, joinEvent, player.id);
 
-            console.log(`[GameServer] Player ${data.playerName} joined room ${room.id}`);
+            console.log(`[GameServer] Player ${sanitizedName} joined room ${room.id}`);
         } catch (error) {
             console.error('[GameServer] Error joining room:', error);
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to join room');

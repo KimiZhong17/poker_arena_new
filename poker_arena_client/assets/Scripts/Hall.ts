@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
-import { SceneManager } from './Manager/SceneManager';
-import { UserManager } from './Manager/UserManager';
+import { SceneManager } from './SceneManager';
+import { AuthService } from './Services/AuthService';
+import { LocalPlayerStore } from './LocalStore/LocalPlayerStore';
 import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
 
 const { ccclass, property } = _decorator;
@@ -34,7 +35,8 @@ export class Hall extends Component {
     @property(Label)
     welcomeLabel: Label = null!;
 
-    private userManager: UserManager = null!;
+    private authService: AuthService = null!;
+    private localPlayerStore: LocalPlayerStore = null!;
     private sceneManager: SceneManager = null!;
 
     // Game mode information
@@ -56,11 +58,12 @@ export class Hall extends Component {
     ];
 
     start() {
-        this.userManager = UserManager.getInstance();
+        this.authService = AuthService.getInstance();
+        this.localPlayerStore = LocalPlayerStore.getInstance();
         this.sceneManager = SceneManager.getInstance();
 
         // Check if user is logged in
-        if (!this.userManager.isUserLoggedIn()) {
+        if (!this.authService.isLoggedIn()) {
             console.warn('[Hall] User not logged in, redirecting to login');
             this.sceneManager.goToLogin();
             return;
@@ -72,7 +75,7 @@ export class Hall extends Component {
 
     private setupUI(): void {
         // Display welcome message
-        const username = this.userManager.getUsername();
+        const username = this.authService.getUsername();
         if (this.welcomeLabel) {
             this.welcomeLabel.string = `Welcome, ${username}!`;
         }
@@ -135,8 +138,8 @@ export class Hall extends Component {
             return;
         }
 
-        // Store selected game mode in UserManager
-        this.userManager.setSelectedGameMode(gameModeId);
+        // Store selected game mode in LocalPlayerStore
+        this.localPlayerStore.setSelectedGameMode(gameModeId);
 
         console.log(`[Hall] Navigating to lobby for game mode: ${modeInfo.displayName}`);
 
@@ -154,8 +157,8 @@ export class Hall extends Component {
     private onLogoutClicked(): void {
         console.log('[Hall] Logout clicked');
 
-        // Clear user session
-        this.userManager.logout();
+        // Clear user session via AuthService
+        this.authService.logout();
 
         // Return to login
         this.sceneManager.goToLogin();

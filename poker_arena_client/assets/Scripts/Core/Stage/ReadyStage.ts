@@ -1,9 +1,10 @@
 import { Button, Label, Node, Color } from 'cc';
 import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
-import { GameStage } from '../GameStage';
-import { RoomManager } from '../Room/RoomManager';
-import { UserManager } from '../../Manager/UserManager';
+import { LocalRoomStore } from '../../LocalStore/LocalRoomStore';
+import { LocalPlayerStore } from '../../LocalStore/LocalPlayerStore';
+import { RoomService } from '../../Services/RoomService';
+import { GameStage } from './StageManager';
 
 /**
  * 准备阶段
@@ -38,17 +39,25 @@ export class ReadyStage extends GameStageBase {
     private totalPlayers: number = 4; // 默认4人（The Decree模式）
 
     // 管理器引用
-    private roomManager: RoomManager;
-    private userManager: UserManager;
+    private localRoomStore: LocalRoomStore;
+    private localPlayerStore: LocalPlayerStore;
+    private roomService: RoomService;
 
     // 本地玩家信息
     private localPlayerId: string = '';
     private isLocalPlayerHost: boolean = false;
 
+    // 网络事件处理器引用（用于清理）
+    private onPlayerReadyHandler: ((data: any) => void) | null = null;
+    private onPlayerJoinedHandler: ((data: any) => void) | null = null;
+    private onPlayerLeftHandler: ((data: any) => void) | null = null;
+    private onGameStartedHandler: ((data: any) => void) | null = null;
+
     constructor(game: Game, rootNode: Node | null = null) {
         super(game, rootNode);
-        this.roomManager = RoomManager.getInstance();
-        this.userManager = UserManager.getInstance();
+        this.localRoomStore = LocalRoomStore.getInstance();
+        this.localPlayerStore = LocalPlayerStore.getInstance();
+        this.roomService = RoomService.getInstance();
     }
 
     /**
@@ -70,7 +79,10 @@ export class ReadyStage extends GameStageBase {
         // 4. 设置按钮事件
         this.setupButtons();
 
-        // 5. 更新按钮显示
+        // 5. 设置网络事件监听
+        this.setupNetworkEvents();
+
+        // 6. 更新按钮显示
         this.updateButtonDisplay();
 
         console.log('[ReadyStage] Waiting for players to ready up...');
@@ -81,11 +93,11 @@ export class ReadyStage extends GameStageBase {
      * 初始化本地玩家信息
      */
     private initLocalPlayerInfo(): void {
-        const currentRoom = this.roomManager.getCurrentRoom();
-        const currentUser = this.userManager.getCurrentUser();
+        const currentRoom = this.localRoomStore.getCurrentRoom();
+        const currentPlayerId = this.localPlayerStore.getCurrentRoomPlayerId();
 
-        if (currentUser) {
-            this.localPlayerId = currentUser.id;
+        if (currentPlayerId) {
+            this.localPlayerId = currentPlayerId;
         } else {
             // 单机模式：默认为 player_0
             this.localPlayerId = 'player_0';
@@ -114,8 +126,38 @@ export class ReadyStage extends GameStageBase {
         // 1. 清理按钮事件
         this.cleanupButtons();
 
-        // 2. 调用基类的 onExit（会自动隐藏UI）
+        // 2. 清理网络事件监听
+        this.cleanupNetworkEvents();
+
+        // 3. 调用基类的 onExit（会自动隐藏UI）
         super.onExit();
+    }
+
+    /**
+     * 清理网络事件监听
+     */
+    private cleanupNetworkEvents(): void {
+        const networkClient = this.game.networkClient;
+        if (!networkClient) return;
+
+        console.log('[ReadyStage] Cleaning up network event listeners');
+
+        if (this.onPlayerReadyHandler) {
+            networkClient.off('player_ready', this.onPlayerReadyHandler);
+            this.onPlayerReadyHandler = null;
+        }
+        if (this.onPlayerJoinedHandler) {
+            networkClient.off('player_joined', this.onPlayerJoinedHandler);
+            this.onPlayerJoinedHandler = null;
+        }
+        if (this.onPlayerLeftHandler) {
+            networkClient.off('player_left', this.onPlayerLeftHandler);
+            this.onPlayerLeftHandler = null;
+        }
+        if (this.onGameStartedHandler) {
+            networkClient.off('game_started', this.onGameStartedHandler);
+            this.onGameStartedHandler = null;
+        }
     }
 
     /**
@@ -158,7 +200,7 @@ export class ReadyStage extends GameStageBase {
         this.playerReadyStates.clear();
 
         // 在单机模式下，使用实际的玩家ID
-        const currentRoom = this.roomManager.getCurrentRoom();
+        const currentRoom = this.localRoomStore.getCurrentRoom();
 
         if (currentRoom) {
             // 多人模式：使用房间中的玩家ID
@@ -206,6 +248,50 @@ export class ReadyStage extends GameStageBase {
         } else {
             console.warn('[ReadyStage] Start button not found');
         }
+    }
+
+    /**
+     * 设置网络事件监听
+     */
+    private setupNetworkEvents(): void {
+        const networkClient = this.game.networkClient;
+        if (!networkClient || !networkClient.getIsConnected()) {
+            console.log('[ReadyStage] Network client not available, skipping network event setup');
+            return;
+        }
+
+        console.log('[ReadyStage] Setting up network event listeners');
+
+        // 监听玩家准备状态变化
+        this.onPlayerReadyHandler = (data: any) => {
+            console.log('[ReadyStage] Player ready event received:', data);
+            this.playerReadyStates.set(data.playerId, data.isReady);
+            this.updateButtonDisplay();
+        };
+        networkClient.on('player_ready', this.onPlayerReadyHandler);
+
+        // 监听玩家加入房间
+        this.onPlayerJoinedHandler = (data: any) => {
+            console.log('[ReadyStage] Player joined:', data.player);
+            this.playerReadyStates.set(data.player.id, false);
+            this.updateButtonDisplay();
+        };
+        networkClient.on('player_joined', this.onPlayerJoinedHandler);
+
+        // 监听玩家离开房间
+        this.onPlayerLeftHandler = (data: any) => {
+            console.log('[ReadyStage] Player left:', data.playerId);
+            this.playerReadyStates.delete(data.playerId);
+            this.updateButtonDisplay();
+        };
+        networkClient.on('player_left', this.onPlayerLeftHandler);
+
+        // 监听游戏开始
+        this.onGameStartedHandler = (data: any) => {
+            console.log('[ReadyStage] Game started event received:', data);
+            // Server will trigger transition to playing stage
+        };
+        networkClient.on('game_started', this.onGameStartedHandler);
     }
 
     /**
@@ -332,23 +418,18 @@ export class ReadyStage extends GameStageBase {
             return;
         }
 
-        // 标记为已准备
-        this.playerReadyStates.set(playerId, true);
-        console.log(`[ReadyStage] Player ${playerId} is ready`);
+        // 发送准备请求到服务器
+        const networkClient = this.game.networkClient;
+        if (networkClient && networkClient.getIsConnected()) {
+            console.log(`[ReadyStage] Sending ready request to server for player ${playerId}`);
+            this.roomService.toggleReady();
 
-        // 更新按钮显示
-        this.updateButtonDisplay();
-
-        // 如果是多人模式，通知 RoomManager
-        const currentRoom = this.roomManager.getCurrentRoom();
-        if (currentRoom) {
-            this.roomManager.setPlayerReady(playerId, true);
+            // 本地临时更新状态（服务器会广播确认）
+            this.playerReadyStates.set(playerId, true);
+            this.updateButtonDisplay();
+        } else {
+            console.warn('[ReadyStage] Not connected to server, cannot send ready request');
         }
-
-        // 显示进度信息
-        const readyCount = this.getReadyPlayerCount();
-        const totalNonHost = this.totalPlayers - 1;
-        console.log(`[ReadyStage] ${readyCount}/${totalNonHost} players ready`);
     }
 
     /**
@@ -356,7 +437,7 @@ export class ReadyStage extends GameStageBase {
      */
     private allNonHostPlayersReady(): boolean {
         // 在单机模式下，如果是房主，直接返回 true
-        if (this.totalPlayers === 1 || !this.roomManager.getCurrentRoom()) {
+        if (this.totalPlayers === 1 || !this.localRoomStore.getCurrentRoom()) {
             return true;
         }
 
@@ -402,17 +483,25 @@ export class ReadyStage extends GameStageBase {
 
     /**
      * 开始游戏
-     * 切换到Playing阶段
+     * 房主发送开始游戏请求到服务器
      */
     private startGame(): void {
-        console.log('[ReadyStage] Switching to Playing stage...');
+        console.log('[ReadyStage] Starting game...');
 
-        // 通过StageManager切换到Playing阶段
-        const stageManager = this.game.stageManager;
-        if (stageManager) {
-            stageManager.switchToStage(GameStage.PLAYING);
+        const networkClient = this.game.networkClient;
+        if (networkClient && networkClient.getIsConnected()) {
+            // 在线模式：发送开始游戏请求到服务器
+            console.log('[ReadyStage] Sending start game request to server');
+            this.roomService.startGame();
         } else {
-            console.error('[ReadyStage] StageManager not found on Game!');
+            // 单机模式：直接切换到Playing阶段
+            console.log('[ReadyStage] Single player mode, switching to Playing stage directly');
+            const stageManager = this.game.stageManager;
+            if (stageManager) {
+                stageManager.switchToStage(GameStage.PLAYING);
+            } else {
+                console.error('[ReadyStage] StageManager not found on Game!');
+            }
         }
     }
 

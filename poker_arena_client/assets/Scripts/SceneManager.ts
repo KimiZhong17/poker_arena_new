@@ -104,7 +104,7 @@ export class SceneManager {
         this.loadScene(SceneName.LOBBY, data);
     }
 
-    public goToGame(data: { roomId: string; gameMode: string }): void {
+    public goToGame(data: { roomId: string; gameMode: string; isOnlineMode?: boolean }): void {
         this.loadScene(SceneName.GAME, data);
     }
 

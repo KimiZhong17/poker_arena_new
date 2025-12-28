@@ -2,6 +2,8 @@ import { Game } from "../../Game";
 import { PlayerLayoutConfig } from "../../UI/PlayerLayoutConfig";
 import { Player, PlayerInfo } from "../Player";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
+import { LocalPlayerStore } from "../../LocalStore/LocalPlayerStore";
+import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
 
 /**
  * Game mode configuration
@@ -424,9 +426,20 @@ export abstract class GameModeClientBase {
             return false;
         }
 
+        const localPlayerStore = LocalPlayerStore.getInstance();
+        const localRoomStore = LocalRoomStore.getInstance();
+
+        const playerId = localPlayerStore.getCurrentRoomPlayerId();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!playerId || !currentRoom) {
+            console.error(`[${this.config.name}] Cannot send dealer call: missing player or room info`);
+            return false;
+        }
+
         const request: DealerCallRequest = {
-            roomId: network.getRoomId(),
-            playerId: network.getPlayerId(),
+            roomId: currentRoom.id,
+            playerId: playerId,
             cardsToPlay
         };
 
@@ -444,9 +457,20 @@ export abstract class GameModeClientBase {
             return false;
         }
 
+        const localPlayerStore = LocalPlayerStore.getInstance();
+        const localRoomStore = LocalRoomStore.getInstance();
+
+        const playerId = localPlayerStore.getCurrentRoomPlayerId();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!playerId || !currentRoom) {
+            console.error(`[${this.config.name}] Cannot send play cards: missing player or room info`);
+            return false;
+        }
+
         const request: PlayCardsRequest = {
-            roomId: network.getRoomId(),
-            playerId: network.getPlayerId(),
+            roomId: currentRoom.id,
+            playerId: playerId,
             cards
         };
 
