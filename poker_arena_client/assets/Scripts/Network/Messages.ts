@@ -113,7 +113,8 @@ export interface RoomCreatedEvent {
  */
 export interface RoomJoinedEvent {
     roomId: string;
-    playerId: string;
+    myPlayerIdInRoom: string;  // 当前玩家在房间内的ID
+    hostId: string;            // 房主ID
     players: PlayerInfo[];
 }
 
@@ -234,14 +235,27 @@ export interface GameOverEvent {
 }
 
 /**
- * 游戏状态更新事件
+ * 游戏状态更新事件（快照同步）
+ * 当玩家重连、进入房间或发现本地张数不对时，由服务器下发全量数据
  */
 export interface GameStateUpdateEvent {
-    state: string;
+    state: string;           // 对应 StageManager 的状态
     roundNumber: number;
     dealerId?: string;
     cardsToPlay?: number;
     deckSize: number;
+    
+    // --- 新增：确保所有玩家的基础信息同步 ---
+    players: {
+        id: string;
+        cardCount: number;   // 核心：同步每个人剩几张牌
+        isReady: boolean;
+        isTurn: boolean;
+        seatIndex: number;
+    }[];
+    
+    lastPlayedCards?: number[]; // 桌面上当前没人管的最大牌
+    lastPlayerId?: string;      // 谁出的最后一把牌
 }
 
 /**

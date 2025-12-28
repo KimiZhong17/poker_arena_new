@@ -1,29 +1,27 @@
 import { NetworkClient } from '../Network/NetworkClient';
 import { LocalPlayerStore } from '../LocalStore/LocalPlayerStore';
-import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
-import { ClientMessageType } from '../Network/Messages';
+import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
+import { 
+    ClientMessageType, 
+    RoomJoinedEvent, 
+    ServerMessageType, 
+    PlayerReadyEvent, 
+    PlayerLeftEvent,
+    PlayerJoinedEvent 
+} from '../Network/Messages';
+import { NetworkManager } from '../Network/NetworkManager';
+import { EventCenter, GameEvents } from '../Utils/EventCenter';
 
-/**
- * RoomService - 房间服务
- *
- * 职责：
- * - 处理所有房间相关的网络请求
- * - 创建/加入/离开房间
- * - 玩家准备/开始游戏
- *
- * 注意：
- * - 不负责本地房间状态存储（由 LocalRoomStore 负责）
- * - LocalRoomStore 会自动监听网络事件并同步状态
- */
 export class RoomService {
     private static instance: RoomService;
-    private networkClient: NetworkClient | null = null;
     private localPlayerStore: LocalPlayerStore;
     private localRoomStore: LocalRoomStore;
+    private serverUrl: string = 'http://localhost:3000'; 
 
     private constructor() {
         this.localPlayerStore = LocalPlayerStore.getInstance();
         this.localRoomStore = LocalRoomStore.getInstance();
+        this.initNetworkListeners();
     }
 
     public static getInstance(): RoomService {
@@ -34,135 +32,137 @@ export class RoomService {
     }
 
     /**
-     * 设置网络客户端
-     * 在需要网络通信的场景中调用
+     * 初始化网络监听
+     * 使用具名函数进行绑定，以便符合双参数 off(event, handler) 的要求
      */
-    public setNetworkClient(client: NetworkClient): void {
-        this.networkClient = client;
+    private initNetworkListeners(): void {
+        const net = NetworkManager.getInstance().getClient(this.serverUrl);
 
-        // 绑定 LocalRoomStore 的自动同步
-        this.localRoomStore.bindNetworkEvents(client);
+        // --- 先解绑，防止重复 ---
+        net.off(ServerMessageType.ROOM_JOINED, this.onRoomJoined);
+        net.off(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
+        net.off(ServerMessageType.PLAYER_READY, this.onPlayerReady);
+        net.off(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
+        net.off(ServerMessageType.GAME_START, this.onGameStart);
+
+        // --- 再绑定 ---
+        // 注意：这里使用 .bind(this) 确保函数内部的 this 指向 RoomService 实例
+        // 或者将成员函数定义为箭头函数（推荐，如下面定义所示）
+        net.on(ServerMessageType.ROOM_JOINED, this.onRoomJoined);
+        net.on(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
+        net.on(ServerMessageType.PLAYER_READY, this.onPlayerReady);
+        net.on(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
+        net.on(ServerMessageType.GAME_START, this.onGameStart);
     }
 
-    // ==================== 房间管理接口 ====================
+    // ==================== 具名处理器 (解决 off 参数匹配问题) ====================
 
-    /**
-     * 创建房间
-     * @param gameMode 游戏模式 (e.g., 'the_decree', 'guandan')
-     * @param maxPlayers 最大玩家数
-     */
-    public createRoom(gameMode: string, maxPlayers: number): void {
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[RoomService] Cannot create room: not connected to server');
-            return;
+    private onRoomJoined = (data: RoomJoinedEvent) => {
+        console.log('[RoomService] Self joined room:', data.roomId);
+
+        // 1. 存入 LocalRoomStore
+        this.localRoomStore.setCurrentRoom({
+            id: data.roomId,
+            name: `Room ${data.roomId}`,
+            gameModeId: 'the_decree',
+            state: RoomState.WAITING,
+            players: data.players,
+            hostId: data.hostId,
+            maxPlayers: 4,
+            isPrivate: false,
+            createdAt: Date.now()
+        });
+
+        // 2. 存入 LocalPlayerStore
+        this.localPlayerStore.setCurrentRoomPlayerId(data.myPlayerIdInRoom);
+
+        // 3. 发出事件通知 UI
+        EventCenter.emit(GameEvents.UI_NAVIGATE_TO_GAME);
+    };
+
+    private onPlayerJoined = (data: PlayerJoinedEvent) => {
+        this.localRoomStore.addPlayer(data.player);
+        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
+    };
+
+    private onPlayerReady = (data: PlayerReadyEvent) => {
+        this.localRoomStore.updatePlayerReady(data.playerId, data.isReady);
+        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
+    };
+
+    private onPlayerLeft = (data: PlayerLeftEvent) => {
+        const myRoomId = this.localPlayerStore.getCurrentRoomPlayerId();
+        if (data.playerId === myRoomId) {
+            this.handleLocalLeave();
+        } else {
+            this.localRoomStore.removePlayer(data.playerId);
+            EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
         }
+    };
 
-        const playerName = this.localPlayerStore.getUsername();
+    private onGameStart = () => {
+        this.localRoomStore.updateRoomState(RoomState.PLAYING);
+        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
+    };
 
-        console.log('[RoomService] Creating room:', { playerName, gameMode, maxPlayers });
-        this.networkClient.createRoom(playerName, gameMode as any, maxPlayers);
-    }
+    // ==================== 基础逻辑与业务接口 ====================
 
-    /**
-     * 加入房间
-     * @param roomId 房间ID (4位数字)
-     */
-    public joinRoom(roomId: string): void {
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[RoomService] Cannot join room: not connected to server');
-            return;
-        }
-
-        const playerName = this.localPlayerStore.getUsername();
-
-        console.log('[RoomService] Joining room:', { roomId, playerName });
-        this.networkClient.joinRoom(roomId, playerName);
-    }
-
-    /**
-     * 离开房间
-     */
-    public leaveRoom(): void {
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.warn('[RoomService] Cannot leave room: not connected to server');
-            return;
-        }
-
-        console.log('[RoomService] Leaving room');
-        this.networkClient.leaveRoom();
-
-        // 清理本地房间状态
+    private handleLocalLeave(): void {
+        // 1. 清空 Store
         this.localRoomStore.clearCurrentRoom();
         this.localPlayerStore.clearCurrentRoomPlayerId();
+
+        // 2. 发出事件通知 UI (可能需要导航回大厅)
+        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
     }
 
-    /**
-     * 切换准备状态
-     * 非房主玩家点击"准备"按钮时调用
-     */
+    private getNetworkClient(): NetworkClient | null {
+        const client = NetworkManager.getInstance().getClient(this.serverUrl);
+        if (!client || !client.getIsConnected()) return null;
+        return client;
+    }
+
+    public createRoom(gameMode: string, maxPlayers: number): void {
+        const client = this.getNetworkClient();
+        if (client) client.send(ClientMessageType.CREATE_ROOM, { 
+            playerName: this.localPlayerStore.getUsername(), 
+            gameMode: gameMode as 'the_decree', 
+            maxPlayers 
+        });
+    }
+
+    public joinRoom(roomId: string): void {
+        const client = this.getNetworkClient();
+        if (client) client.send(ClientMessageType.JOIN_ROOM, { 
+            roomId, 
+            playerName: this.localPlayerStore.getUsername() 
+        });
+    }
+
+    public leaveRoom(): void {
+        const client = this.getNetworkClient();
+        if (client) client.send(ClientMessageType.LEAVE_ROOM, {});
+        this.handleLocalLeave();
+    }
+
     public toggleReady(): void {
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[RoomService] Cannot toggle ready: not connected to server');
-            return;
-        }
-
-        console.log('[RoomService] Toggling ready state');
-        this.networkClient.toggleReady();
+        const client = this.getNetworkClient();
+        if (client) client.send(ClientMessageType.READY, {});
     }
 
-    /**
-     * 开始游戏
-     * 仅房主可调用
-     */
     public startGame(): void {
-        if (!this.networkClient || !this.networkClient.getIsConnected()) {
-            console.error('[RoomService] Cannot start game: not connected to server');
-            return;
+        const client = this.getNetworkClient();
+        if (client && this.isHost()) {
+            client.send(ClientMessageType.START_GAME, { roomId: this.getCurrentRoomId() || "" });
         }
-
-        const currentRoom = this.localRoomStore.getCurrentRoom();
-        if (!currentRoom) {
-            console.error('[RoomService] Cannot start game: not in a room');
-            return;
-        }
-
-        const myPlayerId = this.localPlayerStore.getCurrentRoomPlayerId();
-        const isHost = currentRoom.hostId === myPlayerId;
-
-        if (!isHost) {
-            console.error('[RoomService] Cannot start game: not the host');
-            return;
-        }
-
-        console.log('[RoomService] Starting game');
-        this.networkClient.startGame();
     }
 
-    // ==================== 状态查询接口 ====================
-
-    /**
-     * 检查是否在房间内
-     */
-    public isInRoom(): boolean {
-        return this.localRoomStore.getCurrentRoom() !== null;
-    }
-
-    /**
-     * 检查是否是房主
-     */
     public isHost(): boolean {
-        const currentRoom = this.localRoomStore.getCurrentRoom();
-        if (!currentRoom) return false;
-
-        const myPlayerId = this.localPlayerStore.getCurrentRoomPlayerId();
-        return currentRoom.hostId === myPlayerId;
+        const room = this.localRoomStore.getCurrentRoom();
+        return room?.hostId === this.localPlayerStore.getCurrentRoomPlayerId();
     }
 
-    /**
-     * 获取当前房间ID
-     */
     public getCurrentRoomId(): string | null {
-        const currentRoom = this.localRoomStore.getCurrentRoom();
-        return currentRoom?.id || null;
+        return this.localRoomStore.getCurrentRoom()?.id || null;
     }
 }

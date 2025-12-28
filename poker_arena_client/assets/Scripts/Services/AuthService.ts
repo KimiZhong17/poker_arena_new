@@ -29,14 +29,6 @@ export class AuthService {
         return AuthService.instance;
     }
 
-    /**
-     * 设置网络客户端
-     * 在需要网络通信的场景中调用
-     */
-    public setNetworkClient(client: NetworkClient): void {
-        this.networkClient = client;
-    }
-
     // ==================== 认证接口 ====================
 
     /**

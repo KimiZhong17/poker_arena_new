@@ -1,6 +1,4 @@
 import { PlayerInfo } from '../Core/Player';
-import { NetworkClient } from '../Network/NetworkClient';
-import { PlayerJoinedEvent, PlayerLeftEvent, PlayerReadyEvent } from '../Network/Messages';
 
 /**
  * Room state enumeration
@@ -165,53 +163,17 @@ export class LocalRoomStore {
         return this.currentRoom.players.length;
     }
 
-    // ==================== 辅助方法：绑定网络事件 ====================
-
-    /**
-     * 绑定 NetworkClient 的房间相关事件
-     * 自动同步服务器的房间状态变化
-     *
-     * 使用方法：
-     * ```typescript
-     * const roomStore = RoomStateStore.getInstance();
-     * const networkClient = NetworkManager.getInstance().getClient();
-     * roomStore.bindNetworkEvents(networkClient);
-     * ```
-     *
-     * @param networkClient NetworkClient 实例
-     */
-    public bindNetworkEvents(networkClient: NetworkClient): void {
-        // 玩家加入房间
-        networkClient.on('player_joined', (data: PlayerJoinedEvent) => {
-            console.log('[RoomStateStore] Auto-sync: Player joined', data.player);
-            this.addPlayer(data.player);
-        });
-
-        // 玩家离开房间
-        networkClient.on('player_left', (data: PlayerLeftEvent) => {
-            console.log('[RoomStateStore] Auto-sync: Player left', data.playerId);
-            this.removePlayer(data.playerId);
-        });
-
-        // 玩家准备状态变化
-        networkClient.on('player_ready', (data: PlayerReadyEvent) => {
-            console.log('[RoomStateStore] Auto-sync: Player ready', data);
-            this.updatePlayerReady(data.playerId, data.isReady);
-        });
-
-        console.log('[RoomStateStore] Network events bound for auto-sync');
-    }
-
-    /**
-     * 解绑网络事件
-     * @param networkClient NetworkClient 实例
-     */
-    public unbindNetworkEvents(networkClient: NetworkClient): void {
-        // 移除所有监听器
-        networkClient.off('player_joined', this.addPlayer);
-        networkClient.off('player_left', this.removePlayer);
-        networkClient.off('player_ready', this.updatePlayerReady);
-
-        console.log('[RoomStateStore] Network events unbound');
-    }
+    // ==================== 注意 ====================
+    //
+    // ❌ 旧架构：LocalRoomStore 直接监听 NetworkClient
+    // ✅ 新架构：RoomService 监听 NetworkClient，处理后存入 LocalRoomStore
+    //
+    // 数据流：
+    // NetworkClient (生肉)
+    //   → RoomService (煮肉)
+    //   → LocalRoomStore (碗)
+    //   → EventCenter.emit(GameEvents) (喊"开饭了")
+    //   → UI (吃饭)
+    //
+    // 已移除 bindNetworkEvents / unbindNetworkEvents 方法
 }
