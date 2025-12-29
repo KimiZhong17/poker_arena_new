@@ -1,15 +1,21 @@
-import { 
-    ClientMessageType, 
-    ServerMessageType 
+import { _decorator, Component } from 'cc';
+import {
+    ClientMessageType,
+    ServerMessageType
 } from './Messages';
-import io from 'socket.io-client/dist/socket.io.js';
+
+const { ccclass } = _decorator;
+
+// 声明全局 io 变量（从 socket.io.js 加载）
+declare const io: any;
 
 /**
  * 消息回调函数类型
  */
 type MessageHandler = (data: any) => void;
 
-export class NetworkClient {
+@ccclass('NetworkClient')
+export class NetworkClient extends Component {
     private socket: any = null;
     private serverUrl: string;
     private isConnected: boolean = false;
@@ -18,6 +24,7 @@ export class NetworkClient {
     private handlers: Map<string, MessageHandler[]> = new Map();
 
     constructor(serverUrl: string = 'http://localhost:3000') {
+        super();
         this.serverUrl = serverUrl;
     }
 
@@ -27,6 +34,12 @@ export class NetworkClient {
     public connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             if (this.socket) return resolve();
+
+            // 检查 io 是否已加载
+            if (typeof io === 'undefined') {
+                reject(new Error('Socket.IO library not loaded. Make sure socket.io.js is included.'));
+                return;
+            }
 
             this.socket = io(this.serverUrl, {
                 transports: ['websocket'],
