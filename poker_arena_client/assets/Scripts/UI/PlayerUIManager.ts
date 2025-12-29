@@ -182,8 +182,18 @@ export class PlayerUIManager extends Component {
             if (playerInfo) {
                 // 有玩家：显示玩家信息
                 const isMyPlayer = absoluteSeat === this._mySeatIndex;
-                infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM);
-                console.log(`[PlayerUIManager] Seat ${relativeSeat}: ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+
+                // 检查是否已经初始化过（避免重复调用 init 导致UI重建）
+                if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === playerInfo.id) {
+                    // 已经初始化过，只更新数据
+                    (infoPanel as any).playerInfo = playerInfo;
+                    infoPanel.refresh();
+                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Updated ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+                } else {
+                    // 第一次初始化或玩家更换
+                    infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM);
+                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Initialized ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+                }
             } else {
                 // 空座位：显示"等待玩家..."
                 const emptyPlayerInfo: PlayerInfo = {
@@ -193,8 +203,16 @@ export class PlayerUIManager extends Component {
                     isReady: false,
                     isHost: false
                 };
-                infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM);
-                console.log(`[PlayerUIManager] Seat ${relativeSeat}: Empty`);
+
+                // 检查是否已经是空座位状态
+                if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === '') {
+                    // 已经是空座位，不需要重新初始化
+                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Already empty`);
+                } else {
+                    // 设置为空座位
+                    infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM);
+                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Set to empty`);
+                }
             }
         }
     }
