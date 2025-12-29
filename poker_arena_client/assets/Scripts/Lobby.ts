@@ -25,9 +25,6 @@ export class Lobby extends Component {
     @property(Button)
     joinRoomButton: Button = null!;
 
-    @property(EditBox)
-    roomIdInput: EditBox = null!;
-
     @property(Button)
     backButton: Button = null!;
 
@@ -93,11 +90,6 @@ export class Lobby extends Component {
         // Clear status initially
         if (this.statusLabel) {
             this.statusLabel.string = '';
-        }
-
-        // Clear room ID input
-        if (this.roomIdInput) {
-            this.roomIdInput.string = '';
         }
 
         // 初始隐藏 RoomPanel

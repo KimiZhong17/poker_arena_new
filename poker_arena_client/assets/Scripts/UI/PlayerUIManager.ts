@@ -1,9 +1,10 @@
 import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
 import { PlayerUINode } from './PlayerUINode';
-import { Player } from '../LocalStore/LocalPlayerStore';
+import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
 import { PlayerPosition } from './PlayerLayoutConfig';
 import { DealerIndicator } from './DealerIndicator';
+import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 
 const { ccclass, property } = _decorator;
 
@@ -38,6 +39,13 @@ export class PlayerUIManager extends Component {
     private _levelRank: number = 0;
     private _initialized: boolean = false;
     private _enableGrouping: boolean = true; // 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
+
+    // ===== Ready Stage 相关（两阶段初始化支持）=====
+    private _maxSeats: number = 0;  // 房间最大玩家数
+    private _mySeatIndex: number = 0;  // 本地玩家的座位索引
+    private _seatNodes: Map<number, Node> = new Map();  // 座位节点映射（相对索引 -> Node）
+    private _infoPanels: Map<number, PlayerInfoPanel> = new Map();  // 信息面板映射（相对索引 -> InfoPanel）
+    private _layoutConfig: PlayerPosition[] = [];  // 布局配置
 
     /**
      * 初始化 PlayerUIManager
@@ -74,6 +82,214 @@ export class PlayerUIManager extends Component {
 
         this._initialized = true;
         console.log(`[PlayerUIManager] Initialized with ${this._playerUINodes.length} players`);
+    }
+
+    // ===== 两阶段初始化方法（Ready Stage → Playing Stage）=====
+
+    /**
+     * Ready Stage 初始化：创建所有座位框架和信息面板
+     * @param playerInfos 当前房间内的玩家信息列表
+     * @param maxPlayers 房间最大玩家数
+     * @param mySeatIndex 本地玩家的绝对座位索引
+     * @param layoutConfig 玩家布局配置
+     */
+    public initForReadyStage(
+        playerInfos: PlayerInfo[],
+        maxPlayers: number,
+        mySeatIndex: number,
+        layoutConfig: PlayerPosition[]
+    ): void {
+        console.log(`[PlayerUIManager] InitForReadyStage: maxPlayers=${maxPlayers}, mySeat=${mySeatIndex}`);
+
+        this._maxSeats = maxPlayers;
+        this._mySeatIndex = mySeatIndex;
+        this._layoutConfig = layoutConfig;
+
+        // 清理之前的状态
+        this._seatNodes.clear();
+        this._infoPanels.clear();
+
+        // 创建所有座位节点（包括空座位）
+        for (let absoluteSeat = 0; absoluteSeat < maxPlayers; absoluteSeat++) {
+            const relativeSeat = this.getRelativeSeatIndex(absoluteSeat, mySeatIndex, maxPlayers);
+            const config = layoutConfig[relativeSeat];
+
+            if (!config) {
+                console.error(`[PlayerUIManager] No layout config for relative seat ${relativeSeat}`);
+                continue;
+            }
+
+            // 创建座位节点
+            const seatNode = new Node(config.name);
+            seatNode.addComponent(UITransform);
+            seatNode.layer = this.node.layer;
+
+            // 设置位置（使用 Widget 或 fallback 坐标）
+            const existingWidget = seatNode.getComponent('cc.Widget') as any;
+            if (!existingWidget && config.fallbackX !== undefined && config.fallbackY !== undefined) {
+                seatNode.setPosition(config.fallbackX, config.fallbackY, 0);
+            }
+            seatNode.active = config.active;
+
+            this.node.addChild(seatNode);
+            this._seatNodes.set(relativeSeat, seatNode);
+
+            // 创建 InfoPanel 节点
+            const infoPanelNode = new Node('InfoPanel');
+            infoPanelNode.addComponent(UITransform);
+            infoPanelNode.layer = this.node.layer;
+            infoPanelNode.setPosition(0, 0, 0);
+            seatNode.addChild(infoPanelNode);
+
+            // 添加 PlayerInfoPanel 组件
+            const infoPanel = infoPanelNode.addComponent(PlayerInfoPanel);
+            this._infoPanels.set(relativeSeat, infoPanel);
+
+            console.log(`[PlayerUIManager] Created seat node at relative seat ${relativeSeat} (absolute: ${absoluteSeat})`);
+        }
+
+        // 更新座位显示
+        this.updateSeats(playerInfos);
+
+        console.log(`[PlayerUIManager] Ready stage initialized with ${this._seatNodes.size} seats`);
+    }
+
+    /**
+     * 更新座位显示（玩家加入/离开/准备）
+     * @param playerInfos 当前房间内的玩家信息列表
+     */
+    public updateSeats(playerInfos: PlayerInfo[]): void {
+        console.log(`[PlayerUIManager] UpdateSeats: ${playerInfos.length} players`);
+
+        // 创建座位到玩家的映射
+        const seatToPlayer = new Map<number, PlayerInfo>();
+        for (const playerInfo of playerInfos) {
+            seatToPlayer.set(playerInfo.seatIndex, playerInfo);
+        }
+
+        // 更新所有座位
+        for (let absoluteSeat = 0; absoluteSeat < this._maxSeats; absoluteSeat++) {
+            const relativeSeat = this.getRelativeSeatIndex(absoluteSeat, this._mySeatIndex, this._maxSeats);
+            const infoPanel = this._infoPanels.get(relativeSeat);
+
+            if (!infoPanel) {
+                console.warn(`[PlayerUIManager] InfoPanel not found for relative seat ${relativeSeat}`);
+                continue;
+            }
+
+            const playerInfo = seatToPlayer.get(absoluteSeat);
+
+            if (playerInfo) {
+                // 有玩家：显示玩家信息
+                const isMyPlayer = absoluteSeat === this._mySeatIndex;
+                infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM);
+                console.log(`[PlayerUIManager] Seat ${relativeSeat}: ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+            } else {
+                // 空座位：显示"等待玩家..."
+                const emptyPlayerInfo: PlayerInfo = {
+                    id: '',
+                    name: '等待玩家...',
+                    seatIndex: absoluteSeat,
+                    isReady: false,
+                    isHost: false
+                };
+                infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM);
+                console.log(`[PlayerUIManager] Seat ${relativeSeat}: Empty`);
+            }
+        }
+    }
+
+    /**
+     * 升级到 Playing 模式：将 Ready Stage 的座位升级为完整的游戏UI
+     * @param players 玩家数据数组（包含手牌等游戏数据）
+     * @param pokerSprites 扑克牌精灵资源
+     * @param pokerPrefab 扑克牌预制体
+     * @param levelRank 当前关卡等级
+     * @param enableGrouping 是否启用同数字纵向堆叠
+     */
+    public upgradeToPlayingMode(
+        players: Player[],
+        pokerSprites: Map<string, SpriteFrame>,
+        pokerPrefab: Prefab,
+        levelRank: number = 0,
+        enableGrouping: boolean = true
+    ): void {
+        console.log('[PlayerUIManager] Upgrading to Playing mode...');
+
+        this._pokerSprites = pokerSprites;
+        this._pokerPrefab = pokerPrefab;
+        this._levelRank = levelRank;
+        this._enableGrouping = enableGrouping;
+
+        // 创建玩家索引到座位的映射
+        const seatToPlayer = new Map<number, Player>();
+        for (const player of players) {
+            seatToPlayer.set(player.seatIndex, player);
+        }
+
+        this._playerUINodes = [];
+
+        // 为每个有玩家的座位添加游戏组件
+        for (let absoluteSeat = 0; absoluteSeat < this._maxSeats; absoluteSeat++) {
+            const player = seatToPlayer.get(absoluteSeat);
+            if (!player) continue;  // 跳过空座位
+
+            const relativeSeat = this.getRelativeSeatIndex(absoluteSeat, this._mySeatIndex, this._maxSeats);
+            const seatNode = this._seatNodes.get(relativeSeat);
+            const infoPanel = this._infoPanels.get(relativeSeat);
+
+            if (!seatNode || !infoPanel) {
+                console.error(`[PlayerUIManager] Seat node or InfoPanel not found for relative seat ${relativeSeat}`);
+                continue;
+            }
+
+            // 切换 InfoPanel 到 GAME 模式
+            infoPanel.setMode(InfoPanelMode.GAME);
+            infoPanel.updatePlayerInfo(player.info);
+
+            // 创建手牌容器
+            let handContainer = seatNode.getChildByName('HandContainer');
+            if (!handContainer) {
+                handContainer = new Node('HandContainer');
+                handContainer.addComponent(UITransform);
+                handContainer.layer = this.node.layer;
+                handContainer.setPosition(0, 0, 0);
+                seatNode.addChild(handContainer);
+            }
+
+            // 添加 PlayerUINode 组件
+            let playerUINode = seatNode.getComponent(PlayerUINode);
+            if (!playerUINode) {
+                playerUINode = seatNode.addComponent(PlayerUINode);
+            }
+
+            // 初始化 PlayerUINode（传入已存在的 InfoPanel）
+            playerUINode.handContainer = handContainer;
+            playerUINode.infoPanel = infoPanel.node;
+            playerUINode.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping);
+
+            this._playerUINodes[relativeSeat] = playerUINode;
+
+            console.log(`[PlayerUIManager] Upgraded seat ${relativeSeat} for player ${player.name}`);
+        }
+
+        this._initialized = true;
+        console.log(`[PlayerUIManager] Playing mode initialized with ${this._playerUINodes.length} active players`);
+    }
+
+    /**
+     * 计算相对座位索引（用于主视角旋转）
+     * @param absoluteSeat 服务器的绝对座位索引
+     * @param mySeat 本地玩家的绝对座位索引
+     * @param totalSeats 总座位数
+     * @returns 相对座位索引（本地玩家始终为0）
+     */
+    private getRelativeSeatIndex(absoluteSeat: number, mySeat: number, totalSeats: number): number {
+        return (absoluteSeat - mySeat + totalSeats) % totalSeats;
+    }
+
+    private createPlayerUINode(): void {
+        // 占位函数，防止空类错误
     }
 
     /**

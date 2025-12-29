@@ -5,6 +5,8 @@ import { LocalRoomStore } from '../../LocalStore/LocalRoomStore';
 import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
+import { EventCenter, GameEvents } from '../../Utils/EventCenter';
+import { PlayerLayoutConfig } from '../../UI/PlayerLayoutConfig';
 
 /**
  * 准备阶段
@@ -26,7 +28,7 @@ import { GameStage } from './StageManager';
  * onExit() -> 隐藏UI，注销按钮事件
  */
 export class ReadyStage extends GameStageBase {
-    // UI元素
+    // start/ready button
     private btnStart: Button | null = null;
     private btnLabel: Label | null = null;
 
@@ -47,11 +49,8 @@ export class ReadyStage extends GameStageBase {
     private localPlayerId: string = '';
     private isLocalPlayerHost: boolean = false;
 
-    // 网络事件处理器引用（用于清理）
-    private onPlayerReadyHandler: ((data: any) => void) | null = null;
-    private onPlayerJoinedHandler: ((data: any) => void) | null = null;
-    private onPlayerLeftHandler: ((data: any) => void) | null = null;
-    private onGameStartedHandler: ((data: any) => void) | null = null;
+    // EventCenter 事件处理器引用（用于清理）
+    private onRoomRefreshHandler: (() => void) | null = null;
 
     constructor(game: Game, rootNode: Node | null = null) {
         super(game, rootNode);
@@ -76,13 +75,16 @@ export class ReadyStage extends GameStageBase {
         // 3. 显示UI
         this.showUI();
 
-        // 4. 设置按钮事件
+        // 4. 初始化 PlayerUIManager（用于显示玩家信息）
+        this.initPlayerUIManager();
+
+        // 5. 设置按钮事件
         this.setupButtons();
 
-        // 5. 设置网络事件监听
-        this.setupNetworkEvents();
+        // 6. 设置 EventCenter 事件监听
+        this.setupEventListeners();
 
-        // 6. 更新按钮显示
+        // 7. 更新按钮显示
         this.updateButtonDisplay();
 
         console.log('[ReadyStage] Waiting for players to ready up...');
@@ -118,6 +120,43 @@ export class ReadyStage extends GameStageBase {
     }
 
     /**
+     * 初始化 PlayerUIManager（显示玩家座位和信息）
+     */
+    private initPlayerUIManager(): void {
+        const currentRoom = this.localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            console.warn('[ReadyStage] No current room, skipping PlayerUIManager initialization');
+            return;
+        }
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.warn('[ReadyStage] PlayerUIManager not found on Game');
+            return;
+        }
+
+        // 获取本地玩家信息
+        const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
+        if (!myPlayerInfo) {
+            console.warn('[ReadyStage] Cannot find my player info yet, will retry on UI_REFRESH_ROOM');
+            // 延迟初始化：等待 UI_REFRESH_ROOM 事件时再尝试
+            return;
+        }
+
+        // 获取布局配置
+        const layoutConfig = PlayerLayoutConfig.getStandardLayout(currentRoom.maxPlayers);
+
+        // 初始化 PlayerUIManager
+        console.log(`[ReadyStage] Initializing PlayerUIManager with ${currentRoom.players.length} players, maxPlayers: ${currentRoom.maxPlayers}, mySeat: ${myPlayerInfo.seatIndex}`);
+        playerUIManager.initForReadyStage(
+            currentRoom.players,
+            currentRoom.maxPlayers,
+            myPlayerInfo.seatIndex,
+            layoutConfig
+        );
+    }
+
+    /**
      * 离开准备阶段
      */
     public onExit(): void {
@@ -126,37 +165,22 @@ export class ReadyStage extends GameStageBase {
         // 1. 清理按钮事件
         this.cleanupButtons();
 
-        // 2. 清理网络事件监听
-        this.cleanupNetworkEvents();
+        // 2. 清理 EventCenter 事件监听
+        this.cleanupEventListeners();
 
         // 3. 调用基类的 onExit（会自动隐藏UI）
         super.onExit();
     }
 
     /**
-     * 清理网络事件监听
+     * 清理 EventCenter 事件监听
      */
-    private cleanupNetworkEvents(): void {
-        const networkClient = this.game.networkClient;
-        if (!networkClient) return;
+    private cleanupEventListeners(): void {
+        console.log('[ReadyStage] Cleaning up EventCenter listeners');
 
-        console.log('[ReadyStage] Cleaning up network event listeners');
-
-        if (this.onPlayerReadyHandler) {
-            networkClient.off('player_ready', this.onPlayerReadyHandler);
-            this.onPlayerReadyHandler = null;
-        }
-        if (this.onPlayerJoinedHandler) {
-            networkClient.off('player_joined', this.onPlayerJoinedHandler);
-            this.onPlayerJoinedHandler = null;
-        }
-        if (this.onPlayerLeftHandler) {
-            networkClient.off('player_left', this.onPlayerLeftHandler);
-            this.onPlayerLeftHandler = null;
-        }
-        if (this.onGameStartedHandler) {
-            networkClient.off('game_started', this.onGameStartedHandler);
-            this.onGameStartedHandler = null;
+        if (this.onRoomRefreshHandler) {
+            EventCenter.off(GameEvents.UI_REFRESH_ROOM, this.onRoomRefreshHandler, this);
+            this.onRoomRefreshHandler = null;
         }
     }
 
@@ -221,6 +245,50 @@ export class ReadyStage extends GameStageBase {
     }
 
     /**
+     * 设置 EventCenter 事件监听
+     */
+    private setupEventListeners(): void {
+        console.log('[ReadyStage] Setting up EventCenter listeners');
+
+        // 监听房间状态刷新事件
+        this.onRoomRefreshHandler = () => {
+            console.log('[ReadyStage] Room refresh event received');
+            this.refreshPlayerStates();
+            this.updateButtonDisplay();
+        };
+        EventCenter.on(GameEvents.UI_REFRESH_ROOM, this.onRoomRefreshHandler, this);
+    }
+
+    /**
+     * 从 LocalRoomStore 刷新玩家状态
+     */
+    private refreshPlayerStates(): void {
+        const currentRoom = this.localRoomStore.getCurrentRoom();
+        if (!currentRoom) return;
+
+        // 更新玩家准备状态
+        this.playerReadyStates.clear();
+        for (const player of currentRoom.players) {
+            this.playerReadyStates.set(player.id, player.isReady);
+        }
+
+        console.log('[ReadyStage] Player states refreshed from LocalRoomStore');
+
+        // 更新 PlayerUIManager 显示
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            // 如果 PlayerUIManager 还没初始化（_maxSeats 为 0），尝试初始化
+            if ((playerUIManager as any)._maxSeats === 0) {
+                console.log('[ReadyStage] PlayerUIManager not yet initialized, initializing now...');
+                this.initPlayerUIManager();
+            } else {
+                // 已初始化，只需更新座位信息
+                playerUIManager.updateSeats(currentRoom.players);
+            }
+        }
+    }
+
+    /**
      * 设置按钮事件
      */
     private setupButtons(): void {
@@ -248,50 +316,6 @@ export class ReadyStage extends GameStageBase {
         } else {
             console.warn('[ReadyStage] Start button not found');
         }
-    }
-
-    /**
-     * 设置网络事件监听
-     */
-    private setupNetworkEvents(): void {
-        const networkClient = this.game.networkClient;
-        if (!networkClient || !networkClient.getIsConnected()) {
-            console.log('[ReadyStage] Network client not available, skipping network event setup');
-            return;
-        }
-
-        console.log('[ReadyStage] Setting up network event listeners');
-
-        // 监听玩家准备状态变化
-        this.onPlayerReadyHandler = (data: any) => {
-            console.log('[ReadyStage] Player ready event received:', data);
-            this.playerReadyStates.set(data.playerId, data.isReady);
-            this.updateButtonDisplay();
-        };
-        networkClient.on('player_ready', this.onPlayerReadyHandler);
-
-        // 监听玩家加入房间
-        this.onPlayerJoinedHandler = (data: any) => {
-            console.log('[ReadyStage] Player joined:', data.player);
-            this.playerReadyStates.set(data.player.id, false);
-            this.updateButtonDisplay();
-        };
-        networkClient.on('player_joined', this.onPlayerJoinedHandler);
-
-        // 监听玩家离开房间
-        this.onPlayerLeftHandler = (data: any) => {
-            console.log('[ReadyStage] Player left:', data.playerId);
-            this.playerReadyStates.delete(data.playerId);
-            this.updateButtonDisplay();
-        };
-        networkClient.on('player_left', this.onPlayerLeftHandler);
-
-        // 监听游戏开始
-        this.onGameStartedHandler = (data: any) => {
-            console.log('[ReadyStage] Game started event received:', data);
-            // Server will trigger transition to playing stage
-        };
-        networkClient.on('game_started', this.onGameStartedHandler);
     }
 
     /**
@@ -454,13 +478,6 @@ export class ReadyStage extends GameStageBase {
         }
 
         return true;
-    }
-
-    /**
-     * 检查是否所有玩家都准备好（旧方法，保留兼容性）
-     */
-    private allPlayersReady(): boolean {
-        return this.allNonHostPlayersReady();
     }
 
     /**

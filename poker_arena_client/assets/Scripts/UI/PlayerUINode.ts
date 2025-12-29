@@ -1,6 +1,7 @@
-import { _decorator, Component, Node, Prefab, SpriteFrame, Label, Sprite, UITransform } from 'cc';
+import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
 import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
-import { Player } from '../LocalStore/LocalPlayerStore';
+import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
+import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 
 const { ccclass, property } = _decorator;
 
@@ -21,17 +22,12 @@ export class PlayerUINode extends Component {
     public handContainer: Node = null!;  // 手牌容器
 
     @property(Node)
-    public infoPanel: Node = null!;  // 信息面板
-
-    // 信息面板子元素（自动查找）
-    private nameLabel: Label | null = null;
-    private scoreLabel: Label | null = null;
-    private handTypeLabel: Label | null = null;  // 牌型显示标签
-    private avatarSprite: Sprite | null = null;
+    public infoPanel: Node = null!;  // 信息面板容器节点
 
     // ===== 数据绑定 =====
-    private _player: Player = null!;  // 绑定的 Player 数据
+    private _player: Player | null = null;  // 绑定的 Player 数据
     private _handDisplay: PlayerHandDisplay | null = null;  // 手牌显示组件
+    private _infoPanelComponent: PlayerInfoPanel | null = null;  // 信息面板组件
     private _playerIndex: number = 0;  // 玩家索引（0-4）
 
     // ===== 初始化方法 =====
@@ -83,17 +79,19 @@ export class PlayerUINode extends Component {
 
         if (!this.infoPanel) {
             this.infoPanel = this.node.getChildByName("InfoPanel");
+            // InfoPanel should already exist (created by PlayerUIManager in ready stage)
+            // If not found, log warning but don't create (backward compatibility for old init path)
             if (!this.infoPanel) {
-                this.infoPanel = this.createInfoPanel();
+                console.warn(`[PlayerUINode] InfoPanel not found for ${this._player?.name || 'player'}`);
             }
         }
 
-        // 查找信息面板子元素
+        // Get PlayerInfoPanel component
         if (this.infoPanel) {
-            this.nameLabel = this.infoPanel.getChildByName("NameLabel")?.getComponent(Label) || null;
-            this.scoreLabel = this.infoPanel.getChildByName("ScoreLabel")?.getComponent(Label) || null;
-            this.handTypeLabel = this.infoPanel.getChildByName("HandTypeLabel")?.getComponent(Label) || null;
-            this.avatarSprite = this.infoPanel.getChildByName("Avatar")?.getComponent(Sprite) || null;
+            this._infoPanelComponent = this.infoPanel.getComponent(PlayerInfoPanel);
+            if (!this._infoPanelComponent) {
+                console.warn(`[PlayerUINode] PlayerInfoPanel component not found on InfoPanel node`);
+            }
         }
     }
 
@@ -108,65 +106,6 @@ export class PlayerUINode extends Component {
         this.node.addChild(container);
         console.log(`[PlayerUINode] Created HandContainer for ${this._player?.name || 'player'}`);
         return container;
-    }
-
-    /**
-     * 创建信息面板（如果不存在）
-     */
-    private createInfoPanel(): Node {
-        const panel = new Node("InfoPanel");
-        panel.addComponent(UITransform);
-        panel.layer = this.node.layer;
-
-        // Position based on player index
-        // Player 0 (main player at bottom): position at same height as hand cards, on the left
-        // Player 2 (top player): position on the left side of hand cards
-        // Other players: default position below hand
-        if (this._playerIndex === 0) {
-            // Bottom player: same Y as hand cards (0), left side
-            panel.setPosition(-300, 0, 0);
-        } else if (this._playerIndex === 2) {
-            // Top player: same Y as hand cards (0), left side
-            panel.setPosition(-200, 30, 0);
-        } else {
-            // Left and right players: below hand
-            panel.setPosition(0, -100, 0);
-        }
-
-        // 创建子元素
-        const nameLabel = new Node("NameLabel");
-        const nameLabelComp = nameLabel.addComponent(Label);
-        nameLabel.addComponent(UITransform);
-        nameLabelComp.fontSize = 20;
-        nameLabel.setPosition(0, 0, 0);
-        panel.addChild(nameLabel);
-
-        const scoreLabel = new Node("ScoreLabel");
-        const scoreLabelComp = scoreLabel.addComponent(Label);
-        scoreLabel.addComponent(UITransform);
-        scoreLabelComp.fontSize = 18;
-        scoreLabel.setPosition(0, -25, 0);
-        panel.addChild(scoreLabel);
-
-        // HandType label (for showing poker hand type)
-        const handTypeLabel = new Node("HandTypeLabel");
-        const handTypeLabelComp = handTypeLabel.addComponent(Label);
-        handTypeLabel.addComponent(UITransform);
-        handTypeLabelComp.fontSize = 16;
-        handTypeLabelComp.color = new cc.Color(255, 215, 0, 255); // Gold color
-        handTypeLabel.setPosition(0, -50, 0);
-        panel.addChild(handTypeLabel);
-
-        // Avatar 可选
-        const avatar = new Node("Avatar");
-        avatar.addComponent(Sprite);
-        avatar.addComponent(UITransform);
-        avatar.setPosition(0, 35, 0);
-        panel.addChild(avatar);
-
-        this.node.addChild(panel);
-        console.log(`[PlayerUINode] Created InfoPanel for ${this._player?.name || 'player'} (index: ${this._playerIndex}) at position: ${panel.position.x}, ${panel.position.y}`);
-        return panel;
     }
 
     /**
@@ -200,11 +139,8 @@ export class PlayerUINode extends Component {
      * 更新玩家信息显示
      */
     public updatePlayerInfo(): void {
-        if (this.nameLabel) {
-            this.nameLabel.string = this._player.name;
-        }
-        if (this.scoreLabel) {
-            this.scoreLabel.string = `分数: ${this._player.score}`;
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.updatePlayerInfo(this._player.info);
         }
     }
 
@@ -212,8 +148,9 @@ export class PlayerUINode extends Component {
      * 设置玩家名称
      */
     public setPlayerName(name: string): void {
-        if (this.nameLabel) {
-            this.nameLabel.string = name;
+        if (this._player) {
+            this._player.name = name;
+            this.updatePlayerInfo();
         }
     }
 
@@ -221,8 +158,8 @@ export class PlayerUINode extends Component {
      * 更新玩家分数
      */
     public updateScore(score: number): void {
-        if (this.scoreLabel) {
-            this.scoreLabel.string = `分数: ${score}`;
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.updateScore(score);
         }
     }
 
@@ -230,8 +167,8 @@ export class PlayerUINode extends Component {
      * 设置头像（如果需要）
      */
     public setAvatar(spriteFrame: SpriteFrame): void {
-        if (this.avatarSprite) {
-            this.avatarSprite.spriteFrame = spriteFrame;
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.setAvatar(spriteFrame);
         }
     }
 
@@ -241,16 +178,8 @@ export class PlayerUINode extends Component {
      * @param color 可选的颜色（十六进制字符串，如 "#FFD700"）
      */
     public setHandType(handTypeText: string, color?: string): void {
-        if (this.handTypeLabel) {
-            this.handTypeLabel.string = handTypeText;
-            if (color) {
-                // Parse hex color string to Color
-                const hexColor = color.replace('#', '');
-                const r = parseInt(hexColor.substring(0, 2), 16);
-                const g = parseInt(hexColor.substring(2, 4), 16);
-                const b = parseInt(hexColor.substring(4, 6), 16);
-                this.handTypeLabel.color = new cc.Color(r, g, b, 255);
-            }
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.setHandType(handTypeText, color);
         }
     }
 
@@ -258,8 +187,8 @@ export class PlayerUINode extends Component {
      * 清除牌型显示
      */
     public clearHandType(): void {
-        if (this.handTypeLabel) {
-            this.handTypeLabel.string = "";
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.clearHandType();
         }
     }
 
@@ -356,7 +285,8 @@ export class PlayerUINode extends Component {
      * 清除所有UI显示
      */
     public clearAll(): void {
-        if (this.nameLabel) this.nameLabel.string = "";
-        if (this.scoreLabel) this.scoreLabel.string = "";
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.clear();
+        }
     }
 }
