@@ -174,7 +174,8 @@ export class PlayerInfoPanel extends Component {
 
         // 更新名字（如果是自己，加上标识）
         if (this.nameLabel) {
-            const nameText = this.isMyPlayer ? `${this.playerInfo.name} (我)` : this.playerInfo.name;
+            const displayName = this.getShortenedName(this.playerInfo.name);
+            const nameText = this.isMyPlayer ? `${displayName} (我)` : displayName;
             this.nameLabel.string = nameText;
         }
 
@@ -184,6 +185,31 @@ export class PlayerInfoPanel extends Component {
         } else {
             this.refreshGameMode();
         }
+    }
+
+    /**
+     * 缩短玩家名字显示
+     * 例如：guest_abc123 -> guest_abc
+     * @param name 原始名字
+     * @returns 缩短后的名字
+     */
+    private getShortenedName(name: string): string {
+        // 如果名字以 guest_ 开头，只取前几位
+        if (name.startsWith('guest_')) {
+            const afterGuest = name.substring(6); // 去掉 "guest_"
+            if (afterGuest.length > 3) {
+                return `guest_${afterGuest.substring(0, 3)}`;
+            }
+            return name;
+        }
+
+        // 其他名字如果太长，也进行截断
+        const maxLength = 8;
+        if (name.length > maxLength) {
+            return name.substring(0, maxLength) + '...';
+        }
+
+        return name;
     }
 
     /**

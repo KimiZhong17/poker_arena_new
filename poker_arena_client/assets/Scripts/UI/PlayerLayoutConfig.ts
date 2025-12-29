@@ -28,6 +28,10 @@ export interface PlayerPosition {
     // 可选：备用的固定坐标（用于不支持 Widget 的场景）
     fallbackX?: number;
     fallbackY?: number;
+
+    // 可选：InfoPanel 的偏移位置（相对于座位节点）
+    infoPanelOffsetX?: number;
+    infoPanelOffsetY?: number;
 }
 
 /**
@@ -66,35 +70,45 @@ export class PlayerLayoutConfig {
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: -280
+                fallbackY: -280,
+                infoPanelOffsetX: -300,
+                infoPanelOffsetY: 0
             },
             {
                 name: 'TopLeftHand',
                 widget: { alignTop: true, alignHorizontalCenter: true, top: 120 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: 280
+                fallbackY: 280,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'LeftHand',
                 widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: false,
                 fallbackX: -450,
-                fallbackY: 0
+                fallbackY: 0,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'TopRightHand',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: false,
                 fallbackX: 450,
-                fallbackY: 0
+                fallbackY: 0,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'RightHand',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: false,
                 fallbackX: 550,
-                fallbackY: 50
+                fallbackY: 50,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             }
         ];
     }
@@ -109,35 +123,45 @@ export class PlayerLayoutConfig {
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: -280
+                fallbackY: -280,
+                infoPanelOffsetX: -300,
+                infoPanelOffsetY: 0
             },
             {
                 name: 'TopLeftHand',
                 widget: { alignTop: true, alignLeft: true, top: 100, left: 150 },
                 active: true,
                 fallbackX: -350,
-                fallbackY: 200
+                fallbackY: 200,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'TopRightHand',
                 widget: { alignTop: true, alignRight: true, top: 100, right: 150 },
                 active: true,
                 fallbackX: 350,
-                fallbackY: 200
+                fallbackY: 200,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'LeftHand',
                 widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: false,
                 fallbackX: -450,
-                fallbackY: 0
+                fallbackY: 0,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'RightHand',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: false,
                 fallbackX: 550,
-                fallbackY: 50
+                fallbackY: 50,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             }
         ];
     }
@@ -152,35 +176,45 @@ export class PlayerLayoutConfig {
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 30 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: -280
+                fallbackY: -280,
+                infoPanelOffsetX: -300,
+                infoPanelOffsetY: 0
             },
             {
                 name: 'LeftHand',
                 widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: true,
                 fallbackX: -550,
-                fallbackY: 30
+                fallbackY: 30,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'TopLeftHand',
                 widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: 280
+                fallbackY: 280,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'TopRightHand',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: true,
                 fallbackX: 550,
-                fallbackY: 30
+                fallbackY: 30,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'RightHand',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: false,
                 fallbackX: 550,
-                fallbackY: 50
+                fallbackY: 50,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             }
         ];
     }
@@ -195,35 +229,45 @@ export class PlayerLayoutConfig {
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
                 active: true,
                 fallbackX: 0,
-                fallbackY: -280
+                fallbackY: -280,
+                infoPanelOffsetX: -300,
+                infoPanelOffsetY: 0
             },
             {
                 name: 'LeftHand',
                 widget: { alignLeft: true, alignBottom: true, left: 80, bottom: 280 },
                 active: true,
                 fallbackX: -400,
-                fallbackY: -80
+                fallbackY: -80,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
                 name: 'TopLeftHand',
                 widget: { alignTop: true, alignLeft: true, top: 100, left: 180 },
                 active: true,
                 fallbackX: -250,
-                fallbackY: 220
+                fallbackY: 220,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'TopRightHand',
                 widget: { alignTop: true, alignRight: true, top: 100, right: 180 },
                 active: true,
                 fallbackX: 250,
-                fallbackY: 220
+                fallbackY: 220,
+                infoPanelOffsetX: -200,
+                infoPanelOffsetY: 30
             },
             {
                 name: 'RightHand',
                 widget: { alignRight: true, alignBottom: true, right: 80, bottom: 280 },
                 active: true,
                 fallbackX: 400,
-                fallbackY: -80
+                fallbackY: -80,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             }
         ];
     }

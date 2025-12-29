@@ -87,7 +87,8 @@ export class PlayerUIManager extends Component {
     // ===== 两阶段初始化方法（Ready Stage → Playing Stage）=====
 
     /**
-     * Ready Stage 初始化：创建所有座位框架和信息面板
+     * Ready Stage 初始化：为已存在的座位节点添加信息面板
+     * 注意：座位节点（BottomHand等）及其Widget由Game.ts的createOrUpdateHandNodes创建
      * @param playerInfos 当前房间内的玩家信息列表
      * @param maxPlayers 房间最大玩家数
      * @param mySeatIndex 本地玩家的绝对座位索引
@@ -109,7 +110,7 @@ export class PlayerUIManager extends Component {
         this._seatNodes.clear();
         this._infoPanels.clear();
 
-        // 创建所有座位节点（包括空座位）
+        // 查找并设置所有座位节点（包括空座位）
         for (let absoluteSeat = 0; absoluteSeat < maxPlayers; absoluteSeat++) {
             const relativeSeat = this.getRelativeSeatIndex(absoluteSeat, mySeatIndex, maxPlayers);
             const config = layoutConfig[relativeSeat];
@@ -119,33 +120,43 @@ export class PlayerUIManager extends Component {
                 continue;
             }
 
-            // 创建座位节点
-            const seatNode = new Node(config.name);
-            seatNode.addComponent(UITransform);
-            seatNode.layer = this.node.layer;
-
-            // 设置位置（使用 Widget 或 fallback 坐标）
-            const existingWidget = seatNode.getComponent('cc.Widget') as any;
-            if (!existingWidget && config.fallbackX !== undefined && config.fallbackY !== undefined) {
-                seatNode.setPosition(config.fallbackX, config.fallbackY, 0);
+            // 查找座位节点（必须已由 Game.ts 创建）
+            const seatNode = this.node.getChildByName(config.name);
+            if (!seatNode) {
+                console.error(`[PlayerUIManager] Seat node ${config.name} not found! Make sure Game.ts has created it.`);
+                continue;
             }
-            seatNode.active = config.active;
 
-            this.node.addChild(seatNode);
+            console.log(`[PlayerUIManager] Found seat node: ${config.name}`);
+            seatNode.active = config.active;
             this._seatNodes.set(relativeSeat, seatNode);
 
-            // 创建 InfoPanel 节点
-            const infoPanelNode = new Node('InfoPanel');
-            infoPanelNode.addComponent(UITransform);
-            infoPanelNode.layer = this.node.layer;
-            infoPanelNode.setPosition(0, 0, 0);
-            seatNode.addChild(infoPanelNode);
+            // 查找或创建 InfoPanel 节点
+            let infoPanelNode = seatNode.getChildByName('InfoPanel');
+            if (!infoPanelNode) {
+                infoPanelNode = new Node('InfoPanel');
+                infoPanelNode.addComponent(UITransform);
+                infoPanelNode.layer = this.node.layer;
 
-            // 添加 PlayerInfoPanel 组件
-            const infoPanel = infoPanelNode.addComponent(PlayerInfoPanel);
+                // 应用 InfoPanel 偏移（如果配置中有设置）
+                const offsetX = config.infoPanelOffsetX ?? 0;
+                const offsetY = config.infoPanelOffsetY ?? 0;
+                infoPanelNode.setPosition(offsetX, offsetY, 0);
+
+                seatNode.addChild(infoPanelNode);
+                console.log(`[PlayerUIManager] Created InfoPanel for ${config.name} at offset (${offsetX}, ${offsetY})`);
+            } else {
+                console.log(`[PlayerUIManager] Found existing InfoPanel for ${config.name}`);
+            }
+
+            // 添加或获取 PlayerInfoPanel 组件
+            let infoPanel = infoPanelNode.getComponent(PlayerInfoPanel);
+            if (!infoPanel) {
+                infoPanel = infoPanelNode.addComponent(PlayerInfoPanel);
+            }
             this._infoPanels.set(relativeSeat, infoPanel);
 
-            console.log(`[PlayerUIManager] Created seat node at relative seat ${relativeSeat} (absolute: ${absoluteSeat})`);
+            console.log(`[PlayerUIManager] Setup seat at relative seat ${relativeSeat} (absolute: ${absoluteSeat})`);
         }
 
         // 更新座位显示
