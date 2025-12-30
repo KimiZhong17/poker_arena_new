@@ -357,7 +357,7 @@ export class Game extends Component {
         }
 
         // Node_PlayerUI只是一个逻辑容器，不需要Widget
-        // 所有手牌节点（BottomHand、LeftHand等）的Widget会直接对齐Canvas
+        // 所有手牌节点（BottomSeat、LeftSeat等）的Widget会直接对齐Canvas
         if (!playerUINode.getComponent(UITransform)) {
             playerUINode.addComponent(UITransform);
         }

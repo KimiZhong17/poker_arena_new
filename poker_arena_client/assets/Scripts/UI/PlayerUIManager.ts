@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
-import { PlayerUINode } from './PlayerUINode';
+import { PlayerUIController } from './PlayerUIController';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
 import { PlayerPosition } from './PlayerLayoutConfig';
@@ -12,13 +12,13 @@ const { ccclass, property } = _decorator;
  * PlayerUIManager - 管理所有玩家的UI节点
  *
  * 重构后的职责：
- * - 管理 PlayerUINode 数组（单一数组，简化管理）
+ * - 管理 PlayerUIController 数组（单一数组，简化管理）
  * - 提供批量操作接口（更新所有玩家、显示庄家等）
- * - 负责创建和初始化 PlayerUINode
+ * - 负责创建和初始化 PlayerUIController
  * - 应用玩家布局配置
  *
  * 设计理念：
- * - 从管理多个数组 → 管理单一 PlayerUINode 数组
+ * - 从管理多个数组 → 管理单一 PlayerUIController 数组
  * - UI层管理器，与数据层（PlayerManager）分离
  * - 通过 GameMode 协调数据和UI
  */
@@ -29,7 +29,7 @@ export class PlayerUIManager extends Component {
     public dealerIndicator: DealerIndicator | null = null;
 
     // ===== 玩家UI节点数组（核心）=====
-    private _playerUINodes: PlayerUINode[] = [];
+    private _playerUINodes: PlayerUIController[] = [];
 
     // ===== 资源引用 =====
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
@@ -88,7 +88,7 @@ export class PlayerUIManager extends Component {
 
     /**
      * Ready Stage 初始化：为已存在的座位节点添加信息面板
-     * 注意：座位节点（BottomHand等）及其Widget由Game.ts的createOrUpdateHandNodes创建
+     * 注意：座位节点（BottomSeat等）及其Widget由Game.ts的createOrUpdateHandNodes创建
      * @param playerInfos 当前房间内的玩家信息列表
      * @param maxPlayers 房间最大玩家数
      * @param mySeatIndex 本地玩家的绝对座位索引
@@ -286,18 +286,22 @@ export class PlayerUIManager extends Component {
                 seatNode.addChild(handContainer);
             }
 
-            // 添加 PlayerUINode 组件
-            let playerUINode = seatNode.getComponent(PlayerUINode);
-            if (!playerUINode) {
-                playerUINode = seatNode.addComponent(PlayerUINode);
+            // 添加 PlayerUIController 组件
+            let playerUIController = seatNode.getComponent(PlayerUIController);
+            if (!playerUIController) {
+                playerUIController = seatNode.addComponent(PlayerUIController);
             }
 
-            // 初始化 PlayerUINode（传入已存在的 InfoPanel）
-            playerUINode.handContainer = handContainer;
-            playerUINode.infoPanel = infoPanel.node;
-            playerUINode.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping);
+            // 初始化 PlayerUIController（传入已存在的 InfoPanel）
+            playerUIController.handContainer = handContainer;
+            playerUIController.infoPanel = infoPanel.node;
+            playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping);
 
-            this._playerUINodes[relativeSeat] = playerUINode;
+            this._playerUINodes[relativeSeat] = playerUIController;
+
+            // 立即更新一次手牌显示（即使此时可能还没有手牌数据）
+            // 这样可以确保 PlayerHandDisplay 组件被正确初始化
+            playerUIController.updateHandDisplay();
 
             console.log(`[PlayerUIManager] Upgraded seat ${relativeSeat} for player ${player.name}`);
         }
@@ -368,19 +372,19 @@ export class PlayerUIManager extends Component {
             }
             playerNode.active = config.active;
 
-            // 添加或获取 PlayerUINode 组件
-            let playerUINode = playerNode.getComponent(PlayerUINode);
-            if (!playerUINode) {
-                playerUINode = playerNode.addComponent(PlayerUINode);
+            // 添加或获取 PlayerUIController 组件
+            let playerUIController = playerNode.getComponent(PlayerUIController);
+            if (!playerUIController) {
+                playerUIController = playerNode.addComponent(PlayerUIController);
             }
 
-            // 初始化 PlayerUINode
-            playerUINode.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping);
+            // 初始化 PlayerUIController
+            playerUIController.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping);
 
-            this._playerUINodes.push(playerUINode);
+            this._playerUINodes.push(playerUIController);
         }
 
-        console.log(`[PlayerUIManager] Created ${this._playerUINodes.length} PlayerUINode components`);
+        console.log(`[PlayerUIManager] Created ${this._playerUINodes.length} PlayerUIController components`);
     }
 
     // ===== 批量操作接口 =====
@@ -477,7 +481,7 @@ export class PlayerUIManager extends Component {
 
         const node = this._playerUINodes[dealerIndex];
         if (node) {
-            // 获取 PlayerUINode 的世界坐标
+            // 获取 PlayerUIController 的世界坐标
             const worldPos = node.getWorldPosition();
             console.log(`[PlayerUIManager] Player ${dealerIndex} node world position: (${worldPos.x}, ${worldPos.y})`);
             this.dealerIndicator.moveToDealerPosition(dealerIndex, worldPos, immediate);
@@ -537,9 +541,9 @@ export class PlayerUIManager extends Component {
 
     // ===== 访问器接口 =====
     /**
-     * 获取 PlayerUINode
+     * 获取 PlayerUIController
      */
-    public getPlayerUINode(playerIndex: number): PlayerUINode | null {
+    public getPlayerUINode(playerIndex: number): PlayerUIController | null {
         return this._playerUINodes[playerIndex] || null;
     }
 
@@ -568,9 +572,9 @@ export class PlayerUIManager extends Component {
     }
 
     /**
-     * 获取所有 PlayerUINode
+     * 获取所有 PlayerUIController
      */
-    public getAllPlayerUINodes(): PlayerUINode[] {
+    public getAllPlayerUINodes(): PlayerUIController[] {
         return [...this._playerUINodes];
     }
 

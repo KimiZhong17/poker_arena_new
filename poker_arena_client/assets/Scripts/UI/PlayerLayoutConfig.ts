@@ -21,7 +21,7 @@ export interface WidgetAlignment {
  * 玩家手牌位置配置（基于 Widget 锚点）
  */
 export interface PlayerPosition {
-    name: string;              // 节点名称（BottomHand, LeftHand等）
+    name: string;              // 节点名称（BottomSeat, LeftSeat等）
     widget: WidgetAlignment;   // Widget 锚点配置
     active: boolean;           // 是否激活
 
@@ -66,8 +66,8 @@ export class PlayerLayoutConfig {
     public static getTwoPlayerLayout(): PlayerPosition[] {
         return [
             {
-                name: 'BottomHand',
-                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
+                name: 'BottomSeat',
+                widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 30 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280,
@@ -75,40 +75,13 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 0
             },
             {
-                name: 'TopLeftHand',
-                widget: { alignTop: true, alignHorizontalCenter: true, top: 120 },
+                name: 'TopLeftSeat',
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: 280,
                 infoPanelOffsetX: -200,
                 infoPanelOffsetY: 30
-            },
-            {
-                name: 'LeftHand',
-                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
-                active: false,
-                fallbackX: -450,
-                fallbackY: 0,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
-            },
-            {
-                name: 'TopRightHand',
-                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
-                active: false,
-                fallbackX: 450,
-                fallbackY: 0,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
-            },
-            {
-                name: 'RightHand',
-                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
-                active: false,
-                fallbackX: 550,
-                fallbackY: 50,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
             }
         ];
     }
@@ -119,7 +92,7 @@ export class PlayerLayoutConfig {
     public static getThreePlayerLayout(): PlayerPosition[] {
         return [
             {
-                name: 'BottomHand',
+                name: 'BottomSeat',
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
                 active: true,
                 fallbackX: 0,
@@ -128,7 +101,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 0
             },
             {
-                name: 'TopLeftHand',
+                name: 'TopLeftSeat',
                 widget: { alignTop: true, alignLeft: true, top: 100, left: 150 },
                 active: true,
                 fallbackX: -350,
@@ -137,31 +110,13 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 30
             },
             {
-                name: 'TopRightHand',
+                name: 'TopRightSeat',
                 widget: { alignTop: true, alignRight: true, top: 100, right: 150 },
                 active: true,
                 fallbackX: 350,
                 fallbackY: 200,
                 infoPanelOffsetX: -200,
                 infoPanelOffsetY: 30
-            },
-            {
-                name: 'LeftHand',
-                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
-                active: false,
-                fallbackX: -450,
-                fallbackY: 0,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
-            },
-            {
-                name: 'RightHand',
-                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
-                active: false,
-                fallbackX: 550,
-                fallbackY: 50,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
             }
         ];
     }
@@ -172,7 +127,7 @@ export class PlayerLayoutConfig {
     public static getFourPlayerLayout(): PlayerPosition[] {
         return [
             {
-                name: 'BottomHand',
+                name: 'BottomSeat',
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 30 },
                 active: true,
                 fallbackX: 0,
@@ -181,7 +136,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 0
             },
             {
-                name: 'LeftHand',
+                name: 'LeftSeat',
                 widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: true,
                 fallbackX: -550,
@@ -190,7 +145,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: -100
             },
             {
-                name: 'TopLeftHand',
+                name: 'TopLeftSeat',
                 widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
                 active: true,
                 fallbackX: 0,
@@ -199,7 +154,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 30
             },
             {
-                name: 'TopRightHand',
+                name: 'TopRightSeat',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: true,
                 fallbackX: 550,
@@ -208,7 +163,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: -100
             },
             {
-                name: 'RightHand',
+                name: 'RightSeat',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: false,
                 fallbackX: 550,
@@ -225,7 +180,7 @@ export class PlayerLayoutConfig {
     public static getFivePlayerLayout(): PlayerPosition[] {
         return [
             {
-                name: 'BottomHand',
+                name: 'BottomSeat',
                 widget: { alignBottom: true, alignHorizontalCenter: true, bottom: 120 },
                 active: true,
                 fallbackX: 0,
@@ -234,7 +189,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 0
             },
             {
-                name: 'LeftHand',
+                name: 'LeftSeat',
                 widget: { alignLeft: true, alignBottom: true, left: 80, bottom: 280 },
                 active: true,
                 fallbackX: -400,
@@ -243,7 +198,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: -100
             },
             {
-                name: 'TopLeftHand',
+                name: 'TopLeftSeat',
                 widget: { alignTop: true, alignLeft: true, top: 100, left: 180 },
                 active: true,
                 fallbackX: -250,
@@ -252,7 +207,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 30
             },
             {
-                name: 'TopRightHand',
+                name: 'TopRightSeat',
                 widget: { alignTop: true, alignRight: true, top: 100, right: 180 },
                 active: true,
                 fallbackX: 250,
@@ -261,7 +216,7 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 30
             },
             {
-                name: 'RightHand',
+                name: 'RightSeat',
                 widget: { alignRight: true, alignBottom: true, right: 80, bottom: 280 },
                 active: true,
                 fallbackX: 400,

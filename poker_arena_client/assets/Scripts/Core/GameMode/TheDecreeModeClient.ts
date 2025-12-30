@@ -1,6 +1,7 @@
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
-import { PlayerInfo } from "../../LocalStore/LocalPlayerStore";
+import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
+import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
 import { Node, instantiate } from "cc";
 import {
     DealCardsEvent,
@@ -64,8 +65,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 查找并缓存游戏模式特定的节点
         this.findModeSpecificNodes();
 
-        // 调整玩家布局
-        this.adjustPlayerLayout();
+        // 升级 PlayerUIManager 到游戏模式
+        this.upgradePlayerUIToPlayingMode();
 
         // 显示 UI
         this.showUI();
@@ -193,15 +194,53 @@ export class TheDecreeModeClient extends GameModeClientBase {
     // ==================== 事件处理器 ====================
 
     private onDealCards(data: DealCardsEvent): void {
-        console.log('[TheDecreeModeClient] Deal cards received:', data);
+        console.log('[TheDecreeModeClient] ========== Deal Cards Event ==========');
+        console.log('[TheDecreeModeClient] Player ID:', data.playerId);
+        console.log('[TheDecreeModeClient] Cards:', data.handCards);
+        console.log('[TheDecreeModeClient] Card count:', data.handCards.length);
 
         // 服务器发送的是当前玩家的手牌
-        // 更新 PlayerUIManager 显示手牌
-        if (this.game.playerUIManager) {
-            // TODO: 需要从 playerId 映射到 playerIndex
-            // 暂时先简单处理
-            console.log('[TheDecreeModeClient] Updating hand cards for player');
+        // 更新 Player 数据和 PlayerUIManager 显示
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found!');
+            return;
         }
+
+        // 获取玩家相对索引
+        const playerIndex = this.getPlayerIndex(data.playerId);
+        console.log(`[TheDecreeModeClient] Player index (relative): ${playerIndex}`);
+
+        if (playerIndex === -1) {
+            console.warn(`[TheDecreeModeClient] Player ${data.playerId} not found in player list`);
+            return;
+        }
+
+        // 更新 Player 数据（从 PlayerUIController 获取）
+        const playerUIController = playerUIManager.getPlayerUINode(playerIndex);
+        if (playerUIController) {
+            const player = playerUIController.getPlayer();
+            if (player) {
+                console.log(`[TheDecreeModeClient] Found player: ${player.name}`);
+                console.log(`[TheDecreeModeClient] Before update - handCards:`, player.handCards.length);
+
+                player.setHandCards(data.handCards);
+
+                console.log(`[TheDecreeModeClient] After update - handCards:`, player.handCards.length);
+                console.log(`[TheDecreeModeClient] Calling updatePlayerHand...`);
+
+                // 更新手牌显示
+                playerUIManager.updatePlayerHand(playerIndex);
+
+                console.log(`[TheDecreeModeClient] ✓ Hand display updated successfully`);
+            } else {
+                console.error(`[TheDecreeModeClient] ✗ Player not found in PlayerUIController for index ${playerIndex}`);
+            }
+        } else {
+            console.error(`[TheDecreeModeClient] ✗ PlayerUIController not found for index ${playerIndex}`);
+        }
+
+        console.log('[TheDecreeModeClient] =====================================');
     }
 
     private onCommunityCards(data: CommunityCardsEvent): void {
@@ -274,6 +313,53 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     // ==================== UI 辅助方法 ====================
+
+    /**
+     * 升级 PlayerUIManager 到游戏模式
+     * 将 ReadyStage 的 InfoPanel (ROOM 模式) 升级为 PlayingStage 的完整游戏 UI (GAME 模式)
+     */
+    private upgradePlayerUIToPlayingMode(): void {
+        console.log('[TheDecreeModeClient] Upgrading PlayerUIManager to Playing mode...');
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found!');
+            return;
+        }
+
+        // 从 LocalRoomStore 获取玩家信息
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            console.error('[TheDecreeModeClient] No current room found!');
+            return;
+        }
+
+        // 将 PlayerInfo 转换为 Player 对象
+        const players = currentRoom.players.map(playerInfo => new Player(playerInfo));
+
+        // 获取 poker 资源（从 Game 获取）
+        // @ts-ignore - accessing private property
+        const pokerSprites = this.game['_pokerSprites'];
+        // @ts-ignore - accessing private property
+        const pokerPrefab = this.game['_pokerPrefab'];
+
+        if (!pokerSprites || !pokerPrefab) {
+            console.error('[TheDecreeModeClient] Poker resources not loaded!');
+            return;
+        }
+
+        // 调用 upgradeToPlayingMode
+        playerUIManager.upgradeToPlayingMode(
+            players,
+            pokerSprites,
+            pokerPrefab,
+            0, // levelRank
+            false // TheDecree 不启用分组堆叠
+        );
+
+        console.log('[TheDecreeModeClient] PlayerUIManager upgraded to Playing mode');
+    }
 
     /**
      * 显示公共牌

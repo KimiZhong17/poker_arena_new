@@ -245,10 +245,17 @@ export abstract class GameModeClientBase {
             if (handNode) {
                 handNode.active = config.active;
                 if (config.active) {
-                    // 使用 fallback 坐标（如果有）或保持原位置
-                    // Widget 会在节点添加到场景后自动应用锚点
-                    if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
+                    // 检查节点是否有 Widget 组件
+                    const widget = handNode.getComponent('cc.Widget') as any;
+                    if (widget) {
+                        // 如果有 Widget，让 Widget 自己管理位置，不要手动 setPosition
+                        // 强制更新一次 Widget 对齐以确保位置正确
+                        widget.updateAlignment();
+                        console.log(`[${this.config.name}] ${config.name} has Widget, position managed by Widget`);
+                    } else if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
+                        // 只有在没有 Widget 的情况下才使用 fallback 坐标
                         handNode.setPosition(config.fallbackX, config.fallbackY, 0);
+                        console.log(`[${this.config.name}] ${config.name} no Widget, using fallback position (${config.fallbackX}, ${config.fallbackY})`);
                     }
                 }
             }

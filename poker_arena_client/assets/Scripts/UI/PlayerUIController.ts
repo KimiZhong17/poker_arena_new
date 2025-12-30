@@ -6,17 +6,17 @@ import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 const { ccclass, property } = _decorator;
 
 /**
- * PlayerUINode - 单个玩家的UI节点组件
- * 封装了一个玩家的所有UI元素和行为
+ * PlayerUIController - 单个玩家座位的UI控制器组件
+ * 封装了一个玩家座位的所有UI元素和行为
  *
  * 职责：
- * - 管理单个玩家的所有UI元素（手牌、信息面板、庄家标识）
+ * - 管理单个玩家座位的所有UI元素（手牌、信息面板等）
  * - 与 Player 数据模型绑定
  * - 提供UI更新接口
  * - 不包含游戏逻辑（逻辑在 GameMode 中）
  */
-@ccclass('PlayerUINode')
-export class PlayerUINode extends Component {
+@ccclass('PlayerUIController')
+export class PlayerUIController extends Component {
     // ===== UI节点引用（可在编辑器配置或代码创建）=====
     @property(Node)
     public handContainer: Node = null!;  // 手牌容器
@@ -32,7 +32,7 @@ export class PlayerUINode extends Component {
 
     // ===== 初始化方法 =====
     /**
-     * 初始化 PlayerUINode
+     * 初始化 PlayerUIController
      * @param player 玩家数据模型
      * @param playerIndex 玩家索引（0-4）
      * @param pokerSprites 扑克牌精灵资源
@@ -51,7 +51,7 @@ export class PlayerUINode extends Component {
         this._player = player;
         this._playerIndex = playerIndex;
 
-        console.log(`[PlayerUINode] Initializing for ${player.name} (index: ${playerIndex})`);
+        console.log(`[PlayerUIController] Initializing for ${player.name} (index: ${playerIndex})`);
 
         // 自动查找或创建子节点
         this.setupChildNodes();
@@ -62,7 +62,7 @@ export class PlayerUINode extends Component {
         // 初始化玩家信息
         this.updatePlayerInfo();
 
-        console.log(`[PlayerUINode] Initialized for ${player.name}`);
+        console.log(`[PlayerUIController] Initialized for ${player.name}`);
     }
 
     /**
@@ -82,7 +82,7 @@ export class PlayerUINode extends Component {
             // InfoPanel should already exist (created by PlayerUIManager in ready stage)
             // If not found, log warning but don't create (backward compatibility for old init path)
             if (!this.infoPanel) {
-                console.warn(`[PlayerUINode] InfoPanel not found for ${this._player?.name || 'player'}`);
+                console.warn(`[PlayerUIController] InfoPanel not found for ${this._player?.name || 'player'}`);
             }
         }
 
@@ -90,7 +90,7 @@ export class PlayerUINode extends Component {
         if (this.infoPanel) {
             this._infoPanelComponent = this.infoPanel.getComponent(PlayerInfoPanel);
             if (!this._infoPanelComponent) {
-                console.warn(`[PlayerUINode] PlayerInfoPanel component not found on InfoPanel node`);
+                console.warn(`[PlayerUIController] PlayerInfoPanel component not found on InfoPanel node`);
             }
         }
     }
@@ -104,7 +104,7 @@ export class PlayerUINode extends Component {
         container.layer = this.node.layer;
         container.setPosition(0, 0, 0);
         this.node.addChild(container);
-        console.log(`[PlayerUINode] Created HandContainer for ${this._player?.name || 'player'}`);
+        console.log(`[PlayerUIController] Created HandContainer for ${this._player?.name || 'player'}`);
         return container;
     }
 
@@ -118,7 +118,7 @@ export class PlayerUINode extends Component {
         enableGrouping: boolean = true
     ): void {
         if (!this.handContainer) {
-            console.error(`[PlayerUINode] HandContainer not found for ${this._player.name}`);
+            console.error(`[PlayerUIController] HandContainer not found for ${this._player.name}`);
             return;
         }
 
@@ -131,7 +131,7 @@ export class PlayerUINode extends Component {
         this._handDisplay.handContainer = this.handContainer;
         this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping);
 
-        console.log(`[PlayerUINode] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
+        console.log(`[PlayerUIController] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
     }
 
     // ===== 玩家信息管理 =====

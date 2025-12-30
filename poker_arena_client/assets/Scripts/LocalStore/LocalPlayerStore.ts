@@ -30,7 +30,7 @@ export interface PlayerInfo {
  * - 纯数据容器，用于 UI 绑定
  * - 数据由服务器同步，客户端只读或简单更新
  * - 不包含游戏逻辑（逻辑在服务器）
- * - 不包含 UI 逻辑（UI 在 PlayerUINode 中）
+ * - 不包含 UI 逻辑（UI 在 PlayerUIController 中）
  *
  * 架构说明：
  * - 服务器：完整的 Player 类 + 游戏逻辑
