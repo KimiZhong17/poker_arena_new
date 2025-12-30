@@ -43,7 +43,7 @@ export class RoomService {
         net.off(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.off(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.off(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
-        net.off(ServerMessageType.GAME_START, this.onGameStart);
+        net.off(ServerMessageType.ERROR, this.onError);
 
         // --- 再绑定 ---
         // 注意：这里使用 .bind(this) 确保函数内部的 this 指向 RoomService 实例
@@ -52,7 +52,7 @@ export class RoomService {
         net.on(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.on(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.on(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
-        net.on(ServerMessageType.GAME_START, this.onGameStart);
+        net.on(ServerMessageType.ERROR, this.onError);
     }
 
     // ==================== 具名处理器 (解决 off 参数匹配问题) ====================
@@ -100,9 +100,9 @@ export class RoomService {
         }
     };
 
-    private onGameStart = () => {
-        this.localRoomStore.updateRoomState(RoomState.PLAYING);
-        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
+    private onError = (data: any) => {
+        console.error('[RoomService] Error from server:', data);
+        alert(`服务器错误: ${data.message || data.code || '未知错误'}`);
     };
 
     // ==================== 基础逻辑与业务接口 ====================

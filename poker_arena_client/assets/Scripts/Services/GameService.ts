@@ -9,7 +9,8 @@ import {
     ShowdownEvent,
     RoundEndEvent,
     GameOverEvent,
-    GameStateUpdateEvent
+    GameStateUpdateEvent,
+    CommunityCardsEvent
 } from '../Network/Messages';
 import { NetworkManager } from '../Network/NetworkManager';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
@@ -49,7 +50,9 @@ export class GameService {
         const net = NetworkManager.getInstance().getClient(this.serverUrl);
 
         // --- 先解绑，防止重复 ---
+        net.off(ServerMessageType.GAME_START, this.onGameStart);
         net.off(ServerMessageType.DEAL_CARDS, this.onDealCards);
+        net.off(ServerMessageType.COMMUNITY_CARDS, this.onCommunityCards);
         net.off(ServerMessageType.DEALER_SELECTED, this.onDealerSelected);
         net.off(ServerMessageType.DEALER_CALLED, this.onDealerCalled);
         net.off(ServerMessageType.PLAYER_PLAYED, this.onPlayerPlayed);
@@ -59,7 +62,9 @@ export class GameService {
         net.off(ServerMessageType.GAME_STATE_UPDATE, this.onGameStateUpdate);
 
         // --- 再绑定 ---
+        net.on(ServerMessageType.GAME_START, this.onGameStart);
         net.on(ServerMessageType.DEAL_CARDS, this.onDealCards);
+        net.on(ServerMessageType.COMMUNITY_CARDS, this.onCommunityCards);
         net.on(ServerMessageType.DEALER_SELECTED, this.onDealerSelected);
         net.on(ServerMessageType.DEALER_CALLED, this.onDealerCalled);
         net.on(ServerMessageType.PLAYER_PLAYED, this.onPlayerPlayed);
@@ -72,12 +77,31 @@ export class GameService {
     // ==================== 网络事件处理器 ====================
 
     /**
+     * 游戏开始事件
+     */
+    private onGameStart = (data: any) => {
+        console.log('[GameService] Game started! Switching to Playing stage...', data);
+
+        // 触发阶段切换到 Playing
+        EventCenter.emit('SWITCH_TO_PLAYING_STAGE');
+    };
+
+    /**
      * 发牌事件
      */
     private onDealCards = (data: DealCardsEvent) => {
         console.log('[GameService] Deal cards:', data);
         // TODO: 存储到 LocalGameStore
         EventCenter.emit(GameEvents.GAME_DEAL_CARDS, data);
+    };
+
+    /**
+     * 公共牌事件
+     */
+    private onCommunityCards = (data: CommunityCardsEvent) => {
+        console.log('[GameService] Community cards:', data);
+        // TODO: 存储到 LocalGameStore
+        EventCenter.emit(GameEvents.GAME_COMMUNITY_CARDS, data);
     };
 
     /**

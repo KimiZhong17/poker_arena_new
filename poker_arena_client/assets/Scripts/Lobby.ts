@@ -47,6 +47,8 @@ export class Lobby extends Component {
     private networkClient: NetworkClient | null = null;
     private currentGameMode: string = '';
 
+    private maxPlayers = 2;
+
     start() {
         this.authService = AuthService.getInstance();
         this.roomService = RoomService.getInstance();
@@ -212,7 +214,7 @@ export class Lobby extends Component {
 
         // 通过 RoomService 创建房间
         console.log('[Lobby] Creating room via RoomService...');
-        this.roomService.createRoom(this.currentGameMode, 4);
+        this.roomService.createRoom(this.currentGameMode, this.maxPlayers); // 2/3/4 players
     }
 
     /**
@@ -335,7 +337,7 @@ export class Lobby extends Component {
                 isHost: true,
                 seatIndex: 0
             }],
-            maxPlayers: 4,
+            maxPlayers: this.maxPlayers, // 改为2人，方便测试
             isPrivate: false,
             createdAt: Date.now()
         };
@@ -370,7 +372,7 @@ export class Lobby extends Component {
             state: RoomState.WAITING,
             hostId: data.players.find(p => p.isHost)?.id || data.players[0]?.id || '',
             players: data.players,
-            maxPlayers: 4,
+            maxPlayers: this.maxPlayers, // 改为2人，方便测试
             isPrivate: false,
             createdAt: Date.now()
         };

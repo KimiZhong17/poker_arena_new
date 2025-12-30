@@ -14,6 +14,8 @@ import { EndStage } from './Core/Stage/EndStage';
 import { PlayerLayoutConfig } from './UI/PlayerLayoutConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { NetworkManager } from './Network/NetworkManager';
+import { EventCenter } from './Utils/EventCenter';
+import { GameService } from './Services/GameService';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -152,7 +154,10 @@ export class Game extends Component {
         // 5. Create and setup Stage Manager
         this.createStageManager();
 
-        // 6. Enter Ready Stage
+        // 6. Setup event listeners for stage switching
+        this.setupStageEventListeners();
+
+        // 7. Enter Ready Stage
         console.log("[Game] All systems initialized, entering Ready stage");
         this.stageManager.switchToStage(GameStage.READY);
     }
@@ -196,6 +201,10 @@ export class Game extends Component {
         } else {
             console.log("[Game] Network client not connected, will connect in Ready stage");
         }
+
+        // 初始化 GameService（单例模式，会自动注册网络监听器）
+        GameService.getInstance();
+        console.log("[Game] GameService initialized");
     }
 
     /**
@@ -219,6 +228,23 @@ export class Game extends Component {
         this.stageManager.registerStage(GameStage.END, endStage);
 
         console.log("[Game] Stage Manager created with 3 stages");
+    }
+
+    /**
+     * Setup event listeners for stage switching
+     */
+    private setupStageEventListeners(): void {
+        console.log("[Game] Setting up stage event listeners...");
+
+        // Listen for game start event to switch to Playing stage
+        EventCenter.on('SWITCH_TO_PLAYING_STAGE', () => {
+            console.log("[Game] Received SWITCH_TO_PLAYING_STAGE event, switching stage...");
+            if (this.stageManager) {
+                this.stageManager.switchToStage(GameStage.PLAYING);
+            }
+        }, this);
+
+        console.log("[Game] Stage event listeners setup complete");
     }
 
     /**

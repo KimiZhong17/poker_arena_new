@@ -75,6 +75,11 @@ export class GameServer {
                 this.handleReady(socket);
             });
 
+            // 开始游戏
+            socket.on(ClientMessageType.START_GAME, () => {
+                this.handleStartGame(socket);
+            });
+
             // 庄家叫牌
             socket.on(ClientMessageType.DEALER_CALL, (data: DealerCallRequest) => {
                 this.handleDealerCall(socket, data);
@@ -211,6 +216,8 @@ export class GameServer {
             const response: RoomJoinedEvent = {
                 roomId: room.id,
                 playerId: player.id,
+                myPlayerIdInRoom: player.id,
+                hostId: room.getHostId(),
                 players: room.getPlayersInfo()
             };
 
@@ -288,11 +295,38 @@ export class GameServer {
         room.broadcast(ServerMessageType.PLAYER_READY, event);
 
         console.log(`[GameServer] Player ${player.name} ready: ${isReady}`);
+    }
 
-        // 如果所有玩家都准备好，开始游戏
-        if (room.isAllPlayersReady()) {
-            this.startGame(room);
+    /**
+     * 处理开始游戏请求（房主触发）
+     */
+    private handleStartGame(socket: Socket): void {
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a room');
+            return;
         }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        // 检查是否是房主
+        if (!player.isHost) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Only host can start the game');
+            return;
+        }
+
+        // 检查是否所有玩家都准备好
+        if (!room.isAllPlayersReady()) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Not all players are ready');
+            return;
+        }
+
+        // 开始游戏
+        this.startGame(room);
     }
 
     // ==================== 游戏逻辑 ====================

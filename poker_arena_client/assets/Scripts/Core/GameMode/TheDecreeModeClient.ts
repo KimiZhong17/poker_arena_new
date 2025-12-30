@@ -1,7 +1,7 @@
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
 import { PlayerInfo } from "../../LocalStore/LocalPlayerStore";
-import { Node } from "cc";
+import { Node, instantiate } from "cc";
 import {
     DealCardsEvent,
     CommunityCardsEvent,
@@ -13,6 +13,8 @@ import {
     GameOverEvent
 } from '../../Network/Messages';
 import { LocalUserStore } from '../../LocalStore/LocalUserStore';
+import { PokerFactory } from '../../UI/PokerFactory';
+import { Poker } from '../../UI/Poker';
 
 /**
  * The Decree game mode - Network/Client version
@@ -273,11 +275,72 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     // ==================== UI 辅助方法 ====================
 
+    /**
+     * 显示公共牌
+     */
     private displayCommunityCards(): void {
         console.log('[TheDecreeModeClient] Displaying community cards:', this.communityCards);
 
-        // TODO: 使用 PokerFactory 创建并显示公共牌
-        // 参考 TheDecreeMode.displayCommunityCards()
+        if (!this.communityCardsNode) {
+            console.warn('[TheDecreeModeClient] CommunityCardsNode not found, cannot display cards');
+            return;
+        }
+
+        if (this.communityCards.length === 0) {
+            console.warn('[TheDecreeModeClient] No community cards to display');
+            return;
+        }
+
+        // 清空之前的公共牌
+        this.communityCardsNode.removeAllChildren();
+
+        // 获取 PokerFactory 实例
+        const pokerFactory = PokerFactory.instance;
+        if (!pokerFactory) {
+            console.error('[TheDecreeModeClient] PokerFactory instance not found!');
+            return;
+        }
+
+        // 获取扑克牌资源
+        const pokerSprites = pokerFactory['_pokerSprites'];
+        const pokerPrefab = pokerFactory['_pokerPrefab'];
+        const pokerBack = pokerSprites.get("CardBack3");
+
+        if (!pokerPrefab) {
+            console.error('[TheDecreeModeClient] Poker prefab not found!');
+            return;
+        }
+
+        // 创建4张公共牌
+        const cardSpacing = 120; // 牌之间的间距
+        const startX = -(cardSpacing * (this.communityCards.length - 1)) / 2; // 居中显示
+
+        this.communityCards.forEach((card, index) => {
+            // 创建扑克牌节点
+            const pokerNode = instantiate(pokerPrefab);
+            const pokerCtrl = pokerNode.addComponent(Poker);
+
+            // 获取牌面图片
+            const spriteName = PokerFactory.getCardSpriteName(card);
+            const pokerFront = pokerSprites.get(spriteName);
+
+            if (pokerFront && pokerBack) {
+                pokerCtrl.init(card, pokerBack, pokerFront);
+                pokerCtrl.showFront(); // 公共牌始终显示正面
+            } else {
+                console.warn(`[TheDecreeModeClient] Sprite not found: ${spriteName}`);
+            }
+
+            // 设置位置
+            pokerNode.setPosition(startX + index * cardSpacing, 0, 0);
+
+            // 添加到公共牌节点
+            this.communityCardsNode.addChild(pokerNode);
+
+            console.log(`[TheDecreeModeClient] Created community card ${index + 1}/${this.communityCards.length}: ${spriteName}`);
+        });
+
+        console.log(`[TheDecreeModeClient] Displayed ${this.communityCards.length} community cards`);
     }
 
     // ==================== 游戏逻辑接口（空实现，逻辑在服务器）====================

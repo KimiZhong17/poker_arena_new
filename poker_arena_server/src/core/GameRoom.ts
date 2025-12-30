@@ -64,6 +64,7 @@ export class GameRoom {
         if (this.players.size === 0) {
             this.hostId = player.id;
             player.isHost = true;
+            player.isReady = true;
         }
 
         this.players.set(player.id, player);
@@ -187,6 +188,13 @@ export class GameRoom {
      */
     public getPlayersInfo() {
         return Array.from(this.players.values()).map(p => p.getInfo());
+    }
+
+    /**
+     * 获取房主ID
+     */
+    public getHostId(): string {
+        return this.hostId;
     }
 
     /**

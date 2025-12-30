@@ -23,6 +23,10 @@ export class NetworkClient extends Component {
     // 内部事件中心，用于解耦 NetworkClient 和业务 Service
     private handlers: Map<string, MessageHandler[]> = new Map();
 
+    // 心跳定时器
+    private heartbeatTimer: number | null = null;
+    private readonly HEARTBEAT_INTERVAL = 30000; // 30秒发送一次心跳
+
     constructor(serverUrl: string = 'http://localhost:3000') {
         super();
         this.serverUrl = serverUrl;
@@ -50,6 +54,10 @@ export class NetworkClient extends Component {
             this.socket.on('connect', () => {
                 this.isConnected = true;
                 console.log('[Net] Connected');
+
+                // 启动心跳
+                this.startHeartbeat();
+
                 resolve();
             });
 
@@ -58,6 +66,9 @@ export class NetworkClient extends Component {
             this.socket.on('disconnect', () => {
                 this.isConnected = false;
                 console.log('[Net] Disconnected');
+
+                // 停止心跳
+                this.stopHeartbeat();
             });
 
             // --- 核心重构：自动注册所有服务端消息监听 ---
@@ -124,6 +135,7 @@ export class NetworkClient extends Component {
 
     public disconnect(): void {
         if (this.socket) {
+            this.stopHeartbeat();
             this.socket.disconnect();
             this.socket = null;
         }
@@ -131,5 +143,44 @@ export class NetworkClient extends Component {
 
     public getIsConnected(): boolean {
         return this.isConnected;
+    }
+
+    /**
+     * 启动心跳
+     */
+    private startHeartbeat(): void {
+        // 先清理已存在的定时器
+        this.stopHeartbeat();
+
+        console.log('[Net] Starting heartbeat');
+
+        // 立即发送一次心跳
+        this.sendHeartbeat();
+
+        // 设置定时发送心跳
+        this.heartbeatTimer = window.setInterval(() => {
+            this.sendHeartbeat();
+        }, this.HEARTBEAT_INTERVAL);
+    }
+
+    /**
+     * 停止心跳
+     */
+    private stopHeartbeat(): void {
+        if (this.heartbeatTimer !== null) {
+            console.log('[Net] Stopping heartbeat');
+            window.clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+    }
+
+    /**
+     * 发送心跳
+     */
+    private sendHeartbeat(): void {
+        if (this.isConnected && this.socket) {
+            this.socket.emit(ClientMessageType.PING);
+            console.log('[Net] Heartbeat sent');
+        }
     }
 }
