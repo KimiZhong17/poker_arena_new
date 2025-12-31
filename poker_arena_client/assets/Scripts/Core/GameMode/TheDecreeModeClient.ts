@@ -179,6 +179,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
      * 设置网络事件（使用基类的批量注册方法）
      */
     protected setupNetworkEvents(): void {
+        console.log('[TheDecreeModeClient] ========== Setting up network events ==========');
+        console.log('[TheDecreeModeClient] Registering event handlers...');
+
         this.registerNetworkEvents({
             'deal_cards': this.onDealCards,
             'community_cards': this.onCommunityCards,
@@ -189,15 +192,20 @@ export class TheDecreeModeClient extends GameModeClientBase {
             'round_end': this.onRoundEnd,
             'game_over': this.onGameOver
         });
+
+        console.log('[TheDecreeModeClient] ✓ All network events registered');
+        console.log('[TheDecreeModeClient] ========================================');
     }
 
     // ==================== 事件处理器 ====================
 
     private onDealCards(data: DealCardsEvent): void {
         console.log('[TheDecreeModeClient] ========== Deal Cards Event ==========');
+        console.log('[TheDecreeModeClient] 📩 Received deal_cards event from server');
         console.log('[TheDecreeModeClient] Player ID:', data.playerId);
         console.log('[TheDecreeModeClient] Cards:', data.handCards);
         console.log('[TheDecreeModeClient] Card count:', data.handCards.length);
+        console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
 
         // 服务器发送的是当前玩家的手牌
         // 更新 Player 数据和 PlayerUIManager 显示
@@ -244,11 +252,63 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     private onCommunityCards(data: CommunityCardsEvent): void {
-        console.log('[TheDecreeModeClient] Community cards received:', data);
+        console.log('[TheDecreeModeClient] ========== Community Cards Event ==========');
+        console.log('[TheDecreeModeClient] 📩 Received community_cards event from server');
+        console.log('[TheDecreeModeClient] Cards:', data.cards);
+        console.log('[TheDecreeModeClient] Card count:', data.cards.length);
+        console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
+
         this.communityCards = data.cards;
 
         // 显示公共牌
+        console.log('[TheDecreeModeClient] Calling displayCommunityCards()...');
         this.displayCommunityCards();
+        console.log('[TheDecreeModeClient] ✓ Community cards displayed');
+
+        // 初始化所有玩家的手牌（如果还没有初始化的话）
+        this.initializeAllPlayersHands();
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    /**
+     * 初始化所有玩家的手牌（给没有手牌数据的玩家设置默认数量）
+     * 用于显示其他玩家的手牌背面
+     */
+    private initializeAllPlayersHands(): void {
+        console.log('[TheDecreeModeClient] Initializing all players hands...');
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found!');
+            return;
+        }
+
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            console.error('[TheDecreeModeClient] No current room found!');
+            return;
+        }
+
+        // 给每个玩家设置初始手牌（如果还没有的话）
+        for (let i = 0; i < currentRoom.players.length; i++) {
+            const playerInfo = currentRoom.players[i];
+            const playerUIController = playerUIManager.getPlayerUINode(i);
+
+            if (playerUIController) {
+                const player = playerUIController.getPlayer();
+                if (player && player.handCards.length === 0) {
+                    // 这个玩家还没有手牌数据，给他设置默认的5张空牌（用于显示背面）
+                    console.log(`[TheDecreeModeClient] Initializing ${this.config.initialHandSize} cards for player ${i} (${playerInfo.name})`);
+                    const emptyCards = Array(this.config.initialHandSize).fill(-1); // -1 表示未知的牌（显示背面）
+                    player.setHandCards(emptyCards);
+                    playerUIManager.updatePlayerHand(i);
+                }
+            }
+        }
+
+        console.log('[TheDecreeModeClient] ✓ All players hands initialized');
     }
 
     private onDealerSelected(data: DealerSelectedEvent): void {
@@ -335,8 +395,53 @@ export class TheDecreeModeClient extends GameModeClientBase {
             return;
         }
 
-        // 将 PlayerInfo 转换为 Player 对象
-        const players = currentRoom.players.map(playerInfo => new Player(playerInfo));
+        // 设置玩家 ID 映射（关键！）
+        console.log('[TheDecreeModeClient] Setting up player ID mapping...');
+        console.log('[TheDecreeModeClient] Room players:', currentRoom.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            seatIndex: p.seatIndex
+        })));
+
+        // 获取当前玩家的 ID 和 seatIndex
+        const myPlayerId = localRoomStore.getMyPlayerId();
+        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
+        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
+
+        console.log('[TheDecreeModeClient] My player ID:', myPlayerId);
+        console.log('[TheDecreeModeClient] My seat index:', mySeatIndex);
+
+        // 重新映射玩家位置：让当前玩家总是显示在 index 0（底部）
+        // 其他玩家按顺序显示在其他位置
+        const remappedPlayers = [];
+        for (let i = 0; i < currentRoom.players.length; i++) {
+            const actualSeatIndex = (mySeatIndex + i) % currentRoom.players.length;
+            const playerInfo = currentRoom.players.find(p => p.seatIndex === actualSeatIndex);
+            if (playerInfo) {
+                remappedPlayers.push({
+                    ...playerInfo,
+                    displayIndex: i // 新的显示位置
+                });
+            }
+        }
+
+        console.log('[TheDecreeModeClient] Remapped players:', remappedPlayers.map(p => ({
+            id: p.id,
+            name: p.name,
+            seatIndex: p.seatIndex,
+            displayIndex: p.displayIndex
+        })));
+
+        // 设置映射：playerId -> displayIndex
+        this.playerIdToIndexMap.clear();
+        for (const player of remappedPlayers) {
+            this.playerIdToIndexMap.set(player.id, player.displayIndex);
+        }
+
+        console.log('[TheDecreeModeClient] Player ID mapping:', Array.from(this.playerIdToIndexMap.entries()));
+
+        // 将 PlayerInfo 转换为 Player 对象（使用重新映射后的顺序）
+        const players = remappedPlayers.map(playerInfo => new Player(playerInfo));
 
         // 获取 poker 资源（从 Game 获取）
         // @ts-ignore - accessing private property

@@ -104,7 +104,13 @@ export class TheDecreeMode extends GameModeBase {
     public startGame(): void {
         console.log('[TheDecree] Starting game');
         this.isActive = true;
-        this.dealCards();
+
+        // 延迟发牌，给客户端时间注册事件监听器
+        // 避免客户端还在 ReadyStage -> PlayingStage 切换过程中错过事件
+        setTimeout(() => {
+            console.log('[TheDecree] Delayed dealing cards...');
+            this.dealCards();
+        }, 500); // 500ms 延迟
     }
 
     public dealCards(): void {
@@ -133,6 +139,8 @@ export class TheDecreeMode extends GameModeBase {
             }
         }
 
+        console.log('[TheDecree] Cards dealt to players and community');
+
         this.state = GameState.FIRST_DEALER_SELECTION;
 
         // Notify game started with community cards
@@ -160,6 +168,7 @@ export class TheDecreeMode extends GameModeBase {
      * Auto-select first dealer by comparing first card from each player
      */
     private selectFirstDealerAuto(): void {
+        console.log('[TheDecree] Selecting first dealer automatically');
         const revealedCards = new Map<string, number>();
         const playerOrder = this.playerManager.getPlayerOrder();
 

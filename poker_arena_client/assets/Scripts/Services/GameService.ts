@@ -90,7 +90,11 @@ export class GameService {
      * 发牌事件
      */
     private onDealCards = (data: DealCardsEvent) => {
+        console.log('[GameService] ========== DEAL_CARDS EVENT ==========');
         console.log('[GameService] Deal cards:', data);
+        console.log('[GameService] Player ID:', data.playerId);
+        console.log('[GameService] Cards:', data.handCards);
+        console.log('[GameService] ===========================================');
         // TODO: 存储到 LocalGameStore
         EventCenter.emit(GameEvents.GAME_DEAL_CARDS, data);
     };

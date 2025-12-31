@@ -481,6 +481,12 @@ export class PlayerUIManager extends Component {
 
         const node = this._playerUINodes[dealerIndex];
         if (node) {
+            // 根据玩家位置设置不同的 offset
+            // 这样 dealer indicator 会显示在合适的位置
+            const offsetConfig = this.getDealerIndicatorOffset(dealerIndex);
+            this.dealerIndicator.setOffset(offsetConfig.x, offsetConfig.y);
+            console.log(`[PlayerUIManager] Set dealer indicator offset for player ${dealerIndex}: (${offsetConfig.x}, ${offsetConfig.y})`);
+
             // 获取 PlayerUIController 的世界坐标
             const worldPos = node.getWorldPosition();
             console.log(`[PlayerUIManager] Player ${dealerIndex} node world position: (${worldPos.x}, ${worldPos.y})`);
@@ -488,6 +494,59 @@ export class PlayerUIManager extends Component {
             console.log(`[PlayerUIManager] DealerIndicator moved to player ${dealerIndex}`);
         } else {
             console.warn(`[PlayerUIManager] Player ${dealerIndex} not found for dealer indicator`);
+        }
+    }
+
+    /**
+     * 获取 dealer indicator 的偏移量配置
+     * 根据玩家索引返回不同的偏移值，使 indicator 显示在合适的位置
+     * @param playerIndex 玩家索引（相对位置）
+     */
+    private getDealerIndicatorOffset(playerIndex: number): { x: number, y: number } {
+        // 获取玩家数量
+        const playerCount = this._playerUINodes.length;
+
+        // 根据玩家索引和总人数返回不同的 offset
+        // 假设：
+        // - index 0 (底部，当前玩家): indicator 在右侧
+        // - index 1 (顶部，对手): indicator 在左侧
+        // - index 2 (左侧): indicator 在右侧
+        // - index 3 (右侧): indicator 在左侧
+
+        switch (playerCount) {
+            case 2:
+                // 2人游戏：底部 vs 顶部
+                if (playerIndex === 0) {
+                    return { x: -300, y: 50 };   // 底部玩家：右侧
+                } else {
+                    return { x: -200, y: -50 };  // 顶部玩家：左侧
+                }
+
+            case 3:
+                // 3人游戏：底部、左上、右上
+                if (playerIndex === 0) {
+                    return { x: -300, y: 50 };    // 底部：右侧
+                } else if (playerIndex === 1) {
+                    return { x: 80, y: -100 }; // 左上：左侧
+                } else {
+                    return { x: -80, y: -100 };  // 右上：右侧
+                }
+
+            case 4:
+                // 4人游戏：底部、左侧、顶部、右侧
+                if (playerIndex === 0) {
+                    return { x: -300, y: 50 };     // 底部：右侧
+                } else if (playerIndex === 1) {
+                    return { x: 80, y: -100 };     // 左侧：右侧
+                } else if (playerIndex === 2) {
+                    return { x: -200, y: -50 };  // 顶部：左侧
+                } else {
+                    return { x: -80, y: -100 };    // 右侧：左侧
+                }
+
+            default:
+                // 默认配置
+                return { x: -150, y: 50 };
         }
     }
 

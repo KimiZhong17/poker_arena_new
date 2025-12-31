@@ -429,6 +429,7 @@ export class PlayerHandDisplay extends Component {
 
         if (showFront) {
             // Get sprite name for this card
+            // console.log(`Creating card node for value: ${cardValue.toString(16)}`);
             const spriteName = PokerFactory.getCardSpriteName(cardValue);
             const pokerFront = this._pokerSprites.get(spriteName);
 

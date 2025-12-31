@@ -264,19 +264,29 @@ export class GameRoom {
         const callbacks: TheDecreeEventCallbacks = {
             onGameStarted: (communityCards) => {
                 console.log(`[Room ${this.id}] Game started, community cards dealt`);
+                console.log(`[Room ${this.id}] 📤 Broadcasting COMMUNITY_CARDS event to all players`);
+                console.log(`[Room ${this.id}] Community cards:`, communityCards);
 
                 // Broadcast community cards to all players
                 this.broadcast(ServerMessageType.COMMUNITY_CARDS, {
                     cards: communityCards
                 });
+
+                console.log(`[Room ${this.id}] ✓ COMMUNITY_CARDS event sent`);
             },
 
             onPlayerDealt: (playerId, cards) => {
+                console.log(`[Room ${this.id}] 📤 Sending DEAL_CARDS event to player: ${playerId}`);
+                console.log(`[Room ${this.id}] Cards count:`, cards.length);
+                console.log(`[Room ${this.id}] Cards:`, cards);
+
                 // Send private hand cards to each player
                 this.sendToPlayer(playerId, ServerMessageType.DEAL_CARDS, {
                     playerId,
                     handCards: cards
                 });
+
+                console.log(`[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
             },
 
             onFirstDealerSelected: (dealerId, revealedCards) => {
