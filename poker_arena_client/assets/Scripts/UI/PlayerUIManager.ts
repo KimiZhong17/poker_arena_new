@@ -598,6 +598,17 @@ export class PlayerUIManager extends Component {
         }
     }
 
+    /**
+     * Lock unselected cards for a player (dim them and disable interaction)
+     * Call this after player has played their cards
+     */
+    public lockUnselectedCards(playerIndex: number): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.lockUnselectedCards();
+        }
+    }
+
     // ===== 访问器接口 =====
     /**
      * 获取 PlayerUIController

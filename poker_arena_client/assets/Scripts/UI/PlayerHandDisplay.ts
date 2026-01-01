@@ -333,13 +333,13 @@ export class PlayerHandDisplay extends Component {
     private getHandPileBaseOffset(): { x: number; y: number } {
         // Define base offsets for hand pile based on player index
         // 0: Bottom (player) - centered
-        // 1: Left - centered
-        // 2: Top - slightly left (to create symmetry with played cards on right)
+        // 1: Top (2-player) or Left (3-4 player) - for top player, shift left to create symmetry
+        // 2: Top (3-4 player) - shift left to create symmetry with played cards on right
         // 3: Right - centered
         const offsets = [
             { x: 0, y: 0 },       // Player 0 (Bottom): centered
-            { x: 0, y: 0 },       // Player 1 (Left): centered
-            { x: -100, y: 0 },    // Player 2 (Top): left (symmetry with played cards)
+            { x: -100, y: 0 },    // Player 1 (Top in 2p, Left in 3-4p): left (symmetry with played cards)
+            { x: -100, y: 0 },    // Player 2 (Top in 3-4p): left (symmetry with played cards)
             { x: 0, y: 0 }        // Player 3 (Right): centered
         ];
 
@@ -586,5 +586,35 @@ export class PlayerHandDisplay extends Component {
      */
     public get cardCount(): number {
         return this._player.handCards.length;
+    }
+
+    /**
+     * Lock unselected cards (dim them and disable interaction)
+     * Call this after player has played their cards
+     */
+    public lockUnselectedCards(): void {
+        console.log(`[PlayerHandDisplay] Locking unselected cards for ${this._player.name}`);
+        console.log(`[PlayerHandDisplay] Selected indices: [${Array.from(this._selectedIndices).join(', ')}]`);
+
+        // Disable all card interactions first
+        this._isInteractive = false;
+
+        // Dim unselected cards and disable their click handlers
+        this._pokerComponents.forEach((poker, index) => {
+            // Disable click on all cards
+            poker.disableClick();
+
+            // If card is NOT selected, dim it
+            if (!this._selectedIndices.has(index)) {
+                poker.setOpacity(100); // 100/255 = ~39% opacity (dimmed)
+                console.log(`[PlayerHandDisplay] Dimmed card at index ${index}`);
+            } else {
+                // Keep selected cards at full opacity
+                poker.setOpacity(255);
+                console.log(`[PlayerHandDisplay] Kept card at index ${index} at full opacity`);
+            }
+        });
+
+        console.log(`[PlayerHandDisplay] Locked ${this._pokerComponents.length} cards`);
     }
 }

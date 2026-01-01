@@ -609,16 +609,44 @@ export class Game extends Component {
      * @returns Success status
      */
     public dealerCall(cardsToPlay: 1 | 2 | 3): boolean {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return false;
+        console.log('[Game] dealerCall called, cardsToPlay:', cardsToPlay);
+
+        // Try to get game mode from PlayingStage
+        const playingStage = this.stageManager?.getCurrentStage();
+        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+
+        console.log('[Game] playingStage:', !!playingStage);
+        console.log('[Game] theDecreeMode:', !!theDecreeMode);
+
+        if (!theDecreeMode) {
+            console.error('[Game] TheDecreeMode not found! Trying legacy _theDecreeMode...');
+
+            // Fallback to legacy _theDecreeMode
+            if (!this._theDecreeMode) {
+                console.error('[Game] Game mode not initialized (neither new nor legacy)');
+                return false;
+            }
+
+            const success = this._theDecreeMode.dealerCall(cardsToPlay);
+            console.log('[Game] Legacy dealerCall result:', success);
+
+            if (success) {
+                console.log(`[Game] ✓ Dealer called: ${cardsToPlay} cards to play`);
+            } else {
+                console.error('[Game] ✗ Failed to call. Wrong game state.');
+            }
+
+            return success;
         }
 
-        const success = this._theDecreeMode.dealerCall(cardsToPlay);
+        console.log('[Game] Calling dealerCall on TheDecreeMode...');
+        const success = theDecreeMode.dealerCall(cardsToPlay);
+        console.log('[Game] dealerCall result:', success);
+
         if (success) {
-            console.log(`[The Decree] Dealer called: ${cardsToPlay} cards to play`);
+            console.log(`[Game] ✓ Dealer called: ${cardsToPlay} cards to play`);
         } else {
-            console.error('[The Decree] Failed to call. Wrong game state.');
+            console.error('[Game] ✗ Failed to call. Wrong game state.');
         }
 
         return success;

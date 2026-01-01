@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3 } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3, UIOpacity } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -125,6 +125,26 @@ export class Poker extends Component {
      */
     public isInteractive(): boolean {
         return this._isInteractive;
+    }
+
+    /**
+     * Set card opacity (for dimming unselected cards)
+     * @param opacity Opacity value (0-255)
+     */
+    public setOpacity(opacity: number): void {
+        let uiOpacity = this.node.getComponent(UIOpacity);
+        if (!uiOpacity) {
+            uiOpacity = this.node.addComponent(UIOpacity);
+        }
+        uiOpacity.opacity = opacity;
+    }
+
+    /**
+     * Get current opacity
+     */
+    public getOpacity(): number {
+        const uiOpacity = this.node.getComponent(UIOpacity);
+        return uiOpacity ? uiOpacity.opacity : 255;
     }
 }
 

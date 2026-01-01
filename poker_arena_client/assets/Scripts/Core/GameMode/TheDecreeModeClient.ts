@@ -16,6 +16,7 @@ import {
 import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { PokerFactory } from '../../UI/PokerFactory';
 import { Poker } from '../../UI/Poker';
+import { TheDecreeUIController } from '../../UI/TheDecreeUIController';
 
 /**
  * The Decree game mode - Network/Client version
@@ -40,6 +41,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     // UI 节点（游戏模式特定）
     private theDecreeContainerNode: Node | null = null;
     private communityCardsNode: Node | null = null;
+    private theDecreeUIController: TheDecreeUIController | null = null;
 
     constructor(game: Game, config?: GameModeConfig) {
         const defaultConfig: GameModeConfig = {
@@ -108,6 +110,14 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.theDecreeContainerNode = this.findNodeByName(this.game.node, 'TheDecree');
         if (this.theDecreeContainerNode) {
             console.log('[TheDecreeModeClient] Found TheDecree container node');
+
+            // 查找 TheDecreeUIController 组件
+            this.theDecreeUIController = this.theDecreeContainerNode.getComponent(TheDecreeUIController);
+            if (this.theDecreeUIController) {
+                console.log('[TheDecreeModeClient] Found TheDecreeUIController');
+            } else {
+                console.warn('[TheDecreeModeClient] TheDecreeUIController component not found');
+            }
         } else {
             console.warn('[TheDecreeModeClient] TheDecree container node not found');
         }
@@ -241,6 +251,19 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 playerUIManager.updatePlayerHand(playerIndex);
 
                 console.log(`[TheDecreeModeClient] ✓ Hand display updated successfully`);
+
+                // 如果是主玩家（index 0），启用卡牌选择功能（允许预选）
+                if (playerIndex === 0) {
+                    console.log('[TheDecreeModeClient] Enabling card selection for player 0 (pre-selection allowed)...');
+                    playerUIManager.enableCardSelection(0, (selectedIndices: number[]) => {
+                        console.log(`[TheDecreeModeClient] Selected cards changed: [${selectedIndices.join(', ')}]`);
+                        // 通知 UI 更新出牌按钮状态
+                        if (this.theDecreeUIController) {
+                            this.theDecreeUIController.updateUIState();
+                        }
+                    });
+                    console.log('[TheDecreeModeClient] ✓ Card selection enabled (pre-selection mode)');
+                }
             } else {
                 console.error(`[TheDecreeModeClient] ✗ Player not found in PlayerUIController for index ${playerIndex}`);
             }
@@ -312,7 +335,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     private onDealerSelected(data: DealerSelectedEvent): void {
+        console.log('[TheDecreeModeClient] ========== Dealer Selected Event ==========');
         console.log('[TheDecreeModeClient] Dealer selected:', data);
+        console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
+        console.log('[TheDecreeModeClient] Round number:', data.roundNumber);
+
         this.dealerId = data.dealerId;
         this.currentRoundNumber = data.roundNumber;
 
@@ -322,21 +349,63 @@ export class TheDecreeModeClient extends GameModeClientBase {
             this.game.playerUIManager.showDealer(dealerIndex);
             console.log(`[TheDecreeModeClient] Round ${this.currentRoundNumber}, dealer: ${this.dealerId} (index: ${dealerIndex})`);
         }
-    }
 
-    private onDealerCalled(data: DealerCalledEvent): void {
-        console.log('[TheDecreeModeClient] Dealer called:', data);
-        this.cardsToPlay = data.cardsToPlay;
-
-        // 如果当前玩家是庄家，隐藏叫牌按钮
-        // 如果当前玩家不是庄家，启用选牌功能
+        // 如果本地玩家是庄家，显示叫牌按钮
         const localRoomStore = LocalRoomStore.getInstance();
         const currentPlayerId = localRoomStore.getMyPlayerId();
 
-        if (currentPlayerId && currentPlayerId !== data.dealerId) {
-            // 启用选牌 UI
-            console.log(`[TheDecreeModeClient] Waiting for player to select ${this.cardsToPlay} cards`);
+        console.log('[TheDecreeModeClient] Current player ID:', currentPlayerId);
+        console.log('[TheDecreeModeClient] Is current player dealer?', currentPlayerId === data.dealerId);
+
+        if (currentPlayerId === data.dealerId) {
+            console.log('[TheDecreeModeClient] Current player is dealer, showing call buttons...');
+            if (this.theDecreeUIController) {
+                this.theDecreeUIController.updateCallButtonsVisibility();
+                console.log('[TheDecreeModeClient] ✓ Call buttons visibility updated');
+            } else {
+                console.error('[TheDecreeModeClient] ✗ TheDecreeUIController not found, cannot show call buttons');
+            }
+        } else {
+            console.log('[TheDecreeModeClient] Current player is NOT dealer, hiding call buttons');
         }
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    private onDealerCalled(data: DealerCalledEvent): void {
+        console.log('[TheDecreeModeClient] ========== Dealer Called Event ==========');
+        console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
+        console.log('[TheDecreeModeClient] Cards to play:', data.cardsToPlay);
+
+        this.cardsToPlay = data.cardsToPlay;
+
+        // 获取当前玩家ID
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
+        console.log('[TheDecreeModeClient] Current player ID:', currentPlayerId);
+
+        const isDealer = currentPlayerId === data.dealerId;
+        console.log('[TheDecreeModeClient] Is current player the dealer?', isDealer);
+
+        // 卡牌选择功能已经在 onDealCards 时启用了
+        // 这里只需要更新 UI 状态（启用出牌按钮等）
+        console.log(`[TheDecreeModeClient] Dealer called ${data.cardsToPlay} cards, updating UI state...`);
+
+        if (this.theDecreeUIController) {
+            // 如果是非dealer玩家，隐藏call按钮（因为dealer已经叫牌了）
+            if (!isDealer) {
+                console.log('[TheDecreeModeClient] Non-dealer: hiding call buttons');
+                this.theDecreeUIController.updateCallButtonsVisibility();
+            }
+
+            // 更新 UI 状态（这会根据选牌数量启用/禁用出牌按钮）
+            this.theDecreeUIController.updateUIState();
+            console.log('[TheDecreeModeClient] ✓ UI state updated');
+        } else {
+            console.warn('[TheDecreeModeClient] TheDecreeUIController not found');
+        }
+
+        console.log('[TheDecreeModeClient] =====================================');
     }
 
     private onPlayerPlayed(data: PlayerPlayedEvent): void {
@@ -347,21 +416,105 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     private onShowdown(data: ShowdownEvent): void {
-        console.log('[TheDecreeModeClient] Showdown:', data);
+        console.log('[TheDecreeModeClient] ========== Showdown Event ==========');
+        console.log('[TheDecreeModeClient] Showdown results:', data);
 
         // 显示所有玩家的牌型和结果
         for (const result of data.results) {
-            console.log(`Player ${result.playerId}: ${result.handTypeName} (${result.score} points)${result.isWinner ? ' WINNER!' : ''}`);
+            console.log(`[TheDecreeModeClient] Player ${result.playerId}: ${result.handTypeName} (${result.score} points)${result.isWinner ? ' WINNER!' : ''}`);
+            console.log(`[TheDecreeModeClient]   Cards:`, result.cards);
+            console.log(`[TheDecreeModeClient]   Hand Type:`, result.handType, '-', result.handTypeName);
         }
 
-        // TODO: 更新 UI 显示牌型
+        // 更新所有玩家的手牌显示，显示他们出的牌
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found');
+            return;
+        }
+
+        console.log('[TheDecreeModeClient] Updating showdown display for all players');
+
+        // 遍历所有摊牌结果，更新每个玩家的显示
+        for (const result of data.results) {
+            // 使用 getPlayerIndex 获取相对索引（重要！）
+            const playerIndex = this.getPlayerIndex(result.playerId);
+            if (playerIndex === -1) {
+                console.warn(`[TheDecreeModeClient] Player ${result.playerId} not found in player mapping`);
+                continue;
+            }
+
+            console.log(`[TheDecreeModeClient] Showing cards for player ${result.playerId} at relative index ${playerIndex}`);
+
+            // 获取玩家的 UI 控制器（使用相对索引）
+            const playerUINode = playerUIManager.getPlayerUINode(playerIndex);
+            if (!playerUINode) {
+                console.warn(`[TheDecreeModeClient] PlayerUINode not found for index ${playerIndex}`);
+                continue;
+            }
+
+            // 获取玩家的 HandDisplay
+            const handDisplay = playerUINode.getHandDisplay();
+            if (!handDisplay) {
+                console.warn(`[TheDecreeModeClient] HandDisplay not found for index ${playerIndex}`);
+                continue;
+            }
+
+            // 更新显示，传入出的牌（result.cards）
+            // 这样会显示玩家出的牌的正面
+            handDisplay.updateDisplay(result.cards);
+
+            console.log(`[TheDecreeModeClient] ✓ Updated cards display for player at relative index ${playerIndex}, cards:`, result.cards);
+        }
+
+        console.log('[TheDecreeModeClient] =====================================');
     }
 
     private onRoundEnd(data: RoundEndEvent): void {
-        console.log('[TheDecreeModeClient] Round end:', data);
+        console.log('[TheDecreeModeClient] ========== Round End Event ==========');
+        console.log('[TheDecreeModeClient] Winner ID:', data.winnerId);
+        console.log('[TheDecreeModeClient] Loser ID:', data.loserId);
+        console.log('[TheDecreeModeClient] Scores:', data.scores);
 
-        // 更新所有玩家的分数
-        // TODO: 更新分数显示
+        // 更新所有玩家的分数显示
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found, cannot update scores');
+            return;
+        }
+
+        // 获取房间信息，从中获取玩家列表
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!currentRoom || !currentRoom.players) {
+            console.error('[TheDecreeModeClient] No room data or players found');
+            return;
+        }
+
+        const players = currentRoom.players;
+        console.log('[TheDecreeModeClient] Updating scores for players:', players.length);
+
+        // 遍历所有分数，更新对应玩家的 UI
+        for (const player of players) {
+            const score = data.scores[player.id];
+            if (score !== undefined) {
+                console.log(`[TheDecreeModeClient] Updating score for player ${player.id} (${player.name}): ${score}`);
+
+                // 根据 seatIndex 获取 PlayerUIController
+                const playerUINode = playerUIManager.getPlayerUINode(player.seatIndex);
+                if (playerUINode) {
+                    playerUINode.updateScore(score);
+                    console.log(`[TheDecreeModeClient] ✓ Score updated for player at seat ${player.seatIndex}`);
+                } else {
+                    console.warn(`[TheDecreeModeClient] PlayerUINode not found for seat ${player.seatIndex}`);
+                }
+            } else {
+                console.warn(`[TheDecreeModeClient] No score found for player ${player.id}`);
+            }
+        }
+
+        console.log('[TheDecreeModeClient] =====================================');
     }
 
     private onGameOver(data: GameOverEvent): void {
@@ -576,11 +729,19 @@ export class TheDecreeModeClient extends GameModeClientBase {
     /**
      * 庄家叫牌（由 UI 调用）
      */
-    public dealerCall(cardsToPlay: 1 | 2 | 3): void {
+    public dealerCall(cardsToPlay: 1 | 2 | 3): boolean {
         console.log('[TheDecreeModeClient] Dealer calling', cardsToPlay, 'cards');
 
         // 使用基类的发送方法
-        this.sendDealerCallRequest(cardsToPlay);
+        const success = this.sendDealerCallRequest(cardsToPlay);
+
+        if (success) {
+            console.log('[TheDecreeModeClient] ✓ Dealer call request sent successfully');
+        } else {
+            console.error('[TheDecreeModeClient] ✗ Failed to send dealer call request');
+        }
+
+        return success;
     }
 
     /**

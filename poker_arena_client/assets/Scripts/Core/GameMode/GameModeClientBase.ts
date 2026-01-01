@@ -427,8 +427,13 @@ export abstract class GameModeClientBase {
      * @param cardsToPlay 要出的牌数（1、2或3）
      */
     protected sendDealerCallRequest(cardsToPlay: 1 | 2 | 3): boolean {
+        console.log(`[${this.config.name}] sendDealerCallRequest called, cardsToPlay:`, cardsToPlay);
+
         const network = this.getNetworkClient();
+        console.log(`[${this.config.name}] Network client:`, !!network);
+
         if (!network) {
+            console.error(`[${this.config.name}] No network client available`);
             return false;
         }
 
@@ -437,8 +442,13 @@ export abstract class GameModeClientBase {
         const playerId = localRoomStore.getMyPlayerId();
         const currentRoom = localRoomStore.getCurrentRoom();
 
+        console.log(`[${this.config.name}] Player ID:`, playerId);
+        console.log(`[${this.config.name}] Current room:`, currentRoom?.id);
+
         if (!playerId || !currentRoom) {
             console.error(`[${this.config.name}] Cannot send dealer call: missing player or room info`);
+            console.error(`[${this.config.name}]   playerId:`, playerId);
+            console.error(`[${this.config.name}]   currentRoom:`, currentRoom);
             return false;
         }
 
@@ -448,8 +458,11 @@ export abstract class GameModeClientBase {
             cardsToPlay
         };
 
-        console.log(`[${this.config.name}] Dealer calling ${cardsToPlay} cards`);
-        return network.send(ClientMessageType.DEALER_CALL, request);
+        console.log(`[${this.config.name}] Sending dealer call request:`, request);
+        const result = network.send(ClientMessageType.DEALER_CALL, request);
+        console.log(`[${this.config.name}] Send result:`, result);
+
+        return result;
     }
 
     /**

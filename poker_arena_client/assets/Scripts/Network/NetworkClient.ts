@@ -123,14 +123,16 @@ export class NetworkClient extends Component {
      * 发送请求给服务器（带类型约束）
      * @param type 客户端消息类型
      * @param data 对应协议定义的数据结构
+     * @returns 是否成功发送
      */
-    public send<T>(type: ClientMessageType, data?: T): void {
+    public send<T>(type: ClientMessageType, data?: T): boolean {
         if (!this.isConnected) {
             console.error(`[Net] Cannot send ${type}: Not connected`);
-            return;
+            return false;
         }
         console.log(`[Net Send] ${type}`, data);
         this.socket.emit(type, data);
+        return true;
     }
 
     public disconnect(): void {

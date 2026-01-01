@@ -188,7 +188,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 449.85144644253324,
+    "_orthoHeight": 437.10371819960864,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -522,7 +522,7 @@
     "_string": "开 始",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 100,
+    "_actualFontSize": 70,
     "_fontSize": 70,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
@@ -1403,7 +1403,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "btn_1",
+    "_name": "btn_call1",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -1715,7 +1715,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "btn_2",
+    "_name": "btn_call2",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -2027,7 +2027,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "btn_3",
+    "_name": "btn_call3",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -2407,6 +2407,7 @@
     "btnCall123Node": {
       "__id__": 32
     },
+    "autoPlayToggleButton": null,
     "_id": "85abm1HC9CdLkKrtMAZBEG"
   },
   {
@@ -2660,8 +2661,6 @@
     "playerUIManagerNode": {
       "__id__": 16
     },
-    "objectsGuandanNode": null,
-    "objectsTheDecreeNode": null,
     "nodeReadyStage": {
       "__id__": 8
     },
@@ -2671,7 +2670,6 @@
     "nodeEndStage": {
       "__id__": 61
     },
-    "communityCardsNode": null,
     "_id": "40EnCcv5NA0a9w2zy4FdIR"
   },
   {

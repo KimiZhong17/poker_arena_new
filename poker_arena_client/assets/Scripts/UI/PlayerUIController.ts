@@ -236,6 +236,16 @@ export class PlayerUIController extends Component {
         }
     }
 
+    /**
+     * Lock unselected cards (dim them and disable interaction)
+     * Call this after player has played their cards
+     */
+    public lockUnselectedCards(): void {
+        if (this._handDisplay) {
+            this._handDisplay.lockUnselectedCards();
+        }
+    }
+
     // ===== Getters =====
     public getPlayer(): Player {
         return this._player;

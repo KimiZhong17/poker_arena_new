@@ -1,5 +1,6 @@
 import { _decorator, Component, Node, Button, Label, Color } from 'cc';
 import { Game } from '../Game';
+import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
 const { ccclass, property } = _decorator;
 
 /**
@@ -83,35 +84,43 @@ export class TheDecreeUIController extends Component {
     public updateCallButtonsVisibility(): void {
         console.log('[TheDecreeUI] updateCallButtonsVisibility() called');
         console.log('[TheDecreeUI]   _game:', !!this._game);
-        console.log('[TheDecreeUI]   theDecreeMode:', !!this._game?.theDecreeMode);
 
-        if (!this._game || !this._game.theDecreeMode) {
-            console.log('[TheDecreeUI]   Game or mode not ready, hiding buttons');
+        if (!this._game) {
+            console.log('[TheDecreeUI]   Game not ready, hiding buttons');
             this.hideCallButtons();
             return;
         }
 
-        const theDecreeMode = this._game.theDecreeMode;
-        const currentRound = theDecreeMode.getCurrentRound();
-        const gameState = theDecreeMode.getState();
+        // 从 StageManager 获取当前 PlayingStage，然后获取 GameMode
+        const playingStage = this._game.stageManager?.getCurrentStage();
+        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
 
-        console.log('[TheDecreeUI]   currentRound:', !!currentRound);
-        console.log('[TheDecreeUI]   dealerId:', currentRound?.dealerId);
-        console.log('[TheDecreeUI]   gameState:', gameState);
+        console.log('[TheDecreeUI]   playingStage:', !!playingStage);
+        console.log('[TheDecreeUI]   theDecreeMode:', !!theDecreeMode);
 
-        // Show buttons only when:
-        // 1. There's an active round
-        // 2. player_0 is the dealer
-        // 3. Game state is DEALER_CALL
-        const shouldShow = currentRound &&
-                          currentRound.dealerId === 'player_0' &&
-                          gameState === 'dealer_call';
+        if (!theDecreeMode) {
+            console.log('[TheDecreeUI]   Mode not ready, hiding buttons');
+            this.hideCallButtons();
+            return;
+        }
+
+        const dealerId = theDecreeMode.getDealerId();
+        console.log('[TheDecreeUI]   dealerId:', dealerId);
+
+        // 获取当前玩家ID
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
+
+        console.log('[TheDecreeUI]   currentPlayerId:', currentPlayerId);
+
+        // Show buttons only when current player is the dealer
+        const shouldShow = dealerId && currentPlayerId === dealerId;
 
         console.log('[TheDecreeUI]   shouldShow:', shouldShow);
 
         if (shouldShow) {
             this.showCallButtons();
-            console.log('[TheDecreeUI] Showing call buttons - player_0 is the dealer');
+            console.log('[TheDecreeUI] Showing call buttons - current player is the dealer');
         } else {
             this.hideCallButtons();
         }
@@ -139,10 +148,14 @@ export class TheDecreeUIController extends Component {
      * Auto-find UI elements by name (if not manually assigned)
      */
     private autoFindUIElements(): void {
+        console.log('[TheDecreeUI] Auto-finding UI elements...');
+        console.log('[TheDecreeUI] this.node:', this.node?.name);
+
         // Find play button
         if (!this.playButton) {
             const playButtonNode = this.node.getChildByName('PlayButton');
             this.playButton = playButtonNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] PlayButton search result:', !!this.playButton);
         }
 
         // Auto-find auto-play toggle button
@@ -153,34 +166,50 @@ export class TheDecreeUIController extends Component {
                 const labelNode = toggleNode?.getChildByName('Label');
                 this.autoPlayToggleLabel = labelNode?.getComponent(Label) || null;
             }
+            console.log('[TheDecreeUI] AutoPlayToggleButton search result:', !!this.autoPlayToggleButton);
         }
 
         // Auto-find Btn_Call123 container node if not assigned
+        console.log('[TheDecreeUI] Looking for Btn_Call123 container...');
         if (!this.btnCall123Node) {
             this.btnCall123Node = this.node.getChildByName('Btn_Call123');
+            console.log('[TheDecreeUI] Btn_Call123 found:', !!this.btnCall123Node);
+        } else {
+            console.log('[TheDecreeUI] Btn_Call123 already assigned:', !!this.btnCall123Node);
         }
 
         // Auto-find call buttons from Btn_Call123 container
         if (this.btnCall123Node) {
+            console.log('[TheDecreeUI] Searching for call buttons inside Btn_Call123...');
+            console.log('[TheDecreeUI] Btn_Call123 children count:', this.btnCall123Node.children.length);
+            console.log('[TheDecreeUI] Btn_Call123 children names:', this.btnCall123Node.children.map(c => c.name).join(', '));
+
             // Find buttons inside the container
-            const callOneNode = this.btnCall123Node.getChildByName('CallOneButton');
+            const callOneNode = this.btnCall123Node.getChildByName('btn_call1');
             this.callOneButton = callOneNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallOneButton search result:', !!this.callOneButton, 'node found:', !!callOneNode);
 
-            const callTwoNode = this.btnCall123Node.getChildByName('CallTwoButton');
+            const callTwoNode = this.btnCall123Node.getChildByName('btn_call2');
             this.callTwoButton = callTwoNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallTwoButton search result:', !!this.callTwoButton, 'node found:', !!callTwoNode);
 
-            const callThreeNode = this.btnCall123Node.getChildByName('CallThreeButton');
+            const callThreeNode = this.btnCall123Node.getChildByName('btn_call3');
             this.callThreeButton = callThreeNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallThreeButton search result:', !!this.callThreeButton, 'node found:', !!callThreeNode);
         } else {
+            console.log('[TheDecreeUI] Btn_Call123 not found, trying to find buttons at root level...');
             // Fallback: try to find call buttons at root level
-            const callOneNode = this.node.getChildByName('CallOneButton');
+            const callOneNode = this.node.getChildByName('btn_call1');
             this.callOneButton = callOneNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallOneButton (root) search result:', !!this.callOneButton);
 
-            const callTwoNode = this.node.getChildByName('CallTwoButton');
+            const callTwoNode = this.node.getChildByName('btn_call2');
             this.callTwoButton = callTwoNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallTwoButton (root) search result:', !!this.callTwoButton);
 
-            const callThreeNode = this.node.getChildByName('CallThreeButton');
+            const callThreeNode = this.node.getChildByName('btn_call3');
             this.callThreeButton = callThreeNode?.getComponent(Button) || null;
+            console.log('[TheDecreeUI] CallThreeButton (root) search result:', !!this.callThreeButton);
         }
 
         // Temporarily disabled
@@ -210,25 +239,42 @@ export class TheDecreeUIController extends Component {
      * Register button click events
      */
     private registerButtonEvents(): void {
+        console.log('[TheDecreeUI] Registering button events...');
+
         if (this.playButton) {
             this.playButton.node.on(Button.EventType.CLICK, this.onPlayButtonClicked, this);
+            console.log('[TheDecreeUI] ✓ Play button event registered');
+        } else {
+            console.warn('[TheDecreeUI] ✗ Play button not found');
         }
 
         if (this.autoPlayToggleButton) {
             this.autoPlayToggleButton.node.on(Button.EventType.CLICK, this.onAutoPlayToggleClicked, this);
+            console.log('[TheDecreeUI] ✓ Auto-play toggle event registered');
         }
 
         if (this.callOneButton) {
             this.callOneButton.node.on(Button.EventType.CLICK, () => this.onCallButtonClicked(1), this);
+            console.log('[TheDecreeUI] ✓ Call ONE button event registered');
+        } else {
+            console.warn('[TheDecreeUI] ✗ Call ONE button not found');
         }
 
         if (this.callTwoButton) {
             this.callTwoButton.node.on(Button.EventType.CLICK, () => this.onCallButtonClicked(2), this);
+            console.log('[TheDecreeUI] ✓ Call TWO button event registered');
+        } else {
+            console.warn('[TheDecreeUI] ✗ Call TWO button not found');
         }
 
         if (this.callThreeButton) {
             this.callThreeButton.node.on(Button.EventType.CLICK, () => this.onCallButtonClicked(3), this);
+            console.log('[TheDecreeUI] ✓ Call THREE button event registered');
+        } else {
+            console.warn('[TheDecreeUI] ✗ Call THREE button not found');
         }
+
+        console.log('[TheDecreeUI] Button event registration complete');
 
         // Temporarily disabled
         // if (this.clearSelectionButton) {
@@ -241,17 +287,29 @@ export class TheDecreeUIController extends Component {
      * Can be called externally by TheDecreeMode
      */
     public enableCardSelection(): void {
-        if (!this._game || !this._game.handsManager) {
-            console.error('[TheDecreeUI] Cannot enable card selection - game not ready');
+        console.log('[TheDecreeUI] enableCardSelection() called');
+
+        if (!this._game) {
+            console.error('[TheDecreeUI] Cannot enable card selection - game not found');
             return;
         }
 
-        this._game.handsManager.enableCardSelection(0, (selectedIndices: number[]) => {
+        // 从 StageManager 获取 PlayerUIManager
+        const playerUIManager = this._game.playerUIManager;
+        console.log('[TheDecreeUI] playerUIManager:', !!playerUIManager);
+
+        if (!playerUIManager) {
+            console.error('[TheDecreeUI] Cannot enable card selection - PlayerUIManager not found');
+            return;
+        }
+
+        // 启用玩家0的卡牌选择
+        playerUIManager.enableCardSelection(0, (selectedIndices: number[]) => {
             this._selectedCardIndices = selectedIndices;
             this.onSelectionChanged(selectedIndices);
         });
 
-        console.log('[TheDecreeUI] Card selection enabled');
+        console.log('[TheDecreeUI] ✓ Card selection enabled for player 0');
     }
 
     /**
@@ -275,22 +333,54 @@ export class TheDecreeUIController extends Component {
 
     /**
      * Update UI state (enable/disable buttons)
+     * Controls play button based on:
+     * 1. Whether cards are selected
+     * 2. Whether the number of selected cards matches dealer's requirement
+     * 3. Whether the game is in the correct phase
      */
-    private updateUIState(): void {
-        const hasSelection = this._selectedCardIndices.length > 0;
-
-        // Enable/disable play button based on selection
-        if (this.playButton) {
-            this.playButton.interactable = hasSelection;
+    public updateUIState(): void {
+        if (!this.playButton) {
+            return;
         }
 
-        // Temporarily disabled - clear button
-        // if (this.clearSelectionButton) {
-        //     this.clearSelectionButton.interactable = hasSelection;
-        // }
+        // Check if we have a game and game mode
+        if (!this._game) {
+            this.playButton.interactable = false;
+            return;
+        }
 
-        // Call buttons are always enabled (or based on game state)
-        // You can add more logic here based on game phase
+        const playingStage = this._game.stageManager?.getCurrentStage();
+        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+
+        if (!theDecreeMode) {
+            // No game mode - disable play button
+            this.playButton.interactable = false;
+            return;
+        }
+
+        // Get the required number of cards to play (set by dealer)
+        const cardsToPlay = theDecreeMode.getCardsToPlay();
+        console.log(`[TheDecreeUI] updateUIState - cardsToPlay: ${cardsToPlay}, selected: ${this._selectedCardIndices.length}`);
+
+        // Enable play button only if:
+        // 1. Dealer has called (cardsToPlay > 0)
+        // 2. Player has selected cards
+        // 3. Number of selected cards matches dealer's requirement
+        const hasValidSelection = cardsToPlay > 0 &&
+                                  this._selectedCardIndices.length > 0 &&
+                                  this._selectedCardIndices.length === cardsToPlay;
+
+        this.playButton.interactable = hasValidSelection;
+
+        if (hasValidSelection) {
+            console.log(`[TheDecreeUI] ✓ Play button enabled (${this._selectedCardIndices.length} cards selected)`);
+        } else if (cardsToPlay === 0) {
+            console.log(`[TheDecreeUI] ✗ Play button disabled (dealer hasn't called yet)`);
+        } else if (this._selectedCardIndices.length === 0) {
+            console.log(`[TheDecreeUI] ✗ Play button disabled (no cards selected)`);
+        } else {
+            console.log(`[TheDecreeUI] ✗ Play button disabled (need ${cardsToPlay} cards, selected ${this._selectedCardIndices.length})`);
+        }
     }
 
     // ==================== Button Event Handlers ====================
@@ -299,29 +389,104 @@ export class TheDecreeUIController extends Component {
      * Handle "Play" button clicked
      */
     private onPlayButtonClicked(): void {
-        console.log('[TheDecreeUI] Play button clicked');
+        console.log('[TheDecreeUI] ========== Play Button Clicked ==========');
+        console.log('[TheDecreeUI] Selected card indices:', this._selectedCardIndices);
 
         if (this._selectedCardIndices.length === 0) {
             console.warn('[TheDecreeUI] No cards selected');
-            // this.updateStatusLabel('请先选择牌！', 'warning');
             return;
         }
 
-        // Call game interface to play cards
-        const success = this._game.playerSelectCards('player_0', this._selectedCardIndices);
+        if (!this._game) {
+            console.error('[TheDecreeUI] Game not found!');
+            return;
+        }
+
+        // Get the current game mode from StageManager
+        const playingStage = this._game.stageManager?.getCurrentStage();
+        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+
+        if (!theDecreeMode) {
+            console.error('[TheDecreeUI] TheDecreeMode not found!');
+            return;
+        }
+
+        // Validate that the number of selected cards matches dealer's requirement
+        const cardsToPlay = theDecreeMode.getCardsToPlay();
+        console.log('[TheDecreeUI] Dealer requires:', cardsToPlay, 'cards');
+        console.log('[TheDecreeUI] Player selected:', this._selectedCardIndices.length, 'cards');
+
+        if (cardsToPlay === 0) {
+            console.error('[TheDecreeUI] Cannot play - dealer has not called yet');
+            return;
+        }
+
+        if (this._selectedCardIndices.length !== cardsToPlay) {
+            console.error(`[TheDecreeUI] Invalid number of cards selected! Need ${cardsToPlay}, selected ${this._selectedCardIndices.length}`);
+            return;
+        }
+
+        // Get player's hand cards from PlayerUIManager
+        const playerUIManager = this._game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeUI] PlayerUIManager not found!');
+            return;
+        }
+
+        // Get the player's hand cards (player index 0)
+        const playerUINode = playerUIManager.getPlayerUINode(0);
+        if (!playerUINode) {
+            console.error('[TheDecreeUI] PlayerUINode not found for index 0');
+            return;
+        }
+
+        const player = playerUINode.getPlayer();
+        if (!player) {
+            console.error('[TheDecreeUI] Player data not found');
+            return;
+        }
+
+        const handCards = player.handCards;
+        console.log('[TheDecreeUI] Player hand cards:', handCards);
+
+        // Convert selected indices to actual card values
+        const selectedCards = this._selectedCardIndices
+            .map(index => handCards[index])
+            .filter(card => card !== undefined);
+
+        console.log('[TheDecreeUI] Selected cards:', selectedCards);
+
+        if (selectedCards.length !== this._selectedCardIndices.length) {
+            console.error('[TheDecreeUI] Some selected indices are invalid');
+            return;
+        }
+
+        // Get current player ID from LocalRoomStore
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
+        console.log('[TheDecreeUI] Current player ID:', currentPlayerId);
+
+        // Call TheDecreeMode's playCards method (which will send to server)
+        const success = theDecreeMode.playCards(selectedCards, currentPlayerId);
+        console.log('[TheDecreeUI] playCards result:', success);
 
         if (success) {
-            console.log('[TheDecreeUI] Cards played successfully');
-            // this.updateStatusLabel('出牌成功！', 'success');
+            console.log('[TheDecreeUI] ✓ Play cards request sent successfully');
 
-            // Clear selection
-            this._game.handsManager.clearSelection(0);
-            this._selectedCardIndices = [];
-            this.updateUIState();
+            // Lock unselected cards (dim them and disable interaction)
+            // Don't clear selection - we want to keep selected cards visible
+            playerUIManager.lockUnselectedCards(0);
+
+            // Disable play button after playing (player cannot play again)
+            if (this.playButton) {
+                this.playButton.interactable = false;
+                console.log('[TheDecreeUI] Play button disabled after playing cards');
+            }
         } else {
-            console.error('[TheDecreeUI] Failed to play cards');
-            // this.updateStatusLabel('出牌失败！', 'error');
+            console.error('[TheDecreeUI] ✗ Failed to send play cards request');
         }
+
+        console.log('[TheDecreeUI] =====================================');
     }
 
     /**
@@ -329,23 +494,36 @@ export class TheDecreeUIController extends Component {
      * @param cardsCount Number of cards (1, 2, or 3)
      */
     private onCallButtonClicked(cardsCount: 1 | 2 | 3): void {
+        console.log('[TheDecreeUI] ========== Call Button Clicked ==========');
         console.log(`[TheDecreeUI] Call ${cardsCount} button clicked`);
+        console.log('[TheDecreeUI] _game:', !!this._game);
 
+        if (!this._game) {
+            console.error('[TheDecreeUI] Game not found!');
+            return;
+        }
+
+        console.log('[TheDecreeUI] Calling dealerCall method...');
         const success = this._game.dealerCall(cardsCount);
+        console.log('[TheDecreeUI] dealerCall result:', success);
 
         if (success) {
-            console.log(`[TheDecreeUI] Dealer called: ${cardsCount} cards`);
+            console.log(`[TheDecreeUI] ✓ Dealer called: ${cardsCount} cards`);
             // this.updateStatusLabel(`庄家叫牌：${cardsCount}张`, 'success');
 
             // Hide call buttons immediately after calling
+            console.log('[TheDecreeUI] Hiding call buttons...');
             this.hideCallButtons();
 
             // Enable card selection for all players
+            console.log('[TheDecreeUI] Enabling card selection...');
             this.enableCardSelection();
         } else {
-            console.error(`[TheDecreeUI] Failed to call ${cardsCount} cards`);
+            console.error(`[TheDecreeUI] ✗ Failed to call ${cardsCount} cards`);
             // this.updateStatusLabel('叫牌失败！', 'error');
         }
+
+        console.log('[TheDecreeUI] =====================================');
     }
 
     /**
