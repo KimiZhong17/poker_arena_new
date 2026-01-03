@@ -120,20 +120,21 @@ export class PlayerHandDisplay extends Component {
         const verticalOffset = 30; // Vertical offset for stacked cards
         const wildCardGap = 10; // Extra gap before wild cards (red heart level cards)
 
+        // If grouping is disabled (TheDecree mode), display cards in order received from server
+        // Server has already sorted the cards, so we don't need to sort again
+        if (!this._enableGrouping) {
+            this.displaySpreadSimple(cards, cardWidth, cardSpacing);
+            return;
+        }
+
+        // === Guandan mode: Sort and group cards by point value ===
+
         // Sort cards by point value first (ascending order)
         const sortedCards = [...cards].sort((a, b) => {
             const pointA = a & 0x0F;
             const pointB = b & 0x0F;
             return pointA - pointB;
         });
-
-        // If grouping is disabled (TheDecree mode), display cards in a simple horizontal line
-        if (!this._enableGrouping) {
-            this.displaySpreadSimple(sortedCards, cardWidth, cardSpacing);
-            return;
-        }
-
-        // === Guandan mode: Group cards by point value ===
 
         // Separate wild cards (Heart level cards) from normal cards
         const normalCards: number[] = [];
@@ -388,10 +389,13 @@ export class PlayerHandDisplay extends Component {
             // Get the offset for played cards based on player position
             const offset = this.getPlayedCardOffset();
 
-            console.log(`[displayStack] Displaying ${this._playedCards.length} played cards at offset (${offset.x}, ${offset.y}) with spacing ${playedCardSpacing}`);
+            console.log(`[displayStack] Player ${this._player.name} (index ${this._playerIndex})`);
+            console.log(`[displayStack] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
+            console.log(`[displayStack] Offset: (${offset.x}, ${offset.y}), spacing: ${playedCardSpacing}`);
 
             for (let i = 0; i < this._playedCards.length; i++) {
                 const cardValue = this._playedCards[i];
+                console.log(`[displayStack] Creating card ${i}: 0x${cardValue.toString(16)}`);
                 const cardNode = this.createCardNode(cardValue, true); // Show front
 
                 // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
@@ -404,7 +408,7 @@ export class PlayerHandDisplay extends Component {
                 this.handContainer.addChild(cardNode);
                 this._pokerNodes.push(cardNode);
 
-                console.log(`[displayStack] Played card ${i}: position (${finalX}, ${finalY})`);
+                console.log(`[displayStack] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
             }
         }
 

@@ -448,13 +448,19 @@ export class TheDecreeUIController extends Component {
 
         const handCards = player.handCards;
         console.log('[TheDecreeUI] Player hand cards:', handCards);
+        console.log('[TheDecreeUI] Player hand cards (hex):', handCards.map(c => '0x' + c.toString(16)));
 
         // Convert selected indices to actual card values
         const selectedCards = this._selectedCardIndices
-            .map(index => handCards[index])
+            .map(index => {
+                const card = handCards[index];
+                console.log(`[TheDecreeUI] Index ${index} -> Card 0x${card ? card.toString(16) : 'undefined'}`);
+                return card;
+            })
             .filter(card => card !== undefined);
 
         console.log('[TheDecreeUI] Selected cards:', selectedCards);
+        console.log('[TheDecreeUI] Selected cards (hex):', selectedCards.map(c => '0x' + c.toString(16)));
 
         if (selectedCards.length !== this._selectedCardIndices.length) {
             console.error('[TheDecreeUI] Some selected indices are invalid');

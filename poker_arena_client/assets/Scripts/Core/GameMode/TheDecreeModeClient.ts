@@ -255,14 +255,14 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 // 如果是主玩家（index 0），启用卡牌选择功能（允许预选）
                 if (playerIndex === 0) {
                     console.log('[TheDecreeModeClient] Enabling card selection for player 0 (pre-selection allowed)...');
-                    playerUIManager.enableCardSelection(0, (selectedIndices: number[]) => {
-                        console.log(`[TheDecreeModeClient] Selected cards changed: [${selectedIndices.join(', ')}]`);
-                        // 通知 UI 更新出牌按钮状态
-                        if (this.theDecreeUIController) {
-                            this.theDecreeUIController.updateUIState();
-                        }
-                    });
-                    console.log('[TheDecreeModeClient] ✓ Card selection enabled (pre-selection mode)');
+
+                    // 通过 TheDecreeUIController 启用选牌（这样会正确更新 _selectedCardIndices）
+                    if (this.theDecreeUIController) {
+                        this.theDecreeUIController.enableCardSelection();
+                        console.log('[TheDecreeModeClient] ✓ Card selection enabled via UI controller (pre-selection mode)');
+                    } else {
+                        console.warn('[TheDecreeModeClient] TheDecreeUIController not found, cannot enable card selection');
+                    }
                 }
             } else {
                 console.error(`[TheDecreeModeClient] ✗ Player not found in PlayerUIController for index ${playerIndex}`);
@@ -437,6 +437,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 遍历所有摊牌结果，更新每个玩家的显示
         for (const result of data.results) {
+            console.log(`[TheDecreeModeClient] Processing result for player ${result.playerId}`);
+            console.log(`[TheDecreeModeClient]   Cards (hex):`, result.cards.map(c => '0x' + c.toString(16)));
+
             // 使用 getPlayerIndex 获取相对索引（重要！）
             const playerIndex = this.getPlayerIndex(result.playerId);
             if (playerIndex === -1) {

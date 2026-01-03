@@ -4,6 +4,7 @@ import { TheDecreePlayer } from '../Player';
 import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from './TexasHoldEmEvaluator';
 import { HandTypeHelper } from './HandTypeHelper';
 import { CardSuit, CardPoint } from './CardConst';
+import { sortCardsInPlace, CardRankingMode } from '../../utils/CardUtils';
 
 /**
  * Round state
@@ -122,6 +123,9 @@ export class TheDecreeMode extends GameModeBase {
             this.drawCard()
         ];
 
+        // Sort community cards by point value (ascending, A high)
+        sortCardsInPlace(this.communityCards, CardRankingMode.ACE_HIGH, true);
+
         // Deal 5 cards to each player
         for (const player of this.playerManager.getAllPlayers()) {
             const cards = [
@@ -131,6 +135,10 @@ export class TheDecreeMode extends GameModeBase {
                 this.drawCard(),
                 this.drawCard()
             ];
+
+            // Sort cards by point value (ascending, A high)
+            sortCardsInPlace(cards, CardRankingMode.ACE_HIGH, true);
+
             player.setHandCards(cards);
 
             // Notify callback
