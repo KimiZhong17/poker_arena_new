@@ -39,6 +39,9 @@ export enum GameState {
 export interface TheDecreeEventCallbacks {
     onGameStarted?: (communityCards: number[]) => void;
     onPlayerDealt?: (playerId: string, cards: number[]) => void;
+    onRequestFirstDealerSelection?: () => void;
+    onPlayerSelectedCard?: (playerId: string) => void;
+    onFirstDealerReveal?: (dealerId: string, selections: Map<string, number>) => void;
     onFirstDealerSelected?: (dealerId: string, revealedCards: Map<string, number>) => void;
     onNewRound?: (roundNumber: number, dealerId: string) => void;
     onDealerCall?: (dealerId: string, cardsToPlay: number) => void;
@@ -68,6 +71,7 @@ export class TheDecreeMode extends GameModeBase {
     private deck: number[] = [];
     private currentRound: RoundState | null = null;
     private callbacks: TheDecreeEventCallbacks;
+    private firstDealerSelections: Map<string, number> = new Map();
 
     constructor(config?: GameModeConfig, callbacks?: TheDecreeEventCallbacks) {
         const defaultConfig: GameModeConfig = {
@@ -156,8 +160,8 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onGameStarted(this.communityCards);
         }
 
-        // Auto-select first dealer
-        this.selectFirstDealerAuto();
+        // Request players to select cards for first dealer
+        this.requestFirstDealerSelection();
     }
 
     public cleanup(): void {
@@ -173,10 +177,97 @@ export class TheDecreeMode extends GameModeBase {
     // ==================== 游戏逻辑 ====================
 
     /**
-     * Auto-select first dealer by comparing first card from each player
+     * Request players to select a card for first dealer selection
      */
-    private selectFirstDealerAuto(): void {
-        console.log('[TheDecree] Selecting first dealer automatically');
+    private requestFirstDealerSelection(): void {
+        console.log('[TheDecree] Requesting first dealer selection from all players');
+        this.firstDealerSelections.clear();
+
+        // Notify callback to request selection
+        if (this.callbacks.onRequestFirstDealerSelection) {
+            this.callbacks.onRequestFirstDealerSelection();
+        }
+    }
+
+    /**
+     * Player selects a card for first dealer selection
+     */
+    public selectFirstDealerCard(playerId: string, card: number): boolean {
+        console.log(`[TheDecree] ========== selectFirstDealerCard ==========`);
+        console.log(`[TheDecree] Player ID: ${playerId}`);
+        console.log(`[TheDecree] Card: 0x${card.toString(16)}`);
+        console.log(`[TheDecree] Current state: ${this.state}`);
+        console.log(`[TheDecree] Expected state: ${GameState.FIRST_DEALER_SELECTION}`);
+
+        if (this.state !== GameState.FIRST_DEALER_SELECTION) {
+            console.warn(`[TheDecree] ✗ Cannot select card in state: ${this.state}`);
+            return false;
+        }
+
+        const player = this.playerManager.getPlayer(playerId);
+        if (!player) {
+            console.warn(`[TheDecree] ✗ Player ${playerId} not found`);
+            return false;
+        }
+
+        console.log(`[TheDecree] Player found: ${player.id}`);
+        console.log(`[TheDecree] Player hand cards:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
+
+        if (!player.hasCards([card])) {
+            console.warn(`[TheDecree] ✗ Player ${playerId} does not have card 0x${card.toString(16)}`);
+            console.warn(`[TheDecree]   Player's hand:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
+            return false;
+        }
+
+        if (this.firstDealerSelections.has(playerId)) {
+            console.warn(`[TheDecree] ✗ Player ${playerId} already selected a card`);
+            console.warn(`[TheDecree]   Already selected players:`, Array.from(this.firstDealerSelections.keys()));
+            console.warn(`[TheDecree]   Their cards:`, Array.from(this.firstDealerSelections.entries()).map(([id, card]) => `${id}: 0x${card.toString(16)}`));
+            return false;
+        }
+
+        this.firstDealerSelections.set(playerId, card);
+        console.log(`[TheDecree] ✓ Player ${playerId} selected card for dealer selection`);
+        console.log(`[TheDecree]   Total selections: ${this.firstDealerSelections.size}/${this.playerManager.getPlayerCount()}`);
+
+        // Notify callback
+        if (this.callbacks.onPlayerSelectedCard) {
+            this.callbacks.onPlayerSelectedCard(playerId);
+        }
+
+        // Check if all players have selected
+        if (this.firstDealerSelections.size === this.playerManager.getPlayerCount()) {
+            console.log(`[TheDecree] All ${this.playerManager.getPlayerCount()} players have selected, revealing first dealer...`);
+            this.revealFirstDealer();
+        }
+
+        return true;
+    }
+
+    /**
+     * Reveal first dealer after all players have selected
+     */
+    private revealFirstDealer(): void {
+        console.log('[TheDecree] All players selected, revealing first dealer');
+
+        const dealerId = this.selectFirstDealer(this.firstDealerSelections);
+        console.log(`[TheDecree] First dealer selected: ${dealerId}`);
+
+        // Notify callback
+        if (this.callbacks.onFirstDealerReveal) {
+            this.callbacks.onFirstDealerReveal(dealerId, this.firstDealerSelections);
+        }
+
+        // Start first round
+        this.startNewRound(dealerId);
+    }
+
+    /**
+     * Auto-select first dealer by comparing first card from each player
+     * Used for AI/托管 functionality
+     */
+    public selectFirstDealerAuto(): void {
+        console.log('[TheDecree] Auto-selecting first dealer');
         const revealedCards = new Map<string, number>();
         const playerOrder = this.playerManager.getPlayerOrder();
 
@@ -188,9 +279,14 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         const dealerId = this.selectFirstDealer(revealedCards);
-        console.log(`[TheDecree] First dealer selected: ${dealerId}`);
+        console.log(`[TheDecree] First dealer auto-selected: ${dealerId}`);
 
-        // Notify callback
+        // Notify callback (using the reveal callback)
+        if (this.callbacks.onFirstDealerReveal) {
+            this.callbacks.onFirstDealerReveal(dealerId, revealedCards);
+        }
+
+        // Also trigger the old callback for compatibility
         if (this.callbacks.onFirstDealerSelected) {
             this.callbacks.onFirstDealerSelected(dealerId, revealedCards);
         }
@@ -439,6 +535,14 @@ export class TheDecreeMode extends GameModeBase {
             }
         }
 
+        // Sort each player's hand cards after refilling
+        for (const playerId of playerOrder) {
+            const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+            if (player.handCards.length > 0) {
+                sortCardsInPlace(player.handCards, CardRankingMode.ACE_HIGH, true);
+            }
+        }
+
         // Notify callback
         if (this.callbacks.onHandsRefilled) {
             this.callbacks.onHandsRefilled(this.deck.length);
@@ -545,9 +649,25 @@ export class TheDecreeMode extends GameModeBase {
     }
 
     private getTexasRank(point: CardPoint): number {
-        if (point === CardPoint.P_A) return 14;
-        if (point === CardPoint.P_2) return 2;
-        return point;
+        // Map CardPoint enum values to Texas Hold'em ranking (A is high)
+        // Note: CardPoint enum uses Guandan rules where P_A=14, P_2=15
+        // We need to remap for Texas Hold'em where A=14 is highest, 2=2 is lowest
+        switch (point) {
+            case CardPoint.P_A: return 14;  // A is highest
+            case CardPoint.P_2: return 2;   // 2 is lowest (override enum value of 15)
+            case CardPoint.P_3: return 3;
+            case CardPoint.P_4: return 4;
+            case CardPoint.P_5: return 5;
+            case CardPoint.P_6: return 6;
+            case CardPoint.P_7: return 7;
+            case CardPoint.P_8: return 8;
+            case CardPoint.P_9: return 9;
+            case CardPoint.P_10: return 10;
+            case CardPoint.P_J: return 11;
+            case CardPoint.P_Q: return 12;
+            case CardPoint.P_K: return 13;
+            default: return point;
+        }
     }
 
     private getSuitValue(suit: CardSuit): number {

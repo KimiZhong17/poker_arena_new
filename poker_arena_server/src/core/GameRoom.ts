@@ -289,6 +289,35 @@ export class GameRoom {
                 console.log(`[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
             },
 
+            onRequestFirstDealerSelection: () => {
+                console.log(`[Room ${this.id}] Requesting first dealer selection from all players`);
+
+                this.broadcast(ServerMessageType.REQUEST_FIRST_DEALER_SELECTION, {});
+            },
+
+            onPlayerSelectedCard: (playerId) => {
+                console.log(`[Room ${this.id}] Player ${playerId} selected a card`);
+
+                this.broadcast(ServerMessageType.PLAYER_SELECTED_CARD, {
+                    playerId
+                });
+            },
+
+            onFirstDealerReveal: (dealerId, selections) => {
+                console.log(`[Room ${this.id}] First dealer revealed: ${dealerId}`);
+
+                // Convert Map to array for JSON serialization
+                const selectionsArray = Array.from(selections.entries()).map(([playerId, card]) => ({
+                    playerId,
+                    card
+                }));
+
+                this.broadcast(ServerMessageType.FIRST_DEALER_REVEAL, {
+                    dealerId,
+                    selections: selectionsArray
+                });
+            },
+
             onFirstDealerSelected: (dealerId, revealedCards) => {
                 console.log(`[Room ${this.id}] First dealer: ${dealerId}`);
 
@@ -410,6 +439,33 @@ export class GameRoom {
         this.broadcast(ServerMessageType.GAME_START, {
             players: playerInfos
         });
+    }
+
+    /**
+     * Handle player select card for first dealer
+     */
+    public handleSelectFirstDealerCard(playerId: string, card: number): boolean {
+        console.log(`[GameRoom] ========== handleSelectFirstDealerCard ==========`);
+        console.log(`[GameRoom] Player ID: ${playerId}`);
+        console.log(`[GameRoom] Card: 0x${card.toString(16)}`);
+        console.log(`[GameRoom] theDecreeGame exists: ${!!this.theDecreeGame}`);
+
+        if (!this.theDecreeGame) {
+            console.error(`[GameRoom] ✗ theDecreeGame not initialized`);
+            return false;
+        }
+
+        const success = this.theDecreeGame.selectFirstDealerCard(playerId, card);
+        console.log(`[GameRoom] selectFirstDealerCard result: ${success}`);
+
+        if (!success) {
+            this.sendToPlayer(playerId, ServerMessageType.ERROR, {
+                code: 'INVALID_ACTION',
+                message: 'Invalid card selection'
+            });
+        }
+
+        return success;
     }
 
     /**

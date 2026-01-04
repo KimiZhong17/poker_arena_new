@@ -6,12 +6,16 @@ import { Node, instantiate } from "cc";
 import {
     DealCardsEvent,
     CommunityCardsEvent,
+    RequestFirstDealerSelectionEvent,
+    PlayerSelectedCardEvent,
+    FirstDealerRevealEvent,
     DealerSelectedEvent,
     DealerCalledEvent,
     PlayerPlayedEvent,
     ShowdownEvent,
     RoundEndEvent,
-    GameOverEvent
+    GameOverEvent,
+    ClientMessageType
 } from '../../Network/Messages';
 import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { PokerFactory } from '../../UI/PokerFactory';
@@ -34,6 +38,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     private dealerId: string = '';
     private currentRoundNumber: number = 0;
     private cardsToPlay: number = 0;
+    private gameState: string = ''; // 服务器的游戏状态：'first_dealer', 'dealer_call', 'player_selection', etc.
 
     // 自动出牌设置（仅用于 player_0）
     private isPlayer0AutoPlay: boolean = true;
@@ -195,6 +200,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.registerNetworkEvents({
             'deal_cards': this.onDealCards,
             'community_cards': this.onCommunityCards,
+            'request_first_dealer_selection': this.onRequestFirstDealerSelection,
+            'player_selected_card': this.onPlayerSelectedCard,
+            'first_dealer_reveal': this.onFirstDealerReveal,
             'dealer_selected': this.onDealerSelected,
             'dealer_called': this.onDealerCalled,
             'player_played': this.onPlayerPlayed,
@@ -294,6 +302,209 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] =====================================');
     }
 
+    private onRequestFirstDealerSelection(_data: RequestFirstDealerSelectionEvent): void {
+        console.log('[TheDecreeModeClient] ========== Request First Dealer Selection Event ==========');
+        console.log('[TheDecreeModeClient] 📩 Received request_first_dealer_selection event');
+        console.log('[TheDecreeModeClient] 💡 提示：请选择一张手牌，牌最大的成为首个庄家');
+
+        // 设置游戏状态为首庄选择阶段
+        this.gameState = 'first_dealer';
+
+        // 启用卡牌选择（只能选一张）
+        // 选择后需要点击"出牌"按钮确认
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.enableCardSelection();
+            console.log('[TheDecreeModeClient] ✓ Card selection enabled for first dealer selection');
+        }
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    private onPlayerSelectedCard(data: PlayerSelectedCardEvent): void {
+        console.log('[TheDecreeModeClient] ========== Player Selected Card Event ==========');
+        console.log('[TheDecreeModeClient] 📩 Player selected a card:', data.playerId);
+
+        // 显示其他玩家已经选择的状态
+        const playerName = this.getPlayerName(data.playerId);
+        console.log(`[TheDecreeModeClient] 👤 ${playerName} 已选择`);
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    private onFirstDealerReveal(data: FirstDealerRevealEvent): void {
+        console.log('[TheDecreeModeClient] ========== First Dealer Reveal Event ==========');
+        console.log('[TheDecreeModeClient] 📩 Revealing first dealer selection');
+        console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
+        console.log('[TheDecreeModeClient] All selections:', data.selections);
+
+        // 构建显示信息
+        console.log('[TheDecreeModeClient] 🎴 所有玩家的选择：');
+
+        for (const selection of data.selections) {
+            const playerName = this.getPlayerName(selection.playerId);
+            const cardName = this.getCardName(selection.card);
+            const isDealer = selection.playerId === data.dealerId;
+
+            console.log(`[TheDecreeModeClient]   ${isDealer ? '👑' : '  '} ${playerName}: ${cardName}`);
+        }
+
+        // 找到dealer的名字
+        const dealerName = this.getPlayerName(data.dealerId);
+        console.log(`[TheDecreeModeClient] 🎉 ${dealerName} 成为首个庄家！`);
+
+        // 存储dealer ID
+        this.dealerId = data.dealerId;
+        this.currentRoundNumber = 1;
+
+        // === 在UI上显示所有玩家选择的牌 ===
+        this.displayFirstDealerSelections(data.selections, data.dealerId);
+
+        // 设置游戏状态为庄家叫牌阶段
+        this.gameState = 'dealer_call';
+
+        // 延迟后清除选择状态和显示的牌，准备游戏
+        setTimeout(() => {
+            const playerUIManager = this.game.playerUIManager;
+            if (playerUIManager) {
+                // 清除手牌的选中状态
+                playerUIManager.clearSelection(0);
+
+                // 隐藏显示的选牌
+                this.hideFirstDealerSelections();
+            }
+
+            // 3秒后，如果当前玩家是庄家，显示 dealer call 按钮
+            const localRoomStore = LocalRoomStore.getInstance();
+            const currentPlayerId = localRoomStore.getMyPlayerId();
+
+            if (currentPlayerId === data.dealerId) {
+                console.log('[TheDecreeModeClient] 3 seconds passed, showing dealer call buttons...');
+                if (this.theDecreeUIController) {
+                    this.theDecreeUIController.updateCallButtonsVisibility();
+                    console.log('[TheDecreeModeClient] ✓ Dealer call buttons shown');
+                }
+            }
+        }, 3000);
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    /**
+     * 在UI上显示所有玩家选择的首庄牌
+     * 使用每个玩家自己手牌区域的出牌显示效果
+     */
+    private displayFirstDealerSelections(selections: { playerId: string; card: number }[], dealerId: string): void {
+        console.log('[TheDecreeModeClient] Displaying first dealer selections in each player\'s hand area');
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.warn('[TheDecreeModeClient] PlayerUIManager not found');
+            return;
+        }
+
+        // 为每个玩家显示他们选择的牌（使用出牌显示效果）
+        for (const selection of selections) {
+            const playerIndex = this.getPlayerIndex(selection.playerId);
+            if (playerIndex === -1) {
+                console.warn(`[TheDecreeModeClient] Player ${selection.playerId} not found in mapping`);
+                continue;
+            }
+
+            const playerUINode = playerUIManager.getPlayerUINode(playerIndex);
+            if (!playerUINode) {
+                console.warn(`[TheDecreeModeClient] PlayerUINode not found for index ${playerIndex}`);
+                continue;
+            }
+
+            const handDisplay = playerUINode.getHandDisplay();
+            if (!handDisplay) {
+                console.warn(`[TheDecreeModeClient] HandDisplay not found for index ${playerIndex}`);
+                continue;
+            }
+
+            // 对于主玩家（index 0），不需要重新创建卡牌，因为已经显示了高亮状态
+            // 只需要为其他玩家更新显示（显示他们选择的牌）
+            if (playerIndex === 0) {
+                console.log(`[TheDecreeModeClient] Skipping updateDisplay for main player (index 0) - card already displayed with highlight`);
+            } else {
+                // 使用出牌的显示效果：传入选择的牌作为 playedCards
+                // 这样会在玩家手牌区域显示"已出的牌"效果
+                handDisplay.updateDisplay([selection.card]);
+            }
+
+            const playerName = this.getPlayerName(selection.playerId);
+            const isDealer = selection.playerId === dealerId;
+            console.log(`[TheDecreeModeClient] Displayed selection for ${playerName}: ${this.getCardName(selection.card)}${isDealer ? ' (Dealer 👑)' : ''}`);
+        }
+
+        console.log('[TheDecreeModeClient] ✓ All selections displayed in hand areas');
+    }
+
+    /**
+     * 隐藏首庄选牌显示（重新更新手牌显示，不带出牌效果）
+     */
+    private hideFirstDealerSelections(): void {
+        console.log('[TheDecreeModeClient] Hiding first dealer selections');
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            return;
+        }
+
+        // 为所有玩家重新更新手牌显示，移除出牌效果
+        const playerCount = playerUIManager.getPlayerCount();
+        for (let i = 0; i < playerCount; i++) {
+            const playerUINode = playerUIManager.getPlayerUINode(i);
+            if (playerUINode) {
+                const handDisplay = playerUINode.getHandDisplay();
+                if (handDisplay) {
+                    // 重新显示手牌，不带出牌效果（传入空数组）
+                    handDisplay.updateDisplay([]);
+                }
+            }
+        }
+
+        // ⚠️ 重要：重新启用主玩家的卡牌选择功能
+        // 因为在首庄选择时手动禁用了触摸事件，需要重新启用以便后续游戏阶段可以选牌
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.enableCardSelection();
+            console.log('[TheDecreeModeClient] ✓ Card selection re-enabled for main player');
+        }
+
+        console.log('[TheDecreeModeClient] First dealer selections hidden');
+    }
+
+    /**
+     * 根据playerId获取玩家名字
+     */
+    private getPlayerName(playerId: string): string {
+        const room = LocalRoomStore.getInstance().getCurrentRoom();
+        if (room) {
+            const playerInfo = room.players.find(p => p.id === playerId);
+            if (playerInfo) {
+                return playerInfo.name;
+            }
+        }
+        return 'Unknown';
+    }
+
+    /**
+     * 根据卡牌编码获取卡牌名称（用于显示）
+     */
+    private getCardName(card: number): string {
+        const suits = ['♠', '♥', '♣', '♦'];
+        const points = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+        const suit = (card & 0xF0) >> 4;
+        const point = card & 0x0F;
+
+        if (suit >= 0 && suit < 4 && point >= 1 && point <= 13) {
+            return suits[suit] + points[point];
+        }
+
+        return '未知牌';
+    }
+
     /**
      * 初始化所有玩家的手牌（给没有手牌数据的玩家设置默认数量）
      * 用于显示其他玩家的手牌背面
@@ -350,7 +561,16 @@ export class TheDecreeModeClient extends GameModeClientBase {
             console.log(`[TheDecreeModeClient] Round ${this.currentRoundNumber}, dealer: ${this.dealerId} (index: ${dealerIndex})`);
         }
 
-        // 如果本地玩家是庄家，显示叫牌按钮
+        // 如果是第一回合（首庄选择），不立即显示 call 按钮
+        // call 按钮会在 onFirstDealerReveal 的 3 秒延迟后显示
+        if (data.roundNumber === 1) {
+            console.log('[TheDecreeModeClient] First round - dealer call buttons will be shown after first dealer reveal (3s delay)');
+            console.log('[TheDecreeModeClient] =====================================');
+            return;
+        }
+
+        // 后续回合：如果本地玩家是庄家，立即显示叫牌按钮
+        this.gameState = 'dealer_call';
         const localRoomStore = LocalRoomStore.getInstance();
         const currentPlayerId = localRoomStore.getMyPlayerId();
 
@@ -378,6 +598,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Cards to play:', data.cardsToPlay);
 
         this.cardsToPlay = data.cardsToPlay;
+        this.gameState = 'player_selection';
 
         // 获取当前玩家ID
         const localRoomStore = LocalRoomStore.getInstance();
@@ -463,11 +684,16 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 continue;
             }
 
-            // 更新显示，传入出的牌（result.cards）
-            // 这样会显示玩家出的牌的正面
-            handDisplay.updateDisplay(result.cards);
-
-            console.log(`[TheDecreeModeClient] ✓ Updated cards display for player at relative index ${playerIndex}, cards:`, result.cards);
+            // 对于主玩家（index 0），不需要重新创建卡牌，因为已经显示了高亮状态
+            // 只需要为其他玩家更新显示（显示他们出的牌的正面）
+            if (playerIndex === 0) {
+                console.log(`[TheDecreeModeClient] Skipping updateDisplay for main player (index 0) - cards already displayed with highlight`);
+            } else {
+                // 更新显示，传入出的牌（result.cards）
+                // 这样会显示其他玩家出的牌的正面
+                handDisplay.updateDisplay(result.cards);
+                console.log(`[TheDecreeModeClient] ✓ Updated cards display for player at relative index ${playerIndex}, cards:`, result.cards);
+            }
         }
 
         console.log('[TheDecreeModeClient] =====================================');
@@ -812,11 +1038,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     /**
-     * 获取游戏状态（网络版暂不支持）
+     * 获取游戏状态
      */
     public getState(): string {
-        console.warn('[TheDecreeModeClient] getState() not supported in network mode');
-        return 'unknown';
+        return this.gameState;
     }
 
     /**

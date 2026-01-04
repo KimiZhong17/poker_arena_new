@@ -312,18 +312,18 @@ export class PlayerHandDisplay extends Component {
      */
     private getPlayedCardOffset(): { x: number; y: number } {
         // Define offsets based on player index
-        // 0: Bottom (player) - move up
+        // 0: Bottom (player) - no offset, keep in place with highlight (handled by Poker.setSelected)
         // 1: Left - move right only (no vertical offset)
         // 2: Top - move right (to create symmetry with hand pile on left)
         // 3: Right - move left only (no vertical offset)
         const offsets = [
-            { x: 0, y: 40 },      // Player 0 (Bottom): up
+            { x: 0, y: 0 },       // Player 0 (Bottom): no offset (keep in place, highlight handled by Poker component)
             { x: 150, y: 0 },     // Player 1 (Left): right only
-            { x: 100, y: 0 },  // Player 2 (Top): right and down (symmetry with hand pile)
+            { x: 100, y: 0 },     // Player 2 (Top): right and down (symmetry with hand pile)
             { x: -150, y: 0 }     // Player 3 (Right): left only
         ];
 
-        return offsets[this._playerIndex] || { x: 0, y: 40 };
+        return offsets[this._playerIndex] || { x: 0, y: 0 };
     }
 
     /**

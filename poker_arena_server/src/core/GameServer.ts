@@ -11,6 +11,7 @@ import {
     JoinRoomRequest,
     DealerCallRequest,
     PlayCardsRequest,
+    SelectFirstDealerCardRequest,
     RoomCreatedEvent,
     RoomJoinedEvent,
     PlayerJoinedEvent,
@@ -83,6 +84,11 @@ export class GameServer {
             // 庄家叫牌
             socket.on(ClientMessageType.DEALER_CALL, (data: DealerCallRequest) => {
                 this.handleDealerCall(socket, data);
+            });
+
+            // 选择首个庄家的牌
+            socket.on(ClientMessageType.SELECT_FIRST_DEALER_CARD, (data: SelectFirstDealerCardRequest) => {
+                this.handleSelectFirstDealerCard(socket, data);
             });
 
             // 玩家出牌
@@ -340,6 +346,46 @@ export class GameServer {
         }
 
         console.log(`[GameServer] Game started in room ${room.id}`);
+    }
+
+    /**
+     * 处理选择首个庄家的牌
+     */
+    private handleSelectFirstDealerCard(socket: Socket, data: SelectFirstDealerCardRequest): void {
+        console.log(`[GameServer] ========== handleSelectFirstDealerCard ==========`);
+        console.log(`[GameServer] Received data:`, data);
+        console.log(`[GameServer] Card: 0x${data.card.toString(16)}`);
+
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            console.error(`[GameServer] ✗ Player not found or not in room`);
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+            return;
+        }
+
+        console.log(`[GameServer] Player: ${player.name} (${player.id})`);
+        console.log(`[GameServer] Room ID: ${player.roomId}`);
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            console.error(`[GameServer] ✗ Room not found: ${player.roomId}`);
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        // Verify player ID matches
+        if (data.playerId !== player.id) {
+            console.error(`[GameServer] ✗ Player ID mismatch: ${data.playerId} !== ${player.id}`);
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Player ID mismatch');
+            return;
+        }
+
+        console.log(`[GameServer] Calling room.handleSelectFirstDealerCard...`);
+
+        // Handle select card in room
+        const success = room.handleSelectFirstDealerCard(player.id, data.card);
+
+        console.log(`[GameServer] Player ${player.name} selected card for first dealer (${success ? 'success' : 'failed'})`);
     }
 
     /**

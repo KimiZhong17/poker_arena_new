@@ -14,28 +14,39 @@ export enum CardRankingMode {
 
 /**
  * Get the rank value for a card point based on ranking mode
- * @param point Card point value (1-13, where 1=A, 11=J, 12=Q, 13=K)
+ * @param point Card point value (can be 1-13 for standard, or CardPoint enum value 14-15 for Guandan)
  * @param mode Ranking mode
  * @returns Rank value for sorting
  */
 function getCardRank(point: number, mode: CardRankingMode): number {
+    // Handle CardPoint enum values (Guandan format where A=14, 2=15)
+    // Convert to standard 1-13 format first
+    let normalizedPoint = point;
+    if (point === 14) {
+        normalizedPoint = 1; // A
+    } else if (point === 15) {
+        normalizedPoint = 2; // 2
+    } else if (point >= 3 && point <= 13) {
+        normalizedPoint = point; // 3-K stays the same
+    }
+
     switch (mode) {
         case CardRankingMode.ACE_LOW:
             // A=1, 2=2, ..., K=13
-            return point;
+            return normalizedPoint;
 
         case CardRankingMode.ACE_HIGH:
             // 2=2, ..., K=13, A=14
-            return point === 1 ? 14 : point;
+            return normalizedPoint === 1 ? 14 : normalizedPoint;
 
         case CardRankingMode.TWO_HIGH:
             // 3=3, ..., A=14, 2=15
-            if (point === 2) return 15;
-            if (point === 1) return 14;
-            return point;
+            if (normalizedPoint === 2) return 15;
+            if (normalizedPoint === 1) return 14;
+            return normalizedPoint;
 
         default:
-            return point;
+            return normalizedPoint;
     }
 }
 

@@ -19,6 +19,7 @@ export enum ClientMessageType {
     // 游戏操作
     DEALER_CALL = 'dealer_call',
     PLAY_CARDS = 'play_cards',
+    SELECT_FIRST_DEALER_CARD = 'select_first_dealer_card',
 
     // 心跳
     PING = 'ping'
@@ -59,6 +60,15 @@ export interface PlayCardsRequest {
     cards: number[];
 }
 
+/**
+ * 选择首个庄家的牌请求
+ */
+export interface SelectFirstDealerCardRequest {
+    roomId: string;
+    playerId: string;
+    card: number;
+}
+
 // ==================== 服务器 → 客户端 ====================
 
 /**
@@ -75,6 +85,9 @@ export enum ServerMessageType {
     // 游戏状态
     GAME_START = 'game_start',
     GAME_STATE_UPDATE = 'game_state_update',
+    REQUEST_FIRST_DEALER_SELECTION = 'request_first_dealer_selection',
+    PLAYER_SELECTED_CARD = 'player_selected_card',
+    FIRST_DEALER_REVEAL = 'first_dealer_reveal',
     DEALER_SELECTED = 'dealer_selected',
     DEALER_CALLED = 'dealer_called',
 
@@ -171,6 +184,31 @@ export interface DealCardsEvent {
  */
 export interface CommunityCardsEvent {
     cards: number[];
+}
+
+/**
+ * 请求玩家选择首个庄家的牌
+ */
+export interface RequestFirstDealerSelectionEvent {
+    // 空，仅通知客户端可以选牌
+}
+
+/**
+ * 玩家已选择牌事件（广播）
+ */
+export interface PlayerSelectedCardEvent {
+    playerId: string;
+}
+
+/**
+ * 首个庄家揭晓事件
+ */
+export interface FirstDealerRevealEvent {
+    selections: {
+        playerId: string;
+        card: number;
+    }[];
+    dealerId: string;
 }
 
 /**

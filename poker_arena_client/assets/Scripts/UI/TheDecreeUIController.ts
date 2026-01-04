@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Button, Label, Color } from 'cc';
 import { Game } from '../Game';
 import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
+import { ClientMessageType } from '../Network/Messages';
 const { ccclass, property } = _decorator;
 
 /**
@@ -40,6 +41,7 @@ export class TheDecreeUIController extends Component {
     // Private
     private _game: Game = null!;
     private _selectedCardIndices: number[] = [];
+    private _hasSubmittedFirstDealerSelection: boolean = false; // 防止重复提交首庄选择
 
     onLoad() {
         // Find Game component
@@ -360,20 +362,30 @@ export class TheDecreeUIController extends Component {
 
         // Get the required number of cards to play (set by dealer)
         const cardsToPlay = theDecreeMode.getCardsToPlay();
-        console.log(`[TheDecreeUI] updateUIState - cardsToPlay: ${cardsToPlay}, selected: ${this._selectedCardIndices.length}`);
+        const gameState = theDecreeMode.getState();
+        console.log(`[TheDecreeUI] updateUIState - gameState: ${gameState}, cardsToPlay: ${cardsToPlay}, selected: ${this._selectedCardIndices.length}`);
 
-        // Enable play button only if:
-        // 1. Dealer has called (cardsToPlay > 0)
-        // 2. Player has selected cards
-        // 3. Number of selected cards matches dealer's requirement
-        const hasValidSelection = cardsToPlay > 0 &&
-                                  this._selectedCardIndices.length > 0 &&
-                                  this._selectedCardIndices.length === cardsToPlay;
+        // Enable play button based on game state:
+        // 1. First dealer selection (gameState === 'first_dealer'): enable if exactly 1 card selected
+        // 2. Normal play (cardsToPlay > 0): enable if selected cards match dealer's requirement
+        let hasValidSelection = false;
+
+        if (gameState === 'first_dealer') {
+            // First dealer selection: need exactly 1 card
+            hasValidSelection = this._selectedCardIndices.length === 1;
+        } else {
+            // Normal play: need to match dealer's requirement
+            hasValidSelection = cardsToPlay > 0 &&
+                              this._selectedCardIndices.length > 0 &&
+                              this._selectedCardIndices.length === cardsToPlay;
+        }
 
         this.playButton.interactable = hasValidSelection;
 
         if (hasValidSelection) {
             console.log(`[TheDecreeUI] ✓ Play button enabled (${this._selectedCardIndices.length} cards selected)`);
+        } else if (gameState === 'first_dealer') {
+            console.log(`[TheDecreeUI] ✗ Play button disabled (first dealer selection: need exactly 1 card, selected ${this._selectedCardIndices.length})`);
         } else if (cardsToPlay === 0) {
             console.log(`[TheDecreeUI] ✗ Play button disabled (dealer hasn't called yet)`);
         } else if (this._selectedCardIndices.length === 0) {
@@ -387,6 +399,9 @@ export class TheDecreeUIController extends Component {
 
     /**
      * Handle "Play" button clicked
+     * 处理两种情况：
+     * 1. 首庄选择阶段（gameState === 'first_dealer'）：确认选择首庄的牌
+     * 2. 正常出牌阶段（gameState === 'player_selection'）：出牌
      */
     private onPlayButtonClicked(): void {
         console.log('[TheDecreeUI] ========== Play Button Clicked ==========');
@@ -411,20 +426,11 @@ export class TheDecreeUIController extends Component {
             return;
         }
 
-        // Validate that the number of selected cards matches dealer's requirement
+        const gameState = theDecreeMode.getState();
         const cardsToPlay = theDecreeMode.getCardsToPlay();
-        console.log('[TheDecreeUI] Dealer requires:', cardsToPlay, 'cards');
+        console.log('[TheDecreeUI] gameState:', gameState);
+        console.log('[TheDecreeUI] cardsToPlay:', cardsToPlay);
         console.log('[TheDecreeUI] Player selected:', this._selectedCardIndices.length, 'cards');
-
-        if (cardsToPlay === 0) {
-            console.error('[TheDecreeUI] Cannot play - dealer has not called yet');
-            return;
-        }
-
-        if (this._selectedCardIndices.length !== cardsToPlay) {
-            console.error(`[TheDecreeUI] Invalid number of cards selected! Need ${cardsToPlay}, selected ${this._selectedCardIndices.length}`);
-            return;
-        }
 
         // Get player's hand cards from PlayerUIManager
         const playerUIManager = this._game.playerUIManager;
@@ -470,26 +476,86 @@ export class TheDecreeUIController extends Component {
         // Get current player ID from LocalRoomStore
         const localRoomStore = LocalRoomStore.getInstance();
         const currentPlayerId = localRoomStore.getMyPlayerId();
-        console.log('[TheDecreeUI] Current player ID:', currentPlayerId);
 
-        // Call TheDecreeMode's playCards method (which will send to server)
-        const success = theDecreeMode.playCards(selectedCards, currentPlayerId);
-        console.log('[TheDecreeUI] playCards result:', success);
+        // 判断当前阶段
+        if (gameState === 'first_dealer') {
+            // ========== 首庄选择阶段 ==========
+            console.log('[TheDecreeUI] First dealer selection phase');
 
-        if (success) {
-            console.log('[TheDecreeUI] ✓ Play cards request sent successfully');
+            // 检查是否已经提交过
+            if (this._hasSubmittedFirstDealerSelection) {
+                console.warn('[TheDecreeUI] ✗ Already submitted first dealer selection, ignoring duplicate request');
+                return;
+            }
 
-            // Lock unselected cards (dim them and disable interaction)
-            // Don't clear selection - we want to keep selected cards visible
+            // 只能选择一张牌
+            if (this._selectedCardIndices.length !== 1) {
+                console.error(`[TheDecreeUI] Must select exactly 1 card for first dealer selection! Selected: ${this._selectedCardIndices.length}`);
+                return;
+            }
+
+            const selectedCard = selectedCards[0];
+            console.log('[TheDecreeUI] Selected card for first dealer:', '0x' + selectedCard.toString(16));
+
+            // 发送到服务器
+            if (this._game.networkClient) {
+                this._game.networkClient.send(ClientMessageType.SELECT_FIRST_DEALER_CARD, {
+                    roomId: localRoomStore.getCurrentRoom()?.id,
+                    playerId: currentPlayerId,
+                    card: selectedCard
+                });
+                console.log('[TheDecreeUI] ✓ First dealer card selection sent to server');
+
+                // 标记已提交，防止重复发送
+                this._hasSubmittedFirstDealerSelection = true;
+            }
+
+            // 锁定未选中的牌（变暗），保持选中的牌高亮
             playerUIManager.lockUnselectedCards(0);
 
-            // Disable play button after playing (player cannot play again)
+            // 禁用出牌按钮
             if (this.playButton) {
                 this.playButton.interactable = false;
-                console.log('[TheDecreeUI] Play button disabled after playing cards');
+                console.log('[TheDecreeUI] Play button disabled after first dealer selection');
             }
+
+            console.log('[TheDecreeUI] ⏳ 等待其他玩家选择...');
+
         } else {
-            console.error('[TheDecreeUI] ✗ Failed to send play cards request');
+            // ========== 正常出牌阶段 ==========
+            console.log('[TheDecreeUI] Normal play phase');
+            console.log('[TheDecreeUI] Dealer requires:', cardsToPlay, 'cards');
+
+            if (cardsToPlay === 0) {
+                console.error('[TheDecreeUI] Cannot play - dealer has not called yet');
+                return;
+            }
+
+            // 验证选择的牌数是否匹配
+            if (this._selectedCardIndices.length !== cardsToPlay) {
+                console.error(`[TheDecreeUI] Invalid number of cards selected! Need ${cardsToPlay}, selected ${this._selectedCardIndices.length}`);
+                return;
+            }
+
+            // Call TheDecreeMode's playCards method (which will send to server)
+            const success = theDecreeMode.playCards(selectedCards, currentPlayerId);
+            console.log('[TheDecreeUI] playCards result:', success);
+
+            if (success) {
+                console.log('[TheDecreeUI] ✓ Play cards request sent successfully');
+
+                // Lock unselected cards (dim them and disable interaction)
+                // Don't clear selection - we want to keep selected cards visible
+                playerUIManager.lockUnselectedCards(0);
+
+                // Disable play button after playing (player cannot play again)
+                if (this.playButton) {
+                    this.playButton.interactable = false;
+                    console.log('[TheDecreeUI] Play button disabled after playing cards');
+                }
+            } else {
+                console.error('[TheDecreeUI] ✗ Failed to send play cards request');
+            }
         }
 
         console.log('[TheDecreeUI] =====================================');
