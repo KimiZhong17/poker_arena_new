@@ -184,13 +184,14 @@ export interface DealCardsEvent {
  */
 export interface CommunityCardsEvent {
     cards: number[];
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
  * 请求玩家选择首个庄家的牌
  */
 export interface RequestFirstDealerSelectionEvent {
-    // 空，仅通知客户端可以选牌
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -209,6 +210,7 @@ export interface FirstDealerRevealEvent {
         card: number;
     }[];
     dealerId: string;
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -217,6 +219,7 @@ export interface FirstDealerRevealEvent {
 export interface DealerSelectedEvent {
     dealerId: string;
     roundNumber: number;
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -225,6 +228,7 @@ export interface DealerSelectedEvent {
 export interface DealerCalledEvent {
     dealerId: string;
     cardsToPlay: number;
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -252,6 +256,7 @@ export interface ShowdownResult {
  */
 export interface ShowdownEvent {
     results: ShowdownResult[];
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -261,6 +266,7 @@ export interface RoundEndEvent {
     winnerId: string;
     loserId: string;
     scores: { [playerId: string]: number };
+    gameState: string;  // TheDecreeGameState
 }
 
 /**
@@ -270,6 +276,7 @@ export interface GameOverEvent {
     winnerId: string;
     scores: { [playerId: string]: number };
     totalRounds: number;
+    gameState: string;  // TheDecreeGameState
 }
 
 /**

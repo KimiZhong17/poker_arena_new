@@ -20,9 +20,10 @@ export interface RoundState {
 }
 
 /**
- * Game state enumeration
+ * TheDecree game state enumeration
+ * 服务端和客户端需要保持一致
  */
-export enum GameState {
+export enum TheDecreeGameState {
     SETUP = "setup",
     FIRST_DEALER_SELECTION = "first_dealer",
     DEALER_CALL = "dealer_call",
@@ -37,19 +38,19 @@ export enum GameState {
  * Event callbacks for game state changes
  */
 export interface TheDecreeEventCallbacks {
-    onGameStarted?: (communityCards: number[]) => void;
+    onGameStarted?: (communityCards: number[], gameState: TheDecreeGameState) => void;
     onPlayerDealt?: (playerId: string, cards: number[]) => void;
-    onRequestFirstDealerSelection?: () => void;
+    onRequestFirstDealerSelection?: (gameState: TheDecreeGameState) => void;
     onPlayerSelectedCard?: (playerId: string) => void;
-    onFirstDealerReveal?: (dealerId: string, selections: Map<string, number>) => void;
+    onFirstDealerReveal?: (dealerId: string, selections: Map<string, number>, gameState: TheDecreeGameState) => void;
     onFirstDealerSelected?: (dealerId: string, revealedCards: Map<string, number>) => void;
-    onNewRound?: (roundNumber: number, dealerId: string) => void;
-    onDealerCall?: (dealerId: string, cardsToPlay: number) => void;
+    onNewRound?: (roundNumber: number, dealerId: string, gameState: TheDecreeGameState) => void;
+    onDealerCall?: (dealerId: string, cardsToPlay: number, gameState: TheDecreeGameState) => void;
     onPlayerPlayed?: (playerId: string, cardCount: number) => void;
-    onShowdown?: (results: Map<string, TexasHandResult>) => void;
-    onRoundEnd?: (winnerId: string, loserId: string, scores: Map<string, number>) => void;
+    onShowdown?: (results: Map<string, TexasHandResult>, gameState: TheDecreeGameState) => void;
+    onRoundEnd?: (winnerId: string, loserId: string, scores: Map<string, number>, gameState: TheDecreeGameState) => void;
     onHandsRefilled?: (deckSize: number) => void;
-    onGameOver?: (winnerId: string, scores: Map<string, number>, totalRounds: number) => void;
+    onGameOver?: (winnerId: string, scores: Map<string, number>, totalRounds: number, gameState: TheDecreeGameState) => void;
 }
 
 /**
@@ -65,7 +66,7 @@ export interface TheDecreeEventCallbacks {
  * - 每轮结束后补牌至5张，输家成为下一轮庄家
  */
 export class TheDecreeMode extends GameModeBase {
-    private state: GameState = GameState.SETUP;
+    private state: TheDecreeGameState = TheDecreeGameState.SETUP;
     private playerManager: PlayerManager = new PlayerManager();
     private communityCards: number[] = [];
     private deck: number[] = [];
@@ -102,7 +103,7 @@ export class TheDecreeMode extends GameModeBase {
         this.playerManager.createPlayers(playerInfos, TheDecreePlayer);
         console.log(`[TheDecree] Created ${this.playerManager.getPlayerCount()} players`);
 
-        this.state = GameState.SETUP;
+        this.state = TheDecreeGameState.SETUP;
         this.initializeDeck();
     }
 
@@ -153,11 +154,11 @@ export class TheDecreeMode extends GameModeBase {
 
         console.log('[TheDecree] Cards dealt to players and community');
 
-        this.state = GameState.FIRST_DEALER_SELECTION;
+        this.state = TheDecreeGameState.FIRST_DEALER_SELECTION;
 
         // Notify game started with community cards
         if (this.callbacks.onGameStarted) {
-            this.callbacks.onGameStarted(this.communityCards);
+            this.callbacks.onGameStarted(this.communityCards, this.state);
         }
 
         // Request players to select cards for first dealer
@@ -185,7 +186,7 @@ export class TheDecreeMode extends GameModeBase {
 
         // Notify callback to request selection
         if (this.callbacks.onRequestFirstDealerSelection) {
-            this.callbacks.onRequestFirstDealerSelection();
+            this.callbacks.onRequestFirstDealerSelection(this.state);
         }
     }
 
@@ -197,9 +198,9 @@ export class TheDecreeMode extends GameModeBase {
         console.log(`[TheDecree] Player ID: ${playerId}`);
         console.log(`[TheDecree] Card: 0x${card.toString(16)}`);
         console.log(`[TheDecree] Current state: ${this.state}`);
-        console.log(`[TheDecree] Expected state: ${GameState.FIRST_DEALER_SELECTION}`);
+        console.log(`[TheDecree] Expected state: ${TheDecreeGameState.FIRST_DEALER_SELECTION}`);
 
-        if (this.state !== GameState.FIRST_DEALER_SELECTION) {
+        if (this.state !== TheDecreeGameState.FIRST_DEALER_SELECTION) {
             console.warn(`[TheDecree] ✗ Cannot select card in state: ${this.state}`);
             return false;
         }
@@ -253,9 +254,12 @@ export class TheDecreeMode extends GameModeBase {
         const dealerId = this.selectFirstDealer(this.firstDealerSelections);
         console.log(`[TheDecree] First dealer selected: ${dealerId}`);
 
+        // Move to DEALER_CALL state before callback (will be updated in startNewRound)
+        this.state = TheDecreeGameState.DEALER_CALL;
+
         // Notify callback
         if (this.callbacks.onFirstDealerReveal) {
-            this.callbacks.onFirstDealerReveal(dealerId, this.firstDealerSelections);
+            this.callbacks.onFirstDealerReveal(dealerId, this.firstDealerSelections, this.state);
         }
 
         // Start first round
@@ -283,7 +287,7 @@ export class TheDecreeMode extends GameModeBase {
 
         // Notify callback (using the reveal callback)
         if (this.callbacks.onFirstDealerReveal) {
-            this.callbacks.onFirstDealerReveal(dealerId, revealedCards);
+            this.callbacks.onFirstDealerReveal(dealerId, revealedCards, TheDecreeGameState.DEALER_CALL);
         }
 
         // Also trigger the old callback for compatibility
@@ -347,11 +351,11 @@ export class TheDecreeMode extends GameModeBase {
             theDecreePlayer.resetRound();
         }
 
-        this.state = GameState.DEALER_CALL;
+        this.state = TheDecreeGameState.DEALER_CALL;
 
         // Notify callback
         if (this.callbacks.onNewRound) {
-            this.callbacks.onNewRound(this.currentRound.roundNumber, dealerId);
+            this.callbacks.onNewRound(this.currentRound.roundNumber, dealerId, this.state);
         }
 
         console.log(`[TheDecree] Round ${this.currentRound.roundNumber} started, dealer: ${dealerId}`);
@@ -362,15 +366,15 @@ export class TheDecreeMode extends GameModeBase {
      */
     public dealerCall(dealerId: string, cardsToPlay: 1 | 2 | 3): boolean {
         if (!this.currentRound) return false;
-        if (this.state !== GameState.DEALER_CALL) return false;
+        if (this.state !== TheDecreeGameState.DEALER_CALL) return false;
         if (this.currentRound.dealerId !== dealerId) return false;
 
         this.currentRound.cardsToPlay = cardsToPlay;
-        this.state = GameState.PLAYER_SELECTION;
+        this.state = TheDecreeGameState.PLAYER_SELECTION;
 
         // Notify callback
         if (this.callbacks.onDealerCall) {
-            this.callbacks.onDealerCall(dealerId, cardsToPlay);
+            this.callbacks.onDealerCall(dealerId, cardsToPlay, this.state);
         }
 
         console.log(`[TheDecree] Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
@@ -383,7 +387,7 @@ export class TheDecreeMode extends GameModeBase {
         const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer | undefined;
         if (!player) return false;
 
-        if (this.state !== GameState.PLAYER_SELECTION) return false;
+        if (this.state !== TheDecreeGameState.PLAYER_SELECTION) return false;
         if (player.hasPlayed) return false;
         if (cards.length !== this.currentRound.cardsToPlay) return false;
 
@@ -408,7 +412,7 @@ export class TheDecreeMode extends GameModeBase {
 
         // Check if all players have played
         if (this.allPlayersPlayed()) {
-            this.state = GameState.SHOWDOWN;
+            this.state = TheDecreeGameState.SHOWDOWN;
             this.processShowdown();
         }
 
@@ -451,12 +455,12 @@ export class TheDecreeMode extends GameModeBase {
 
         // Notify callback
         if (this.callbacks.onShowdown) {
-            this.callbacks.onShowdown(results);
+            this.callbacks.onShowdown(results, this.state);
         }
 
         // Calculate scores
         this.calculateScores(results);
-        this.state = GameState.SCORING;
+        this.state = TheDecreeGameState.SCORING;
 
         // Log results
         console.log(`[TheDecree] Round ${this.currentRound.roundNumber} - Winner: ${winnerId}, Loser: ${loserId}`);
@@ -490,13 +494,14 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onRoundEnd(
                 this.currentRound.roundWinnerId!,
                 this.currentRound.roundLoserId!,
-                this.getScores()
+                this.getScores(),
+                this.state
             );
         }
     }
 
     private proceedToRefill(): void {
-        this.state = GameState.REFILL;
+        this.state = TheDecreeGameState.REFILL;
         this.refillHands();
     }
 
@@ -572,7 +577,7 @@ export class TheDecreeMode extends GameModeBase {
 
     private handleGameOver(): void {
         console.log('[TheDecree] Game Over');
-        this.state = GameState.GAME_OVER;
+        this.state = TheDecreeGameState.GAME_OVER;
 
         // Find final winner
         let winnerId = '';
@@ -592,7 +597,8 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onGameOver(
                 winnerId,
                 this.getScores(),
-                this.currentRound?.roundNumber || 0
+                this.currentRound?.roundNumber || 0,
+                this.state
             );
         }
     }
@@ -682,7 +688,7 @@ export class TheDecreeMode extends GameModeBase {
 
     // ==================== Getters ====================
 
-    public getState(): GameState {
+    public getState(): TheDecreeGameState {
         return this.state;
     }
 

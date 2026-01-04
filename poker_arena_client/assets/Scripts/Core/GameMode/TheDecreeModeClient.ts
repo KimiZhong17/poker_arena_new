@@ -21,6 +21,7 @@ import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { PokerFactory } from '../../UI/PokerFactory';
 import { Poker } from '../../UI/Poker';
 import { TheDecreeUIController } from '../../UI/TheDecreeUIController';
+import { TheDecreeGameState } from './TheDecreeGameState';
 
 /**
  * The Decree game mode - Network/Client version
@@ -38,7 +39,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     private dealerId: string = '';
     private currentRoundNumber: number = 0;
     private cardsToPlay: number = 0;
-    private gameState: string = ''; // 服务器的游戏状态：'first_dealer', 'dealer_call', 'player_selection', etc.
+    private gameState: TheDecreeGameState = TheDecreeGameState.SETUP; // 服务器的游戏状态
 
     // 自动出牌设置（仅用于 player_0）
     private isPlayer0AutoPlay: boolean = true;
@@ -287,9 +288,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] 📩 Received community_cards event from server');
         console.log('[TheDecreeModeClient] Cards:', data.cards);
         console.log('[TheDecreeModeClient] Card count:', data.cards.length);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
         console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
 
         this.communityCards = data.cards;
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 显示公共牌
         console.log('[TheDecreeModeClient] Calling displayCommunityCards()...');
@@ -302,13 +305,14 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] =====================================');
     }
 
-    private onRequestFirstDealerSelection(_data: RequestFirstDealerSelectionEvent): void {
+    private onRequestFirstDealerSelection(data: RequestFirstDealerSelectionEvent): void {
         console.log('[TheDecreeModeClient] ========== Request First Dealer Selection Event ==========');
         console.log('[TheDecreeModeClient] 📩 Received request_first_dealer_selection event');
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
         console.log('[TheDecreeModeClient] 💡 提示：请选择一张手牌，牌最大的成为首个庄家');
 
         // 设置游戏状态为首庄选择阶段
-        this.gameState = 'first_dealer';
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 启用卡牌选择（只能选一张）
         // 选择后需要点击"出牌"按钮确认
@@ -335,6 +339,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] ========== First Dealer Reveal Event ==========');
         console.log('[TheDecreeModeClient] 📩 Revealing first dealer selection');
         console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
         console.log('[TheDecreeModeClient] All selections:', data.selections);
 
         // 构建显示信息
@@ -356,11 +361,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.dealerId = data.dealerId;
         this.currentRoundNumber = 1;
 
+        // 设置游戏状态
+        this.gameState = data.gameState as TheDecreeGameState;
+
         // === 在UI上显示所有玩家选择的牌 ===
         this.displayFirstDealerSelections(data.selections, data.dealerId);
-
-        // 设置游戏状态为庄家叫牌阶段
-        this.gameState = 'dealer_call';
 
         // 延迟后清除选择状态和显示的牌，准备游戏
         setTimeout(() => {
@@ -550,9 +555,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Dealer selected:', data);
         console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
         console.log('[TheDecreeModeClient] Round number:', data.roundNumber);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
 
         this.dealerId = data.dealerId;
         this.currentRoundNumber = data.roundNumber;
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 显示庄家指示器（使用基类的 getPlayerIndex）
         const dealerIndex = this.getPlayerIndex(data.dealerId);
@@ -570,7 +577,6 @@ export class TheDecreeModeClient extends GameModeClientBase {
         }
 
         // 后续回合：如果本地玩家是庄家，立即显示叫牌按钮
-        this.gameState = 'dealer_call';
         const localRoomStore = LocalRoomStore.getInstance();
         const currentPlayerId = localRoomStore.getMyPlayerId();
 
@@ -596,9 +602,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] ========== Dealer Called Event ==========');
         console.log('[TheDecreeModeClient] Dealer ID:', data.dealerId);
         console.log('[TheDecreeModeClient] Cards to play:', data.cardsToPlay);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
 
         this.cardsToPlay = data.cardsToPlay;
-        this.gameState = 'player_selection';
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 获取当前玩家ID
         const localRoomStore = LocalRoomStore.getInstance();
@@ -639,6 +646,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
     private onShowdown(data: ShowdownEvent): void {
         console.log('[TheDecreeModeClient] ========== Showdown Event ==========');
         console.log('[TheDecreeModeClient] Showdown results:', data);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
+
+        // 设置游戏状态
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 显示所有玩家的牌型和结果
         for (const result of data.results) {
@@ -704,6 +715,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Winner ID:', data.winnerId);
         console.log('[TheDecreeModeClient] Loser ID:', data.loserId);
         console.log('[TheDecreeModeClient] Scores:', data.scores);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
+
+        // 设置游戏状态
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 更新所有玩家的分数显示
         const playerUIManager = this.game.playerUIManager;
@@ -747,11 +762,20 @@ export class TheDecreeModeClient extends GameModeClientBase {
     }
 
     private onGameOver(data: GameOverEvent): void {
+        console.log('[TheDecreeModeClient] ========== Game Over Event ==========');
         console.log('[TheDecreeModeClient] Game over:', data);
-        console.log(`Winner: ${data.winnerId} with ${data.scores[data.winnerId]} points`);
+        console.log('[TheDecreeModeClient] Winner ID:', data.winnerId);
+        console.log('[TheDecreeModeClient] Total rounds:', data.totalRounds);
+        console.log('[TheDecreeModeClient] Game state:', data.gameState);
+        console.log(`[TheDecreeModeClient] Winner: ${data.winnerId} with ${data.scores[data.winnerId]} points`);
+
+        // 设置游戏状态
+        this.gameState = data.gameState as TheDecreeGameState;
 
         // 切换到结束阶段
         // TODO: 通知 PlayingStage 游戏结束
+
+        console.log('[TheDecreeModeClient] =====================================');
     }
 
     // ==================== UI 辅助方法 ====================
@@ -1040,7 +1064,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     /**
      * 获取游戏状态
      */
-    public getState(): string {
+    public getState(): TheDecreeGameState {
         return this.gameState;
     }
 

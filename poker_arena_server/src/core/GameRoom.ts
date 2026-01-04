@@ -262,14 +262,15 @@ export class GameRoom {
      */
     private initTheDecreeGame(): void {
         const callbacks: TheDecreeEventCallbacks = {
-            onGameStarted: (communityCards) => {
+            onGameStarted: (communityCards, gameState) => {
                 console.log(`[Room ${this.id}] Game started, community cards dealt`);
                 console.log(`[Room ${this.id}] 📤 Broadcasting COMMUNITY_CARDS event to all players`);
                 console.log(`[Room ${this.id}] Community cards:`, communityCards);
 
                 // Broadcast community cards to all players
                 this.broadcast(ServerMessageType.COMMUNITY_CARDS, {
-                    cards: communityCards
+                    cards: communityCards,
+                    gameState: gameState
                 });
 
                 console.log(`[Room ${this.id}] ✓ COMMUNITY_CARDS event sent`);
@@ -289,10 +290,12 @@ export class GameRoom {
                 console.log(`[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
             },
 
-            onRequestFirstDealerSelection: () => {
+            onRequestFirstDealerSelection: (gameState) => {
                 console.log(`[Room ${this.id}] Requesting first dealer selection from all players`);
 
-                this.broadcast(ServerMessageType.REQUEST_FIRST_DEALER_SELECTION, {});
+                this.broadcast(ServerMessageType.REQUEST_FIRST_DEALER_SELECTION, {
+                    gameState: gameState
+                });
             },
 
             onPlayerSelectedCard: (playerId) => {
@@ -303,7 +306,7 @@ export class GameRoom {
                 });
             },
 
-            onFirstDealerReveal: (dealerId, selections) => {
+            onFirstDealerReveal: (dealerId, selections, gameState) => {
                 console.log(`[Room ${this.id}] First dealer revealed: ${dealerId}`);
 
                 // Convert Map to array for JSON serialization
@@ -314,7 +317,8 @@ export class GameRoom {
 
                 this.broadcast(ServerMessageType.FIRST_DEALER_REVEAL, {
                     dealerId,
-                    selections: selectionsArray
+                    selections: selectionsArray,
+                    gameState: gameState
                 });
             },
 
@@ -327,21 +331,23 @@ export class GameRoom {
                 });
             },
 
-            onNewRound: (roundNumber, dealerId) => {
+            onNewRound: (roundNumber, dealerId, gameState) => {
                 console.log(`[Room ${this.id}] Round ${roundNumber} started, dealer: ${dealerId}`);
 
                 this.broadcast(ServerMessageType.DEALER_SELECTED, {
                     dealerId,
-                    roundNumber
+                    roundNumber,
+                    gameState: gameState
                 });
             },
 
-            onDealerCall: (dealerId, cardsToPlay) => {
+            onDealerCall: (dealerId, cardsToPlay, gameState) => {
                 console.log(`[Room ${this.id}] Dealer ${dealerId} calls ${cardsToPlay} cards`);
 
                 this.broadcast(ServerMessageType.DEALER_CALLED, {
                     dealerId,
-                    cardsToPlay
+                    cardsToPlay,
+                    gameState: gameState
                 });
             },
 
@@ -355,7 +361,7 @@ export class GameRoom {
                 });
             },
 
-            onShowdown: (results) => {
+            onShowdown: (results, gameState) => {
                 console.log(`[Room ${this.id}] Showdown`);
 
                 // Build showdown results
@@ -372,11 +378,12 @@ export class GameRoom {
                 });
 
                 this.broadcast(ServerMessageType.SHOWDOWN, {
-                    results: showdownResults
+                    results: showdownResults,
+                    gameState: gameState
                 });
             },
 
-            onRoundEnd: (winnerId, loserId, scores) => {
+            onRoundEnd: (winnerId, loserId, scores, gameState) => {
                 console.log(`[Room ${this.id}] Round end - Winner: ${winnerId}, Loser: ${loserId}`);
 
                 // Convert Map to object for JSON serialization
@@ -388,7 +395,8 @@ export class GameRoom {
                 this.broadcast(ServerMessageType.ROUND_END, {
                     winnerId,
                     loserId,
-                    scores: scoresObj
+                    scores: scoresObj,
+                    gameState: gameState
                 });
             },
 
@@ -406,7 +414,7 @@ export class GameRoom {
                 }
             },
 
-            onGameOver: (winnerId, scores, totalRounds) => {
+            onGameOver: (winnerId, scores, totalRounds, gameState) => {
                 console.log(`[Room ${this.id}] Game over - Winner: ${winnerId}`);
 
                 const scoresObj: { [key: string]: number } = {};
@@ -417,7 +425,8 @@ export class GameRoom {
                 this.broadcast(ServerMessageType.GAME_OVER, {
                     winnerId,
                     scores: scoresObj,
-                    totalRounds
+                    totalRounds,
+                    gameState: gameState
                 });
 
                 // End game after a delay
