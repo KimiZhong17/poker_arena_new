@@ -575,8 +575,20 @@ export class TheDecreeUIController extends Component {
             return;
         }
 
-        console.log('[TheDecreeUI] Calling dealerCall method...');
-        const success = this._game.dealerCall(cardsCount);
+        // Get TheDecreeModeClient from PlayingStage
+        const playingStage = this._game.stageManager?.getCurrentStage();
+        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+
+        console.log('[TheDecreeUI] playingStage:', !!playingStage);
+        console.log('[TheDecreeUI] theDecreeMode:', !!theDecreeMode);
+
+        if (!theDecreeMode) {
+            console.error('[TheDecreeUI] TheDecreeModeClient not found!');
+            return;
+        }
+
+        console.log('[TheDecreeUI] Calling dealerCall method on TheDecreeModeClient...');
+        const success = theDecreeMode.dealerCall(cardsCount);
         console.log('[TheDecreeUI] dealerCall result:', success);
 
         if (success) {

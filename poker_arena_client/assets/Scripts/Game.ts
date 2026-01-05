@@ -3,8 +3,6 @@ import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
 import { SceneManager } from './SceneManager';
-import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
-import { GameModeClientBase } from './Core/GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from './Core/GameMode/TheDecreeModeClient';
 import { GameStage } from './Core/Stage/StageManager';
 import { StageManager } from './Core/Stage/StageManager';
@@ -20,9 +18,6 @@ const { ccclass, property } = _decorator;
 
 @ccclass('Game')
 export class Game extends Component {
-
-    @property(Node)
-    public gameControllerNode: Node = null!;
 
     @property(Node)
     public playerUIManagerNode: Node = null!;
@@ -76,17 +71,6 @@ export class Game extends Component {
         this.isOnlineMode = transitionData.isOnlineMode || false;
 
         console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}, Online Mode: ${this.isOnlineMode}`);
-
-        // Initialize GameController
-        if (this.gameControllerNode) {
-            this._gameController = this.gameControllerNode.getComponent(GameController);
-            if (!this._gameController) {
-                this._gameController = this.gameControllerNode.addComponent(GameController);
-            }
-        } else {
-            // If no node assigned, add to current node
-            this._gameController = this.node.addComponent(GameController);
-        }
 
         assetManager.loadBundle("Pokers", (err, bundle) => {
             if (err) {
@@ -510,8 +494,6 @@ export class Game extends Component {
         return this._playerUIManager;
     }
 
-    // ==================== Legacy TheDecree Interfaces (被PlayingStage使用) ====================
-
     /**
      * Get The Decree mode instance
      */
@@ -519,454 +501,399 @@ export class Game extends Component {
         return this._theDecreeMode;
     }
 
-    /**
-     * Get community cards (4 cards shared by all players)
-     */
-    public getCommunityCards(): number[] {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return [];
-        }
-        return this._theDecreeMode.getCommunityCards();
-    }
-
-    /**
-     * Get a player's hand cards (5 cards)
-     * @param playerId Player ID (e.g., 'player_0')
-     */
-    public getPlayerHand(playerId: string): number[] {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return [];
-        }
-        const playerState = this._theDecreeMode.getPlayer(playerId);
-        return playerState ? playerState.handCards : [];
-    }
-
-    /**
-     * Get all players' scores
-     */
-    public getPlayerScores(): Map<string, number> {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return new Map();
-        }
-        return this._theDecreeMode.getScores();
-    }
-
-    /**
-     * Get current game state
-     */
-    public getTheDecreeState(): string {
-        if (!this._theDecreeMode) {
-            return 'NOT_INITIALIZED';
-        }
-        return this._theDecreeMode.getState();
-    }
-
-    /**
-     * Get current round information
-     */
-    public getCurrentRound(): any {
-        if (!this._theDecreeMode) {
-            return null;
-        }
-        return this._theDecreeMode.getCurrentRound();
-    }
-
-    /**
-     * Phase 1: Select first dealer by revealing one card from each player
-     * @param revealedCards Map of playerId -> card index (0-4)
-     * @returns The dealer's player ID
-     */
-    public selectFirstDealer(revealedCards: Map<string, number>): string {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return '';
-        }
-
-        // Convert card indices to actual cards
-        const cardMap = new Map<string, number>();
-        for (const [playerId, cardIndex] of revealedCards) {
-            const playerState = this._theDecreeMode.getPlayer(playerId);
-            if (playerState && cardIndex >= 0 && cardIndex < playerState.handCards.length) {
-                cardMap.set(playerId, playerState.handCards[cardIndex]);
-            }
-        }
-
-        const dealerId = this._theDecreeMode.selectFirstDealer(cardMap);
-        console.log(`[The Decree] First dealer selected: ${dealerId}`);
-
-        // Start first round
-        this._theDecreeMode.startNewRound(dealerId);
-
-        return dealerId;
-    }
-
-    /**
-     * Phase 2: Dealer calls how many cards to play (1, 2, or 3)
-     * @param cardsToPlay Number of cards (1, 2, or 3)
-     * @returns Success status
-     */
-    public dealerCall(cardsToPlay: 1 | 2 | 3): boolean {
-        console.log('[Game] dealerCall called, cardsToPlay:', cardsToPlay);
-
-        // Try to get game mode from PlayingStage
-        const playingStage = this.stageManager?.getCurrentStage();
-        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
-
-        console.log('[Game] playingStage:', !!playingStage);
-        console.log('[Game] theDecreeMode:', !!theDecreeMode);
-
-        if (!theDecreeMode) {
-            console.error('[Game] TheDecreeMode not found! Trying legacy _theDecreeMode...');
-
-            // Fallback to legacy _theDecreeMode
-            if (!this._theDecreeMode) {
-                console.error('[Game] Game mode not initialized (neither new nor legacy)');
-                return false;
-            }
-
-            const success = this._theDecreeMode.dealerCall(cardsToPlay);
-            console.log('[Game] Legacy dealerCall result:', success);
-
-            if (success) {
-                console.log(`[Game] ✓ Dealer called: ${cardsToPlay} cards to play`);
-            } else {
-                console.error('[Game] ✗ Failed to call. Wrong game state.');
-            }
-
-            return success;
-        }
-
-        console.log('[Game] Calling dealerCall on TheDecreeMode...');
-        const success = theDecreeMode.dealerCall(cardsToPlay);
-        console.log('[Game] dealerCall result:', success);
-
-        if (success) {
-            console.log(`[Game] ✓ Dealer called: ${cardsToPlay} cards to play`);
-        } else {
-            console.error('[Game] ✗ Failed to call. Wrong game state.');
-        }
-
-        return success;
-    }
-
-    /**
-     * Universal interface: Player selects cards to play
-     * Routes to appropriate game mode implementation
-     * @param playerId Player ID (for The Decree) or player index as string (for Guandan)
-     * @param cardIndices Indices of cards in player's hand (e.g., [0, 2] for 1st and 3rd card)
-     * @returns Success status
-     */
-    public playerSelectCards(playerId: string, cardIndices: number[]): boolean {
-        if (this._gameMode === 'the_decree') {
-            return this._playerSelectCardsTheDecree(playerId, cardIndices);
-        } else if (this._gameMode === 'guandan') {
-            return this._playerSelectCardsGuandan(playerId, cardIndices);
-        } else {
-            console.error(`[Game] Unknown game mode: ${this._gameMode}`);
-            return false;
-        }
-    }
-
-    /**
-     * The Decree mode: Player selects cards to play
-     * @param playerId Player ID (e.g., 'player_0')
-     * @param cardIndices Indices of cards in player's hand
-     * @returns Success status
-     */
-    private _playerSelectCardsTheDecree(playerId: string, cardIndices: number[]): boolean {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return false;
-        }
-
-        const playerState = this._theDecreeMode.getPlayer(playerId);
-        if (!playerState) {
-            console.error(`[The Decree] Player ${playerId} not found`);
-            return false;
-        }
-
-        // Convert indices to actual cards
-        const cards = cardIndices.map(index => playerState.handCards[index]).filter(c => c !== undefined);
-
-        const success = this._theDecreeMode.playCards(cards, playerId);
-        if (success) {
-            console.log(`[The Decree] Player ${playerId} played ${cards.length} cards`);
-
-            // Check if round is over (all players played)
-            const currentRound = this._theDecreeMode.getCurrentRound();
-            if (currentRound && currentRound.roundWinnerId) {
-                console.log(`[The Decree] Round complete!`);
-                console.log(`Winner: ${currentRound.roundWinnerId}`);
-                console.log(`Loser: ${currentRound.roundLoserId}`);
-            }
-        } else {
-            console.error('[The Decree] Failed to play cards');
-        }
-
-        return success;
-    }
-
-    /**
-     * Guandan mode: Player selects cards to play
-     * @param playerId Player index as string (e.g., '0', '1', '2')
-     * @param cardIndices Indices of cards in player's hand
-     * @returns Success status
-     */
-    private _playerSelectCardsGuandan(playerId: string, cardIndices: number[]): boolean {
-        if (!this._gameController) {
-            console.error('[Guandan] Game controller not initialized');
-            return false;
-        }
-
-        // Convert playerId string to player index
-        const playerIndex = parseInt(playerId, 10);
-        if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
-            console.error(`[Guandan] Invalid player index: ${playerId}`);
-            return false;
-        }
-
-        const player = this._gameController.players[playerIndex];
-        if (!player) {
-            console.error(`[Guandan] Player ${playerIndex} not found`);
-            return false;
-        }
-
-        // Convert indices to actual cards
-        const cards = cardIndices.map(index => player.handCards[index]).filter(c => c !== undefined);
-
-        if (cards.length === 0) {
-            console.error(`[Guandan] No valid cards selected`);
-            return false;
-        }
-
-        // Call game controller to play cards
-        const success = this._gameController.playCards(playerIndex, cards);
-        if (success) {
-            console.log(`[Guandan] Player ${player.name} (${playerIndex}) played ${cards.length} cards`);
-
-            // Update hand display
-            this._playerUIManager.updatePlayerHand(playerIndex);
-
-            // Check if player finished
-            if (player.isFinished()) {
-                console.log(`[Guandan] Player ${player.name} finished!`);
-            }
-        } else {
-            console.error(`[Guandan] Failed to play cards for player ${playerIndex}`);
-        }
-
-        return success;
-    }
-
-    /**
-     * Universal interface: Player passes their turn
-     * Routes to appropriate game mode implementation (Guandan only, The Decree doesn't support passing)
-     * @param playerId Player ID or player index as string
-     * @returns Success status
-     */
-    public playerPass(playerId: string): boolean {
-        if (this._gameMode === 'the_decree') {
-            console.error('[The Decree] Pass is not supported in The Decree mode');
-            return false;
-        } else if (this._gameMode === 'guandan') {
-            return this._playerPassGuandan(playerId);
-        } else {
-            console.error(`[Game] Unknown game mode: ${this._gameMode}`);
-            return false;
-        }
-    }
-
-    /**
-     * Guandan mode: Player passes their turn
-     * @param playerId Player index as string (e.g., '0', '1', '2')
-     * @returns Success status
-     */
-    private _playerPassGuandan(playerId: string): boolean {
-        if (!this._gameController) {
-            console.error('[Guandan] Game controller not initialized');
-            return false;
-        }
-
-        // Convert playerId string to player index
-        const playerIndex = parseInt(playerId, 10);
-        if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
-            console.error(`[Guandan] Invalid player index: ${playerId}`);
-            return false;
-        }
-
-        const player = this._gameController.players[playerIndex];
-        if (!player) {
-            console.error(`[Guandan] Player ${playerIndex} not found`);
-            return false;
-        }
-
-        // Call game controller to pass
-        const success = this._gameController.pass(playerIndex);
-        if (success) {
-            console.log(`[Guandan] Player ${player.name} (${playerIndex}) passed`);
-        } else {
-            console.error(`[Guandan] Failed to pass for player ${playerIndex}`);
-        }
-
-        return success;
-    }
-
-    /**
-     * Phase 4: Refill players' hands to 5 cards
-     * Call this after showdown to start next round
-     */
-    public refillHands(): void {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return;
-        }
-
-        this._theDecreeMode.refillHands();
-        console.log('[The Decree] Hands refilled');
-
-        // Check if game is over
-        if (this._theDecreeMode.isGameOver()) {
-            console.log('[The Decree] Game Over!');
-            this.showFinalScores();
-        } else {
-            console.log('[The Decree] Next round started');
-        }
-    }
-
-    /**
-     * Show final scores and winner
-     */
-    private showFinalScores(): void {
-        if (!this._theDecreeMode) return;
-
-        const scores = this._theDecreeMode.getScores();
-        console.log('=== Final Scores ===');
-
-        let maxScore = -1;
-        let winnerId = '';
-
-        for (const [playerId, score] of scores) {
-            console.log(`${playerId}: ${score} points`);
-            if (score > maxScore) {
-                maxScore = score;
-                winnerId = playerId;
-            }
-        }
-
-        console.log(`\nWinner: ${winnerId} with ${maxScore} points!`);
-    }
-
-    /**
-     * Get player's played cards in current round
-     * @param playerId Player ID
-     */
-    public getPlayerPlayedCards(playerId: string): number[] {
-        if (!this._theDecreeMode) {
-            return [];
-        }
-
-        const currentRound = this._theDecreeMode.getCurrentRound();
-        if (!currentRound) {
-            return [];
-        }
-
-        return currentRound.playerPlays.get(playerId) || [];
-    }
-
-    /**
-     * Check if all players have played in current round
-     */
-    public allPlayersPlayed(): boolean {
-        if (!this._theDecreeMode) {
-            return false;
-        }
-
-        const currentRound = this._theDecreeMode.getCurrentRound();
-        if (!currentRound) {
-            return false;
-        }
-
-        return currentRound.playerPlays.size === 4; // 4 players
-    }
-
-    /**
-     * Get the hand type and rank for comparison
-     * Used to show what hand each player made
-     * @param playerId Player ID
-     */
-    public getPlayerHandResult(playerId: string): any {
-        if (!this._theDecreeMode) {
-            return null;
-        }
-
-        const currentRound = this._theDecreeMode.getCurrentRound();
-        if (!currentRound) {
-            return null;
-        }
-
-        const playedCards = currentRound.playerPlays.get(playerId);
-        if (!playedCards) {
-            return null;
-        }
-
-        // Combine played cards with community cards
-        const communityCards = this._theDecreeMode.getCommunityCards();
-        const allCards = [...playedCards, ...communityCards];
-
-        // Import TexasHoldEmEvaluator to evaluate hand
-        // This will be used for display purposes
-        return {
-            playedCards,
-            communityCards,
-            allCards
-            // TODO: Add hand type and rank
-        };
-    }
-
-    /**
-     * Quick test method: Auto-play a complete round
-     * This is for testing purposes
-     */
-    public autoPlayTestRound(): void {
-        if (!this._theDecreeMode) {
-            console.error('[The Decree] Game not initialized');
-            return;
-        }
-
-        console.log('\n=== Auto-Play Test Round ===');
-
-        // Step 1: Select first dealer (each player reveals their first card)
-        const revealedCards = new Map<string, number>();
-        revealedCards.set('player_0', 0);
-        revealedCards.set('player_1', 0);
-        revealedCards.set('player_2', 0);
-        revealedCards.set('player_3', 0);
-
-        const dealerId = this.selectFirstDealer(revealedCards);
-        console.log(`Dealer: ${dealerId}`);
-
-        // Step 2: Dealer calls number of cards
-        this.dealerCall(2); // Play 2 cards
-
-        // Step 3: All players select cards
-        this.playerSelectCards('player_0', [0, 1]); // Player 0 plays first 2 cards
-        this.playerSelectCards('player_1', [0, 1]);
-        this.playerSelectCards('player_2', [0, 1]);
-        this.playerSelectCards('player_3', [0, 1]);
-
-        // Step 4: Refill hands
-        this.scheduleOnce(() => {
-            this.refillHands();
-        }, 2);
-    }
-
-    // ==================== The Decree Helper Methods ====================
-    // NOTE: Most helper methods have been moved to TheDecreeMode itself
-    // Legacy methods removed:
-    // - initializeTheDecreeHandsDisplay() - now handled by TheDecreeMode.displayCards()
-    // - displayCommunityCards() - now handled by TheDecreeMode.displayCommunityCards()
-    // - updateTheDecreeHandsDisplay() - now handled by TheDecreeMode.syncPlayerDataToUI()
+    // /**
+    //  * Get community cards (4 cards shared by all players)
+    //  */
+    // public getCommunityCards(): number[] {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return [];
+    //     }
+    //     return this._theDecreeMode.getCommunityCards();
+    // }
+
+    // /**
+    //  * Get a player's hand cards (5 cards)
+    //  * @param playerId Player ID (e.g., 'player_0')
+    //  */
+    // public getPlayerHand(playerId: string): number[] {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return [];
+    //     }
+    //     const playerState = this._theDecreeMode.getPlayer(playerId);
+    //     return playerState ? playerState.handCards : [];
+    // }
+
+    // /**
+    //  * Get all players' scores
+    //  */
+    // public getPlayerScores(): Map<string, number> {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return new Map();
+    //     }
+    //     return this._theDecreeMode.getScores();
+    // }
+
+    // /**
+    //  * Get current game state
+    //  */
+    // public getTheDecreeState(): string {
+    //     if (!this._theDecreeMode) {
+    //         return 'NOT_INITIALIZED';
+    //     }
+    //     return this._theDecreeMode.getState();
+    // }
+
+    // /**
+    //  * Get current round information
+    //  */
+    // public getCurrentRound(): any {
+    //     if (!this._theDecreeMode) {
+    //         return null;
+    //     }
+    //     return this._theDecreeMode.getCurrentRound();
+    // }
+
+    // /**
+    //  * Phase 1: Select first dealer by revealing one card from each player
+    //  * @param revealedCards Map of playerId -> card index (0-4)
+    //  * @returns The dealer's player ID
+    //  */
+    // public selectFirstDealer(revealedCards: Map<string, number>): string {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return '';
+    //     }
+
+    //     // Convert card indices to actual cards
+    //     const cardMap = new Map<string, number>();
+    //     for (const [playerId, cardIndex] of revealedCards) {
+    //         const playerState = this._theDecreeMode.getPlayer(playerId);
+    //         if (playerState && cardIndex >= 0 && cardIndex < playerState.handCards.length) {
+    //             cardMap.set(playerId, playerState.handCards[cardIndex]);
+    //         }
+    //     }
+
+    //     const dealerId = this._theDecreeMode.selectFirstDealer(cardMap);
+    //     console.log(`[The Decree] First dealer selected: ${dealerId}`);
+
+    //     // Start first round
+    //     this._theDecreeMode.startNewRound(dealerId);
+
+    //     return dealerId;
+    // }
+
+
+    // /**
+    //  * Universal interface: Player selects cards to play
+    //  * Routes to appropriate game mode implementation
+    //  * @param playerId Player ID (for The Decree) or player index as string (for Guandan)
+    //  * @param cardIndices Indices of cards in player's hand (e.g., [0, 2] for 1st and 3rd card)
+    //  * @returns Success status
+    //  */
+    // public playerSelectCards(playerId: string, cardIndices: number[]): boolean {
+    //     if (this._gameMode === 'the_decree') {
+    //         return this._playerSelectCardsTheDecree(playerId, cardIndices);
+    //     } else if (this._gameMode === 'guandan') {
+    //         return this._playerSelectCardsGuandan(playerId, cardIndices);
+    //     } else {
+    //         console.error(`[Game] Unknown game mode: ${this._gameMode}`);
+    //         return false;
+    //     }
+    // }
+
+    // /**
+    //  * The Decree mode: Player selects cards to play
+    //  * @param playerId Player ID (e.g., 'player_0')
+    //  * @param cardIndices Indices of cards in player's hand
+    //  * @returns Success status
+    //  */
+    // private _playerSelectCardsTheDecree(playerId: string, cardIndices: number[]): boolean {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return false;
+    //     }
+
+    //     const playerState = this._theDecreeMode.getPlayer(playerId);
+    //     if (!playerState) {
+    //         console.error(`[The Decree] Player ${playerId} not found`);
+    //         return false;
+    //     }
+
+    //     // Convert indices to actual cards
+    //     const cards = cardIndices.map(index => playerState.handCards[index]).filter(c => c !== undefined);
+
+    //     const success = this._theDecreeMode.playCards(cards, playerId);
+    //     if (success) {
+    //         console.log(`[The Decree] Player ${playerId} played ${cards.length} cards`);
+
+    //         // Check if round is over (all players played)
+    //         const currentRound = this._theDecreeMode.getCurrentRound();
+    //         if (currentRound && currentRound.roundWinnerId) {
+    //             console.log(`[The Decree] Round complete!`);
+    //             console.log(`Winner: ${currentRound.roundWinnerId}`);
+    //             console.log(`Loser: ${currentRound.roundLoserId}`);
+    //         }
+    //     } else {
+    //         console.error('[The Decree] Failed to play cards');
+    //     }
+
+    //     return success;
+    // }
+
+    // /**
+    //  * Guandan mode: Player selects cards to play
+    //  * @param playerId Player index as string (e.g., '0', '1', '2')
+    //  * @param cardIndices Indices of cards in player's hand
+    //  * @returns Success status
+    //  */
+    // private _playerSelectCardsGuandan(playerId: string, cardIndices: number[]): boolean {
+    //     if (!this._gameController) {
+    //         console.error('[Guandan] Game controller not initialized');
+    //         return false;
+    //     }
+
+    //     // Convert playerId string to player index
+    //     const playerIndex = parseInt(playerId, 10);
+    //     if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
+    //         console.error(`[Guandan] Invalid player index: ${playerId}`);
+    //         return false;
+    //     }
+
+    //     const player = this._gameController.players[playerIndex];
+    //     if (!player) {
+    //         console.error(`[Guandan] Player ${playerIndex} not found`);
+    //         return false;
+    //     }
+
+    //     // Convert indices to actual cards
+    //     const cards = cardIndices.map(index => player.handCards[index]).filter(c => c !== undefined);
+
+    //     if (cards.length === 0) {
+    //         console.error(`[Guandan] No valid cards selected`);
+    //         return false;
+    //     }
+
+    //     // Call game controller to play cards
+    //     const success = this._gameController.playCards(playerIndex, cards);
+    //     if (success) {
+    //         console.log(`[Guandan] Player ${player.name} (${playerIndex}) played ${cards.length} cards`);
+
+    //         // Update hand display
+    //         this._playerUIManager.updatePlayerHand(playerIndex);
+
+    //         // Check if player finished
+    //         if (player.isFinished()) {
+    //             console.log(`[Guandan] Player ${player.name} finished!`);
+    //         }
+    //     } else {
+    //         console.error(`[Guandan] Failed to play cards for player ${playerIndex}`);
+    //     }
+
+    //     return success;
+    // }
+
+    // /**
+    //  * Universal interface: Player passes their turn
+    //  * Routes to appropriate game mode implementation (Guandan only, The Decree doesn't support passing)
+    //  * @param playerId Player ID or player index as string
+    //  * @returns Success status
+    //  */
+    // public playerPass(playerId: string): boolean {
+    //     if (this._gameMode === 'the_decree') {
+    //         console.error('[The Decree] Pass is not supported in The Decree mode');
+    //         return false;
+    //     } else if (this._gameMode === 'guandan') {
+    //         return this._playerPassGuandan(playerId);
+    //     } else {
+    //         console.error(`[Game] Unknown game mode: ${this._gameMode}`);
+    //         return false;
+    //     }
+    // }
+
+    // /**
+    //  * Guandan mode: Player passes their turn
+    //  * @param playerId Player index as string (e.g., '0', '1', '2')
+    //  * @returns Success status
+    //  */
+    // private _playerPassGuandan(playerId: string): boolean {
+    //     if (!this._gameController) {
+    //         console.error('[Guandan] Game controller not initialized');
+    //         return false;
+    //     }
+
+    //     // Convert playerId string to player index
+    //     const playerIndex = parseInt(playerId, 10);
+    //     if (isNaN(playerIndex) || playerIndex < 0 || playerIndex >= this._gameController.players.length) {
+    //         console.error(`[Guandan] Invalid player index: ${playerId}`);
+    //         return false;
+    //     }
+
+    //     const player = this._gameController.players[playerIndex];
+    //     if (!player) {
+    //         console.error(`[Guandan] Player ${playerIndex} not found`);
+    //         return false;
+    //     }
+
+    //     // Call game controller to pass
+    //     const success = this._gameController.pass(playerIndex);
+    //     if (success) {
+    //         console.log(`[Guandan] Player ${player.name} (${playerIndex}) passed`);
+    //     } else {
+    //         console.error(`[Guandan] Failed to pass for player ${playerIndex}`);
+    //     }
+
+    //     return success;
+    // }
+
+    // /**
+    //  * Phase 4: Refill players' hands to 5 cards
+    //  * Call this after showdown to start next round
+    //  */
+    // public refillHands(): void {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return;
+    //     }
+
+    //     this._theDecreeMode.refillHands();
+    //     console.log('[The Decree] Hands refilled');
+
+    //     // Check if game is over
+    //     if (this._theDecreeMode.isGameOver()) {
+    //         console.log('[The Decree] Game Over!');
+    //         this.showFinalScores();
+    //     } else {
+    //         console.log('[The Decree] Next round started');
+    //     }
+    // }
+
+    // /**
+    //  * Show final scores and winner
+    //  */
+    // private showFinalScores(): void {
+    //     if (!this._theDecreeMode) return;
+
+    //     const scores = this._theDecreeMode.getScores();
+    //     console.log('=== Final Scores ===');
+
+    //     let maxScore = -1;
+    //     let winnerId = '';
+
+    //     for (const [playerId, score] of scores) {
+    //         console.log(`${playerId}: ${score} points`);
+    //         if (score > maxScore) {
+    //             maxScore = score;
+    //             winnerId = playerId;
+    //         }
+    //     }
+
+    //     console.log(`\nWinner: ${winnerId} with ${maxScore} points!`);
+    // }
+
+    // /**
+    //  * Get player's played cards in current round
+    //  * @param playerId Player ID
+    //  */
+    // public getPlayerPlayedCards(playerId: string): number[] {
+    //     if (!this._theDecreeMode) {
+    //         return [];
+    //     }
+
+    //     const currentRound = this._theDecreeMode.getCurrentRound();
+    //     if (!currentRound) {
+    //         return [];
+    //     }
+
+    //     return currentRound.playerPlays.get(playerId) || [];
+    // }
+
+    // /**
+    //  * Check if all players have played in current round
+    //  */
+    // public allPlayersPlayed(): boolean {
+    //     if (!this._theDecreeMode) {
+    //         return false;
+    //     }
+
+    //     const currentRound = this._theDecreeMode.getCurrentRound();
+    //     if (!currentRound) {
+    //         return false;
+    //     }
+
+    //     return currentRound.playerPlays.size === 4; // 4 players
+    // }
+
+    // /**
+    //  * Get the hand type and rank for comparison
+    //  * Used to show what hand each player made
+    //  * @param playerId Player ID
+    //  */
+    // public getPlayerHandResult(playerId: string): any {
+    //     if (!this._theDecreeMode) {
+    //         return null;
+    //     }
+
+    //     const currentRound = this._theDecreeMode.getCurrentRound();
+    //     if (!currentRound) {
+    //         return null;
+    //     }
+
+    //     const playedCards = currentRound.playerPlays.get(playerId);
+    //     if (!playedCards) {
+    //         return null;
+    //     }
+
+    //     // Combine played cards with community cards
+    //     const communityCards = this._theDecreeMode.getCommunityCards();
+    //     const allCards = [...playedCards, ...communityCards];
+
+    //     // Import TexasHoldEmEvaluator to evaluate hand
+    //     // This will be used for display purposes
+    //     return {
+    //         playedCards,
+    //         communityCards,
+    //         allCards
+    //         // TODO: Add hand type and rank
+    //     };
+    // }
+
+    // /**
+    //  * Quick test method: Auto-play a complete round
+    //  * This is for testing purposes
+    //  */
+    // public autoPlayTestRound(): void {
+    //     if (!this._theDecreeMode) {
+    //         console.error('[The Decree] Game not initialized');
+    //         return;
+    //     }
+
+    //     console.log('\n=== Auto-Play Test Round ===');
+
+    //     // Step 1: Select first dealer (each player reveals their first card)
+    //     const revealedCards = new Map<string, number>();
+    //     revealedCards.set('player_0', 0);
+    //     revealedCards.set('player_1', 0);
+    //     revealedCards.set('player_2', 0);
+    //     revealedCards.set('player_3', 0);
+
+    //     const dealerId = this.selectFirstDealer(revealedCards);
+    //     console.log(`Dealer: ${dealerId}`);
+
+    //     // Step 2: Dealer calls number of cards
+    //     this.dealerCall(2); // Play 2 cards
+
+    //     // Step 3: All players select cards
+    //     this.playerSelectCards('player_0', [0, 1]); // Player 0 plays first 2 cards
+    //     this.playerSelectCards('player_1', [0, 1]);
+    //     this.playerSelectCards('player_2', [0, 1]);
+    //     this.playerSelectCards('player_3', [0, 1]);
+
+    //     // Step 4: Refill hands
+    //     this.scheduleOnce(() => {
+    //         this.refillHands();
+    //     }, 2);
+    // }
 }
