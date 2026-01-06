@@ -1,22 +1,23 @@
 import { NetworkClient } from '../Network/NetworkClient';
 import { LocalUserStore } from '../LocalStore/LocalUserStore';
 import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
-import { 
-    ClientMessageType, 
-    RoomJoinedEvent, 
-    ServerMessageType, 
-    PlayerReadyEvent, 
+import { LocalGameStore } from '../LocalStore/LocalGameStore';
+import {
+    ClientMessageType,
+    RoomJoinedEvent,
+    ServerMessageType,
+    PlayerReadyEvent,
     PlayerLeftEvent,
-    PlayerJoinedEvent 
+    PlayerJoinedEvent
 } from '../Network/Messages';
 import { NetworkManager } from '../Network/NetworkManager';
+import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
 
 export class RoomService {
     private static instance: RoomService;
     private localUserStore: LocalUserStore;
     private localRoomStore: LocalRoomStore;
-    private serverUrl: string = 'http://localhost:3000'; 
 
     private constructor() {
         this.localUserStore = LocalUserStore.getInstance();
@@ -36,7 +37,7 @@ export class RoomService {
      * 使用具名函数进行绑定，以便符合双参数 off(event, handler) 的要求
      */
     private initNetworkListeners(): void {
-        const net = NetworkManager.getInstance().getClient(this.serverUrl);
+        const net = NetworkManager.getInstance().getClient(NetworkConfig.getServerUrl());
 
         // --- 先解绑，防止重复 ---
         net.off(ServerMessageType.ROOM_JOINED, this.onRoomJoined);
@@ -111,12 +112,15 @@ export class RoomService {
         // 1. 清空 Store（clearCurrentRoom 会同时清空 myPlayerIdInRoom）
         this.localRoomStore.clearCurrentRoom();
 
-        // 2. 发出事件通知 UI (可能需要导航回大厅)
+        // 2. 清空游戏状态
+        LocalGameStore.getInstance().clear();
+
+        // 3. 发出事件通知 UI (可能需要导航回大厅)
         EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
     }
 
     private getNetworkClient(): NetworkClient | null {
-        const client = NetworkManager.getInstance().getClient(this.serverUrl);
+        const client = NetworkManager.getInstance().getClient(NetworkConfig.getServerUrl());
         if (!client || !client.getIsConnected()) return null;
         return client;
     }

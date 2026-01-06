@@ -355,28 +355,34 @@ export class PlayerHandDisplay extends Component {
         console.log(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
 
         // Calculate remaining cards (cards in hand that haven't been played yet)
-        const remainingCards = cardCount - this._playedCards.length;
+        // In TheDecree mode, cardCount includes played cards, so we need to subtract them
+        const remainingCards = Math.max(0, cardCount - this._playedCards.length);
 
         // Get base offset for hand pile positioning
         const baseOffset = this.getHandPileBaseOffset();
 
         // 1. Show stacked card backs (representing the remaining hand cards)
-        const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
-        const stackOffset = 2; // Pixel offset for stacking effect
+        // Only show card backs if there are remaining cards
+        if (remainingCards > 0) {
+            const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
+            const stackOffset = 2; // Pixel offset for stacking effect
 
-        for (let i = 0; i < maxStackDisplay; i++) {
-            const cardNode = this.createCardNode(0, false); // 0 = back only
+            for (let i = 0; i < maxStackDisplay; i++) {
+                const cardNode = this.createCardNode(0, false); // 0 = back only
 
-            // Apply base offset + slight offset for stacking effect
-            const x = baseOffset.x + i * stackOffset;
-            const y = baseOffset.y + i * stackOffset;
-            cardNode.setPosition(x, y, 0);
+                // Apply base offset + slight offset for stacking effect
+                const x = baseOffset.x + i * stackOffset;
+                const y = baseOffset.y + i * stackOffset;
+                cardNode.setPosition(x, y, 0);
 
-            this.handContainer.addChild(cardNode);
-            this._pokerNodes.push(cardNode);
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+            }
+
+            console.log(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
+        } else {
+            console.log(`[displayStack] No remaining cards to display (all ${cardCount} cards have been played)`);
         }
-
-        console.log(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
 
         // 2. If there are played cards, display them face-up in a spread with overlap
         if (this._playedCards.length > 0) {

@@ -1,3 +1,5 @@
+// This file is deprecated and will be replaced soon.
+// TODO: Change to GuandanModeClent
 import { _decorator, Component } from 'cc';
 import { Player, PlayerState } from '../LocalStore/LocalPlayerStore';
 import { Dealer } from '../Card/Dealer';

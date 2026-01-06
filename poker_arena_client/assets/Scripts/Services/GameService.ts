@@ -13,7 +13,11 @@ import {
     CommunityCardsEvent
 } from '../Network/Messages';
 import { NetworkManager } from '../Network/NetworkManager';
+import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
+import { LocalGameStore } from '../LocalStore/LocalGameStore';
+import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
+import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 
 /**
  * GameService - 游戏服务
@@ -30,7 +34,6 @@ import { EventCenter, GameEvents } from '../Utils/EventCenter';
  */
 export class GameService {
     private static instance: GameService;
-    private serverUrl: string = 'http://localhost:3000';
 
     private constructor() {
         this.initNetworkListeners();
@@ -47,7 +50,7 @@ export class GameService {
      * 初始化网络监听
      */
     private initNetworkListeners(): void {
-        const net = NetworkManager.getInstance().getClient(this.serverUrl);
+        const net = NetworkManager.getInstance().getClient(NetworkConfig.getServerUrl());
 
         // --- 先解绑，防止重复 ---
         net.off(ServerMessageType.GAME_START, this.onGameStart);
@@ -82,6 +85,23 @@ export class GameService {
     private onGameStart = (data: any) => {
         console.log('[GameService] Game started! Switching to Playing stage...', data);
 
+        // 重置游戏状态
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.resetGame();
+        gameStore.setGameActive(true);
+        gameStore.setGameState(TheDecreeGameState.SETUP);
+
+        // 初始化玩家数据
+        const roomStore = LocalRoomStore.getInstance();
+        const currentRoom = roomStore.getCurrentRoom();
+        const myPlayerId = roomStore.getMyPlayerId();
+
+        if (currentRoom && myPlayerId) {
+            const playerIds = currentRoom.players.map(p => p.id);
+            gameStore.initializePlayers(playerIds, myPlayerId);
+            console.log(`[GameService] Initialized ${playerIds.length} players in LocalGameStore`);
+        }
+
         // 触发阶段切换到 Playing
         EventCenter.emit('SWITCH_TO_PLAYING_STAGE');
     };
@@ -95,7 +115,11 @@ export class GameService {
         console.log('[GameService] Player ID:', data.playerId);
         console.log('[GameService] Cards:', data.handCards);
         console.log('[GameService] ===========================================');
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore（使用新方法）
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setPlayerHandCards(data.playerId, data.handCards);
+
         EventCenter.emit(GameEvents.GAME_DEAL_CARDS, data);
     };
 
@@ -104,7 +128,12 @@ export class GameService {
      */
     private onCommunityCards = (data: CommunityCardsEvent) => {
         console.log('[GameService] Community cards:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setCommunityCards(data.cards);
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+
         EventCenter.emit(GameEvents.GAME_COMMUNITY_CARDS, data);
     };
 
@@ -113,7 +142,14 @@ export class GameService {
      */
     private onDealerSelected = (data: DealerSelectedEvent) => {
         console.log('[GameService] Dealer selected:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setDealerId(data.dealerId);
+        gameStore.setCurrentRound(data.roundNumber);
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setPlayerIsDealer(data.dealerId, true);
+
         EventCenter.emit(GameEvents.GAME_DEALER_SELECTED, data);
     };
 
@@ -122,7 +158,12 @@ export class GameService {
      */
     private onDealerCalled = (data: DealerCalledEvent) => {
         console.log('[GameService] Dealer called:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setCardsToPlay(data.cardsToPlay);
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+
         EventCenter.emit(GameEvents.GAME_DEALER_CALLED, data);
     };
 
@@ -131,7 +172,11 @@ export class GameService {
      */
     private onPlayerPlayed = (data: PlayerPlayedEvent) => {
         console.log('[GameService] Player played:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setPlayerCardCount(data.playerId, data.cardCount);
+
         EventCenter.emit(GameEvents.GAME_PLAYER_PLAYED, data);
     };
 
@@ -140,7 +185,11 @@ export class GameService {
      */
     private onShowdown = (data: ShowdownEvent) => {
         console.log('[GameService] Showdown:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+
         EventCenter.emit(GameEvents.GAME_SHOWDOWN, data);
     };
 
@@ -149,7 +198,25 @@ export class GameService {
      */
     private onRoundEnd = (data: RoundEndEvent) => {
         console.log('[GameService] Round end:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setScores(data.scores);
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+
+        // 添加回合历史记录
+        const currentRound = gameStore.getCurrentRound();
+        gameStore.addRoundHistory({
+            roundNumber: currentRound,
+            dealerId: gameStore.getDealerId(),
+            cardsToPlay: gameStore.getCardsToPlay(),
+            winnerId: data.winnerId,
+            loserId: data.loserId,
+            showdownResults: [], // 摊牌结果在 onShowdown 中已经处理
+            scores: data.scores,
+            timestamp: Date.now()
+        });
+
         EventCenter.emit(GameEvents.GAME_ROUND_END, data);
     };
 
@@ -158,7 +225,13 @@ export class GameService {
      */
     private onGameOver = (data: GameOverEvent) => {
         console.log('[GameService] Game over:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setScores(data.scores);
+        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameActive(false);
+
         EventCenter.emit(GameEvents.GAME_OVER, data);
     };
 
@@ -167,14 +240,40 @@ export class GameService {
      */
     private onGameStateUpdate = (data: GameStateUpdateEvent) => {
         console.log('[GameService] Game state update:', data);
-        // TODO: 存储到 LocalGameStore
+
+        // 存储到 LocalGameStore（全量同步）
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setCurrentRound(data.roundNumber);
+        gameStore.setDeckSize(data.deckSize);
+
+        if (data.dealerId) {
+            gameStore.setDealerId(data.dealerId);
+        }
+
+        if (data.cardsToPlay) {
+            gameStore.setCardsToPlay(data.cardsToPlay);
+        }
+
+        if (data.lastPlayedCards) {
+            // 注意：这里只更新最后出的牌，不添加到出牌记录
+            // 因为这是快照同步，不是实时出牌事件
+        }
+
+        // 更新所有玩家的手牌数量
+        if (data.players) {
+            for (const player of data.players) {
+                gameStore.setPlayerCardCount(player.id, player.cardCount);
+                gameStore.setPlayerTurn(player.id, player.isTurn);
+            }
+        }
+
         EventCenter.emit(GameEvents.GAME_STATE_UPDATE, data);
     };
 
     // ==================== 业务接口（发送请求）====================
 
     private getNetworkClient(): NetworkClient | null {
-        const client = NetworkManager.getInstance().getClient(this.serverUrl);
+        const client = NetworkManager.getInstance().getClient(NetworkConfig.getServerUrl());
         if (!client || !client.getIsConnected()) return null;
         return client;
     }

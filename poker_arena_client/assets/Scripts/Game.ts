@@ -12,6 +12,7 @@ import { EndStage } from './Core/Stage/EndStage';
 import { PlayerLayoutConfig } from './UI/PlayerLayoutConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { NetworkManager } from './Network/NetworkManager';
+import { NetworkConfig } from './Config/NetworkConfig';
 import { EventCenter } from './Utils/EventCenter';
 import { GameService } from './Services/GameService';
 const { ccclass, property } = _decorator;
@@ -176,7 +177,8 @@ export class Game extends Component {
         console.log("[Game] Initializing network client...");
 
         // 使用 NetworkManager 获取全局单例 NetworkClient
-        const serverUrl = 'http://localhost:3000';  // TODO: Get from config
+        const serverUrl = NetworkConfig.getServerUrl();
+        console.log(`[Game] Connecting to server: ${serverUrl}`);
         const networkManager = NetworkManager.getInstance();
         this.networkClient = networkManager.getClient(serverUrl);
 

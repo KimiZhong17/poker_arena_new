@@ -36,15 +36,36 @@ const httpServer = createServer(app);
 // 创建游戏服务器
 const gameServer = new GameServer(httpServer);
 
+// 获取本机局域网 IP 地址
+function getLocalIPAddress(): string {
+    const { networkInterfaces } = require('os');
+    const nets = networkInterfaces();
+
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            // 跳过非 IPv4 和内部地址
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
 // 启动服务器
 const PORT = ServerConfig.PORT;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
+    const localIP = getLocalIPAddress();
+
     console.log('='.repeat(50));
     console.log('🎮 Poker Arena Server');
     console.log('='.repeat(50));
-    console.log(`✅ HTTP Server: http://localhost:${PORT}`);
-    console.log(`✅ WebSocket Server: ws://localhost:${PORT}`);
+    console.log(`✅ Local: http://localhost:${PORT}`);
+    console.log(`✅ Network: http://${localIP}:${PORT}`);
+    console.log(`✅ WebSocket: ws://${localIP}:${PORT}`);
     console.log(`✅ CORS Origin: ${ServerConfig.CORS_ORIGIN}`);
+    console.log('='.repeat(50));
+    console.log('📱 局域网玩家请使用: http://${localIP}:${PORT}');
     console.log('='.repeat(50));
     console.log('Server is ready to accept connections!');
     console.log('');

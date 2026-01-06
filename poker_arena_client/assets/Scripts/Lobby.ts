@@ -7,6 +7,7 @@ import { AuthService } from './Services/AuthService';
 import { RoomService } from './Services/RoomService';
 import { LocalUserStore } from './LocalStore/LocalUserStore';
 import { NetworkManager } from './Network/NetworkManager';
+import { NetworkConfig } from './Config/NetworkConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
 import { LocalRoomStore, RoomData, RoomState } from './LocalStore/LocalRoomStore';
@@ -102,7 +103,8 @@ export class Lobby extends Component {
      * 初始化网络客户端
      */
     private initNetworkClient(): void {
-        const serverUrl = 'http://localhost:3000'; // TODO: 从配置读取
+        const serverUrl = NetworkConfig.getServerUrl();
+        console.log(`[Lobby] Connecting to server: ${serverUrl}`);
 
         // 使用 NetworkManager 获取全局单例 NetworkClient
         const networkManager = NetworkManager.getInstance();

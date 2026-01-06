@@ -44,6 +44,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
     // 自动出牌设置（仅用于 player_0）
     private isPlayer0AutoPlay: boolean = true;
 
+    // 摊牌显示清除定时器
+    private showdownClearTimer: number | null = null;
+
     // UI 节点（游戏模式特定）
     private theDecreeContainerNode: Node | null = null;
     private communityCardsNode: Node | null = null;
@@ -89,6 +92,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Exiting game mode');
         this.isActive = false;
 
+        // 清除摊牌显示定时器
+        this.clearShowdownTimer();
+
         // 注销网络事件监听器（使用基类方法）
         this.unregisterAllNetworkEvents();
 
@@ -102,6 +108,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     public cleanup(): void {
         console.log('[TheDecreeModeClient] Cleaning up');
+        this.clearShowdownTimer();
         super.cleanup();
         this.unregisterAllNetworkEvents();
     }
@@ -561,6 +568,16 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.currentRoundNumber = data.roundNumber;
         this.gameState = data.gameState as TheDecreeGameState;
 
+        // 重置 cardsToPlay 为 0，防止玩家在新回合 dealer call 之前使用上一回合的数值出牌
+        this.cardsToPlay = 0;
+        console.log('[TheDecreeModeClient] Reset cardsToPlay to 0 for new round');
+
+        // 更新 UI 状态，禁用出牌按钮
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.updateUIState();
+            console.log('[TheDecreeModeClient] UI state updated - play button should be disabled');
+        }
+
         // 显示庄家指示器（使用基类的 getPlayerIndex）
         const dealerIndex = this.getPlayerIndex(data.dealerId);
         if (dealerIndex !== -1 && this.game.playerUIManager) {
@@ -606,6 +623,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         this.cardsToPlay = data.cardsToPlay;
         this.gameState = data.gameState as TheDecreeGameState;
+
+        // 清除上一回合的摊牌显示
+        this.clearShowdownDisplay();
 
         // 获取当前玩家ID
         const localRoomStore = LocalRoomStore.getInstance();
@@ -707,6 +727,13 @@ export class TheDecreeModeClient extends GameModeClientBase {
             }
         }
 
+        // 设置定时器，3秒后自动清除摊牌显示
+        this.clearShowdownTimer(); // 先清除之前的定时器
+        this.showdownClearTimer = window.setTimeout(() => {
+            console.log('[TheDecreeModeClient] Auto-clearing showdown display after 3 seconds');
+            this.clearShowdownDisplay();
+        }, 3000);
+
         console.log('[TheDecreeModeClient] =====================================');
     }
 
@@ -719,6 +746,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 设置游戏状态
         this.gameState = data.gameState as TheDecreeGameState;
+
+        // 重置 cardsToPlay 为 0，准备下一回合
+        this.cardsToPlay = 0;
+        console.log('[TheDecreeModeClient] Reset cardsToPlay to 0 at round end');
 
         // 更新所有玩家的分数显示
         const playerUIManager = this.game.playerUIManager;
@@ -938,6 +969,52 @@ export class TheDecreeModeClient extends GameModeClientBase {
         });
 
         console.log(`[TheDecreeModeClient] Displayed ${this.communityCards.length} community cards`);
+    }
+
+    /**
+     * 清除摊牌显示定时器
+     */
+    private clearShowdownTimer(): void {
+        if (this.showdownClearTimer !== null) {
+            window.clearTimeout(this.showdownClearTimer);
+            this.showdownClearTimer = null;
+            console.log('[TheDecreeModeClient] Showdown clear timer cancelled');
+        }
+    }
+
+    /**
+     * 清除摊牌显示
+     * 将所有玩家的出牌显示恢复为手牌背面
+     */
+    private clearShowdownDisplay(): void {
+        console.log('[TheDecreeModeClient] Clearing showdown display...');
+
+        // 清除定时器
+        this.clearShowdownTimer();
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.warn('[TheDecreeModeClient] PlayerUIManager not found');
+            return;
+        }
+
+        // 获取玩家数量
+        const playerCount = playerUIManager.getPlayerCount();
+
+        // 遍历所有玩家（除了主玩家 index 0）
+        for (let i = 1; i < playerCount; i++) {
+            const playerUINode = playerUIManager.getPlayerUINode(i);
+            if (playerUINode) {
+                const handDisplay = playerUINode.getHandDisplay();
+                if (handDisplay) {
+                    // 清除出牌显示，恢复为手牌背面
+                    handDisplay.updateDisplay([]);
+                    console.log(`[TheDecreeModeClient] Cleared showdown display for player at index ${i}`);
+                }
+            }
+        }
+
+        console.log('[TheDecreeModeClient] ✓ Showdown display cleared for all players');
     }
 
     // ==================== 游戏逻辑接口（空实现，逻辑在服务器）====================
