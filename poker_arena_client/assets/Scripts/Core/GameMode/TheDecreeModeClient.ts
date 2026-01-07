@@ -15,9 +15,12 @@ import {
     ShowdownEvent,
     RoundEndEvent,
     GameOverEvent,
-    ClientMessageType
+    PlayerAutoChangedEvent,
+    ClientMessageType,
+    SetAutoRequest
 } from '../../Network/Messages';
 import { LocalUserStore } from '../../LocalStore/LocalUserStore';
+import { LocalGameStore } from '../../LocalStore/LocalGameStore';
 import { PokerFactory } from '../../UI/PokerFactory';
 import { Poker } from '../../UI/Poker';
 import { TheDecreeUIController } from '../../UI/TheDecreeUIController';
@@ -216,7 +219,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
             'player_played': this.onPlayerPlayed,
             'showdown': this.onShowdown,
             'round_end': this.onRoundEnd,
-            'game_over': this.onGameOver
+            'game_over': this.onGameOver,
+            'player_auto_changed': this.onPlayerAutoChanged
         });
 
         console.log('[TheDecreeModeClient] ✓ All network events registered');
@@ -1173,5 +1177,51 @@ export class TheDecreeModeClient extends GameModeClientBase {
      */
     public refillHands(): void {
         console.warn('[TheDecreeModeClient] refillHands() not supported in network mode - controlled by server');
+    }
+
+    // ==================== 托管相关方法 ====================
+
+    /**
+     * 处理玩家托管状态变化事件
+     */
+    private onPlayerAutoChanged(data: PlayerAutoChangedEvent): void {
+        console.log('[TheDecreeModeClient] ========== Player Auto Changed Event ==========');
+        console.log('[TheDecreeModeClient] Player ID:', data.playerId);
+        console.log('[TheDecreeModeClient] Is Auto:', data.isAuto);
+        console.log('[TheDecreeModeClient] Reason:', data.reason);
+
+        // 更新 LocalGameStore
+        LocalGameStore.getInstance().setPlayerAuto(
+            data.playerId,
+            data.isAuto,
+            data.reason
+        );
+
+        console.log('[TheDecreeModeClient] ✓ Player auto state updated');
+        console.log('[TheDecreeModeClient] ========================================');
+    }
+
+    /**
+     * 切换托管状态
+     */
+    public toggleAuto(): void {
+        const myId = LocalGameStore.getInstance().getMyPlayerId();
+        const isAuto = LocalGameStore.getInstance().isPlayerAuto(myId);
+
+        this.setAuto(!isAuto);
+    }
+
+    /**
+     * 设置托管状态
+     * @param isAuto 是否托管
+     */
+    public setAuto(isAuto: boolean): void {
+        const request: SetAutoRequest = {
+            isAuto
+        };
+
+        this.networkClient.emit(ClientMessageType.SET_AUTO, request);
+
+        console.log(`[TheDecreeModeClient] Set auto mode: ${isAuto}`);
     }
 }

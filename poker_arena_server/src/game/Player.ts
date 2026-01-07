@@ -88,6 +88,11 @@ export class TheDecreePlayer extends Player {
     public playedCards: number[] = [];
     public hasPlayed: boolean = false;
 
+    // 托管相关字段
+    public isAuto: boolean = false;           // 是否托管中
+    public autoStartTime: number = 0;         // 托管开始时间
+    public lastActionTime: number = Date.now(); // 最后操作时间
+
     /**
      * 出牌
      */

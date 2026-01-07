@@ -1,6 +1,7 @@
 import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 import { ShowdownResult } from '../Network/Messages';
 import { PlayerState } from './LocalPlayerStore';
+import { EventCenter, GameEvents } from '../Utils/EventCenter';
 
 /**
  * 玩家游戏数据
@@ -14,6 +15,8 @@ export interface PlayerGameData {
     state: PlayerState;        // 游戏状态
     isDealer: boolean;         // 是否庄家
     isTurn: boolean;           // 是否轮到
+    isAuto: boolean;           // 是否托管中
+    autoReason?: 'manual' | 'timeout' | 'disconnect'; // 托管原因
 }
 
 /**
@@ -115,7 +118,9 @@ export class LocalGameStore {
                 score: 0,
                 state: PlayerState.WAITING,
                 isDealer: false,
-                isTurn: false
+                isTurn: false,
+                isAuto: false,
+                autoReason: undefined
             });
         }
 
@@ -297,6 +302,62 @@ export class LocalGameStore {
     public isPlayerTurn(playerId: string): boolean {
         const player = this.players.get(playerId);
         return player ? player.isTurn : false;
+    }
+
+    // ==================== 托管状态管理 ====================
+
+    /**
+     * 设置玩家托管状态
+     * @param playerId 玩家ID
+     * @param isAuto 是否托管
+     * @param reason 托管原因
+     */
+    public setPlayerAuto(playerId: string, isAuto: boolean, reason?: 'manual' | 'timeout' | 'disconnect'): void {
+        const player = this.players.get(playerId);
+        if (!player) {
+            console.warn(`[LocalGameStore] Player ${playerId} not found for auto mode`);
+            return;
+        }
+
+        player.isAuto = isAuto;
+        player.autoReason = reason;
+
+        console.log(`[LocalGameStore] Player ${playerId} auto mode: ${isAuto} (${reason || 'manual'})`);
+
+        // 触发事件通知UI更新
+        EventCenter.emit(GameEvents.PLAYER_AUTO_CHANGED, {
+            playerId,
+            isAuto,
+            reason
+        });
+    }
+
+    /**
+     * 获取玩家托管状态
+     * @param playerId 玩家ID
+     * @returns 是否托管中
+     */
+    public isPlayerAuto(playerId: string): boolean {
+        const player = this.players.get(playerId);
+        return player ? player.isAuto : false;
+    }
+
+    /**
+     * 获取我的托管状态
+     * @returns 是否托管中
+     */
+    public isMyAuto(): boolean {
+        return this.isPlayerAuto(this.myPlayerId);
+    }
+
+    /**
+     * 获取玩家托管原因
+     * @param playerId 玩家ID
+     * @returns 托管原因
+     */
+    public getPlayerAutoReason(playerId: string): 'manual' | 'timeout' | 'disconnect' | undefined {
+        const player = this.players.get(playerId);
+        return player ? player.autoReason : undefined;
     }
 
     // ==================== 向后兼容方法（旧架构）====================

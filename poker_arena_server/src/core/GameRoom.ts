@@ -431,6 +431,16 @@ export class GameRoom {
 
                 // End game after a delay
                 setTimeout(() => this.endGame(), 5000);
+            },
+
+            onPlayerAutoChanged: (playerId, isAuto, reason) => {
+                console.log(`[Room ${this.id}] Player ${playerId} auto mode changed: ${isAuto} (${reason || 'manual'})`);
+
+                this.broadcast(ServerMessageType.PLAYER_AUTO_CHANGED, {
+                    playerId,
+                    isAuto,
+                    reason
+                });
             }
         };
 
@@ -509,6 +519,29 @@ export class GameRoom {
         }
 
         return success;
+    }
+
+    /**
+     * Handle set auto mode action
+     */
+    public handleSetAuto(playerId: string, isAuto: boolean): boolean {
+        if (!this.theDecreeGame) {
+            this.sendToPlayer(playerId, ServerMessageType.ERROR, {
+                code: 'GAME_NOT_STARTED',
+                message: 'Game has not started yet'
+            });
+            return false;
+        }
+
+        const player = this.players.get(playerId);
+        if (!player) {
+            return false;
+        }
+
+        console.log(`[Room ${this.id}] Player ${player.name} ${isAuto ? 'enabled' : 'disabled'} auto mode`);
+        this.theDecreeGame.setPlayerAuto(playerId, isAuto, 'manual');
+
+        return true;
     }
 
     /**

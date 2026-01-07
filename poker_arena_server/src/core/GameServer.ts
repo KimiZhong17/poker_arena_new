@@ -12,6 +12,7 @@ import {
     DealerCallRequest,
     PlayCardsRequest,
     SelectFirstDealerCardRequest,
+    SetAutoRequest,
     RoomCreatedEvent,
     RoomJoinedEvent,
     PlayerJoinedEvent,
@@ -94,6 +95,11 @@ export class GameServer {
             // 玩家出牌
             socket.on(ClientMessageType.PLAY_CARDS, (data: PlayCardsRequest) => {
                 this.handlePlayCards(socket, data);
+            });
+
+            // 设置托管
+            socket.on(ClientMessageType.SET_AUTO, (data: SetAutoRequest) => {
+                this.handleSetAuto(socket, data);
             });
 
             // 心跳
@@ -442,6 +448,28 @@ export class GameServer {
         const success = room.handlePlayCards(player.id, data.cards);
 
         console.log(`[GameServer] Player ${player.name} played ${data.cards.length} cards (${success ? 'success' : 'failed'})`);
+    }
+
+    /**
+     * 处理设置托管
+     */
+    private handleSetAuto(socket: Socket, data: SetAutoRequest): void {
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+            return;
+        }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        // Handle set auto in room
+        const success = room.handleSetAuto(player.id, data.isAuto);
+
+        console.log(`[GameServer] Player ${player.name} ${data.isAuto ? 'enabled' : 'disabled'} auto mode (${success ? 'success' : 'failed'})`);
     }
 
     // ==================== 连接管理 ====================

@@ -21,6 +21,9 @@ export enum ClientMessageType {
     PLAY_CARDS = 'play_cards',
     SELECT_FIRST_DEALER_CARD = 'select_first_dealer_card',
 
+    // 托管
+    SET_AUTO = 'set_auto',
+
     // 心跳
     PING = 'ping'
 }
@@ -69,6 +72,13 @@ export interface SelectFirstDealerCardRequest {
     card: number;
 }
 
+/**
+ * 设置托管请求
+ */
+export interface SetAutoRequest {
+    isAuto: boolean;
+}
+
 // ==================== 服务器 → 客户端 ====================
 
 /**
@@ -97,6 +107,9 @@ export enum ServerMessageType {
 
     // 玩家操作
     PLAYER_PLAYED = 'player_played',
+
+    // 托管
+    PLAYER_AUTO_CHANGED = 'player_auto_changed',
 
     // 回合结果
     SHOWDOWN = 'showdown',
@@ -309,6 +322,15 @@ export interface GameStateUpdateEvent {
 export interface ErrorEvent {
     code: string;
     message: string;
+}
+
+/**
+ * 玩家托管状态变化事件
+ */
+export interface PlayerAutoChangedEvent {
+    playerId: string;
+    isAuto: boolean;
+    reason?: 'manual' | 'timeout' | 'disconnect';
 }
 
 // ==================== 错误码 ====================

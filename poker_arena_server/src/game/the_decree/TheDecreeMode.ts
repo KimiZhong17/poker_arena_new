@@ -5,6 +5,7 @@ import { TexasHoldEmEvaluator, TexasHandResult, TexasHandType } from './TexasHol
 import { HandTypeHelper } from './HandTypeHelper';
 import { CardSuit, CardPoint } from './CardConst';
 import { sortCardsInPlace, CardRankingMode } from '../../utils/CardUtils';
+import { AutoPlayStrategy, ConservativeStrategy } from './AutoPlayStrategy';
 
 /**
  * Round state
@@ -51,6 +52,7 @@ export interface TheDecreeEventCallbacks {
     onRoundEnd?: (winnerId: string, loserId: string, scores: Map<string, number>, gameState: TheDecreeGameState) => void;
     onHandsRefilled?: (deckSize: number) => void;
     onGameOver?: (winnerId: string, scores: Map<string, number>, totalRounds: number, gameState: TheDecreeGameState) => void;
+    onPlayerAutoChanged?: (playerId: string, isAuto: boolean, reason?: string) => void;
 }
 
 /**
@@ -73,6 +75,10 @@ export class TheDecreeMode extends GameModeBase {
     private currentRound: RoundState | null = null;
     private callbacks: TheDecreeEventCallbacks;
     private firstDealerSelections: Map<string, number> = new Map();
+
+    // 托管相关字段
+    private autoPlayStrategy: AutoPlayStrategy = new ConservativeStrategy();
+    private autoPlayTimers: Map<string, NodeJS.Timeout> = new Map();
 
     constructor(config?: GameModeConfig, callbacks?: TheDecreeEventCallbacks) {
         const defaultConfig: GameModeConfig = {
@@ -169,6 +175,12 @@ export class TheDecreeMode extends GameModeBase {
         console.log('[TheDecree] Cleaning up');
         super.cleanup();
 
+        // 清理所有托管定时器
+        for (const [playerId, timer] of this.autoPlayTimers) {
+            clearTimeout(timer);
+        }
+        this.autoPlayTimers.clear();
+
         this.playerManager.clear();
         this.communityCards = [];
         this.deck = [];
@@ -226,6 +238,9 @@ export class TheDecreeMode extends GameModeBase {
             console.warn(`[TheDecree]   Their cards:`, Array.from(this.firstDealerSelections.entries()).map(([id, card]) => `${id}: 0x${card.toString(16)}`));
             return false;
         }
+
+        // 更新最后操作时间
+        this.updatePlayerActionTime(playerId);
 
         this.firstDealerSelections.set(playerId, card);
         console.log(`[TheDecree] ✓ Player ${playerId} selected card for dealer selection`);
@@ -369,6 +384,9 @@ export class TheDecreeMode extends GameModeBase {
         if (this.state !== TheDecreeGameState.DEALER_CALL) return false;
         if (this.currentRound.dealerId !== dealerId) return false;
 
+        // 更新最后操作时间
+        this.updatePlayerActionTime(dealerId);
+
         this.currentRound.cardsToPlay = cardsToPlay;
         this.state = TheDecreeGameState.PLAYER_SELECTION;
 
@@ -398,6 +416,9 @@ export class TheDecreeMode extends GameModeBase {
         if (!this.isValidPlay(cards, playerId)) {
             return false;
         }
+
+        // 更新最后操作时间
+        this.updatePlayerActionTime(playerId);
 
         const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
         player.playCards(cards);
@@ -724,4 +745,164 @@ export class TheDecreeMode extends GameModeBase {
     public getAllPlayers(): TheDecreePlayer[] {
         return this.playerManager.getAllPlayers() as TheDecreePlayer[];
     }
+
+    // ==================== 托管相关方法 ====================
+
+    /**
+     * 设置玩家托管状态
+     * @param playerId 玩家ID
+     * @param isAuto 是否托管
+     * @param reason 托管原因
+     */
+    public setPlayerAuto(playerId: string, isAuto: boolean, reason?: string): void {
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+        if (!player) {
+            console.warn(`[TheDecree] Player ${playerId} not found for auto mode`);
+            return;
+        }
+
+        player.isAuto = isAuto;
+
+        if (isAuto) {
+            player.autoStartTime = Date.now();
+            console.log(`[TheDecree] Player ${player.name} is now in auto mode (${reason || 'manual'})`);
+
+            // 如果轮到该玩家，立即执行托管操作
+            if (this.isPlayerTurn(playerId)) {
+                this.scheduleAutoAction(playerId);
+            }
+        } else {
+            // 取消托管，清除定时器
+            this.clearAutoPlayTimer(playerId);
+            console.log(`[TheDecree] Player ${player.name} cancelled auto mode`);
+        }
+
+        // 通知所有客户端
+        if (this.callbacks.onPlayerAutoChanged) {
+            this.callbacks.onPlayerAutoChanged(playerId, isAuto, reason);
+        }
+    }
+
+    /**
+     * 检查是否轮到该玩家操作
+     */
+    private isPlayerTurn(playerId: string): boolean {
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+        if (!player) return false;
+
+        switch (this.state) {
+            case TheDecreeGameState.FIRST_DEALER_SELECTION:
+                return !player.hasPlayed;
+
+            case TheDecreeGameState.DEALER_CALL:
+                return this.currentRound?.dealerId === playerId;
+
+            case TheDecreeGameState.PLAYER_SELECTION:
+                return !player.hasPlayed;
+
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * 调度托管操作（延迟执行，模拟思考）
+     */
+    private scheduleAutoAction(playerId: string): void {
+        this.clearAutoPlayTimer(playerId);
+
+        const AUTO_PLAY_ACTION_DELAY = 2000; // 2秒延迟
+        const timer = setTimeout(() => {
+            this.executeAutoAction(playerId);
+        }, AUTO_PLAY_ACTION_DELAY);
+
+        this.autoPlayTimers.set(playerId, timer);
+    }
+
+    /**
+     * 执行托管操作
+     */
+    private executeAutoAction(playerId: string): void {
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+        if (!player || !player.isAuto) {
+            return;
+        }
+
+        console.log(`[TheDecree] Executing auto action for player ${player.name} in state ${this.state}`);
+
+        try {
+            switch (this.state) {
+                case TheDecreeGameState.FIRST_DEALER_SELECTION:
+                    if (!player.hasPlayed) {
+                        const card = this.autoPlayStrategy.selectFirstDealerCard(player.handCards);
+                        console.log(`[TheDecree] Auto selecting card: 0x${card.toString(16)}`);
+                        this.selectFirstDealerCard(playerId, card);
+                    }
+                    break;
+
+                case TheDecreeGameState.DEALER_CALL:
+                    if (this.currentRound?.dealerId === playerId) {
+                        const cardsToPlay = this.autoPlayStrategy.dealerCall(
+                            player.handCards,
+                            this.communityCards
+                        );
+                        console.log(`[TheDecree] Auto dealer call: ${cardsToPlay} cards`);
+                        this.dealerCall(playerId, cardsToPlay);
+                    }
+                    break;
+
+                case TheDecreeGameState.PLAYER_SELECTION:
+                    if (!player.hasPlayed && this.currentRound?.cardsToPlay) {
+                        const cards = this.autoPlayStrategy.playCards(
+                            player.handCards,
+                            this.currentRound.cardsToPlay
+                        );
+                        console.log(`[TheDecree] Auto playing cards:`, cards.map(c => '0x' + c.toString(16)));
+                        this.playCards(cards, playerId);
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error(`[TheDecree] Error executing auto action for player ${playerId}:`, error);
+        }
+    }
+
+    /**
+     * 清除托管定时器
+     */
+    private clearAutoPlayTimer(playerId: string): void {
+        const timer = this.autoPlayTimers.get(playerId);
+        if (timer) {
+            clearTimeout(timer);
+            this.autoPlayTimers.delete(playerId);
+        }
+    }
+
+    /**
+     * 更新玩家最后操作时间
+     */
+    private updatePlayerActionTime(playerId: string): void {
+        const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
+        if (player) {
+            player.lastActionTime = Date.now();
+        }
+    }
+
+    /**
+     * 检查所有玩家是否需要自动托管（超时检测）
+     * 应该由外部定时器调用
+     */
+    public checkAutoPlayTimeouts(timeoutMs: number): void {
+        for (const player of this.playerManager.getAllPlayers()) {
+            const theDecreePlayer = player as TheDecreePlayer;
+            if (theDecreePlayer.isAuto) continue; // 已经托管的跳过
+
+            const timeSinceLastAction = Date.now() - theDecreePlayer.lastActionTime;
+            if (timeSinceLastAction > timeoutMs && this.isPlayerTurn(theDecreePlayer.id)) {
+                console.log(`[TheDecree] Player ${theDecreePlayer.name} timeout, enabling auto mode`);
+                this.setPlayerAuto(theDecreePlayer.id, true, 'timeout');
+            }
+        }
+    }
 }
+
