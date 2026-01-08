@@ -1,7 +1,9 @@
-import { _decorator, Component, Node, Button, Label, Color } from 'cc';
+import { _decorator, Component, Node, Button, EventHandler } from 'cc';
 import { Game } from '../Game';
 import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
+import { LocalGameStore } from '../LocalStore/LocalGameStore';
 import { ClientMessageType } from '../Network/Messages';
+import { Switch } from './Switch';
 const { ccclass, property } = _decorator;
 
 /**
@@ -22,14 +24,13 @@ export class TheDecreeUIController extends Component {
     @property(Node)
     public btnCall123Node: Node | null = null;
 
-    @property(Button)
-    public autoPlayToggleButton: Button | null = null;
+    @property(Switch)
+    public autoPlaySwitch: Switch | null = null;
 
     // Auto-found references (don't need to assign in editor)
     private callOneButton: Button | null = null;
     private callTwoButton: Button | null = null;
     private callThreeButton: Button | null = null;
-    private autoPlayToggleLabel: Label | null = null;
 
     // Temporarily unused - uncomment when needed
     // @property(Button)
@@ -70,13 +71,26 @@ export class TheDecreeUIController extends Component {
         // Initialize button visibility
         this.updateCallButtonsVisibility();
 
-        // Initialize auto-play toggle UI
+        // Initialize auto-play switch state
+        // 延迟初始化，等待 LocalGameStore 从服务器同步数据
         this.scheduleOnce(() => {
-            if (this._game && this._game.theDecreeMode) {
-                const isEnabled = this._game.theDecreeMode.isPlayer0AutoPlayEnabled();
-                this.updateAutoPlayToggleUI(isEnabled);
+            if (this.autoPlaySwitch) {
+                const myId = LocalGameStore.getInstance().getMyPlayerId();
+                const isEnabled = LocalGameStore.getInstance().isPlayerAuto(myId);
+
+                console.log('[TheDecreeUI] Initializing auto-play switch...');
+                console.log('[TheDecreeUI] My player ID:', myId);
+                console.log('[TheDecreeUI] LocalGameStore isAuto:', isEnabled);
+
+                // 直接使用服务器同步的状态，不做任何修改
+                // 如果用户想要默认开启，应该在服务器端设置默认值
+                this.autoPlaySwitch.setValue(isEnabled, true); // silent = true，不触发回调
+                console.log('[TheDecreeUI] Auto-play switch initialized to:', isEnabled);
             }
-        }, 0.1);
+
+            // Register Switch event AFTER initialization
+            this.registerSwitchEvent();
+        }, 0.2);
     }
 
     /**
@@ -160,15 +174,11 @@ export class TheDecreeUIController extends Component {
             console.log('[TheDecreeUI] PlayButton search result:', !!this.playButton);
         }
 
-        // Auto-find auto-play toggle button
-        if (!this.autoPlayToggleButton) {
-            const toggleNode = this.node.getChildByName('AutoPlayToggleButton');
-            this.autoPlayToggleButton = toggleNode?.getComponent(Button) || null;
-            if (this.autoPlayToggleButton) {
-                const labelNode = toggleNode?.getChildByName('Label');
-                this.autoPlayToggleLabel = labelNode?.getComponent(Label) || null;
-            }
-            console.log('[TheDecreeUI] AutoPlayToggleButton search result:', !!this.autoPlayToggleButton);
+        // Auto-find auto-play switch
+        if (!this.autoPlaySwitch) {
+            const switchNode = this.node.getChildByName('switch_auto');
+            this.autoPlaySwitch = switchNode?.getComponent(Switch) || null;
+            console.log('[TheDecreeUI] AutoPlaySwitch search result:', !!this.autoPlaySwitch);
         }
 
         // Auto-find Btn_Call123 container node if not assigned
@@ -227,7 +237,7 @@ export class TheDecreeUIController extends Component {
 
         console.log('[TheDecreeUI] UI elements found:', {
             playButton: !!this.playButton,
-            autoPlayToggleButton: !!this.autoPlayToggleButton,
+            autoPlaySwitch: !!this.autoPlaySwitch,
             btnCall123Node: !!this.btnCall123Node,
             callOneButton: !!this.callOneButton,
             callTwoButton: !!this.callTwoButton,
@@ -250,10 +260,8 @@ export class TheDecreeUIController extends Component {
             console.warn('[TheDecreeUI] ✗ Play button not found');
         }
 
-        if (this.autoPlayToggleButton) {
-            this.autoPlayToggleButton.node.on(Button.EventType.CLICK, this.onAutoPlayToggleClicked, this);
-            console.log('[TheDecreeUI] ✓ Auto-play toggle event registered');
-        }
+        // 注意：Switch 事件在 start() 之后注册，避免初始化时触发
+        // 这里不注册 Switch 事件
 
         if (this.callOneButton) {
             this.callOneButton.node.on(Button.EventType.CLICK, () => this.onCallButtonClicked(1), this);
@@ -282,6 +290,26 @@ export class TheDecreeUIController extends Component {
         // if (this.clearSelectionButton) {
         //     this.clearSelectionButton.node.on(Button.EventType.CLICK, this.onClearSelectionClicked, this);
         // }
+    }
+
+    /**
+     * Register Switch event after initialization
+     * Called in start() after setValue()
+     */
+    private registerSwitchEvent(): void {
+        if (this.autoPlaySwitch) {
+            // 通过代码直接注册事件（更可靠）
+            // 创建 EventHandler 并添加到 Switch 的 onValueChanged 数组
+            const handler = new EventHandler();
+            handler.target = this.node;
+            handler.component = 'TheDecreeUIController';
+            handler.handler = 'onAutoPlaySwitchChanged';
+            handler.customEventData = '';
+
+            this.autoPlaySwitch.onValueChanged.push(handler);
+
+            console.log('[TheDecreeUI] ✓ Auto-play switch event registered via code');
+        }
     }
 
     /**
@@ -611,44 +639,32 @@ export class TheDecreeUIController extends Component {
     }
 
     /**
-     * Handle auto-play toggle button clicked
+     * Handle auto-play switch value changed
+     * This method should be configured in the editor as the onValueChanged callback
+     *
+     * @param event - The Switch component that triggered the event
+     * @param customEventData - Custom data from editor (optional)
      */
-    private onAutoPlayToggleClicked(): void {
+    public onAutoPlaySwitchChanged(event: Switch, customEventData?: string): void {
+        console.log('[TheDecreeUI] onAutoPlaySwitchChanged called');
+        console.log('[TheDecreeUI] event:', event);
+        console.log('[TheDecreeUI] customEventData:', customEventData);
+
         if (!this._game || !this._game.theDecreeMode) {
             console.error('[TheDecreeUI] Cannot toggle auto-play - game not ready');
             return;
         }
 
+        // event 参数是 Switch 组件本身
+        const isOn = event ? event.getValue() : false;
+        console.log('[TheDecreeUI] Switch value:', isOn);
+
         const theDecreeMode = this._game.theDecreeMode;
-        const currentState = theDecreeMode.isPlayer0AutoPlayEnabled();
-        const newState = !currentState;
 
-        theDecreeMode.setPlayer0AutoPlay(newState);
-        this.updateAutoPlayToggleUI(newState);
+        // 调用 setAuto() 发送到服务器，而不是只设置本地状态
+        theDecreeMode.setAuto(isOn);
 
-        console.log(`[TheDecreeUI] Auto-play toggled to: ${newState ? 'ON' : 'OFF'}`);
-    }
-
-    /**
-     * Update auto-play toggle button visual state
-     */
-    private updateAutoPlayToggleUI(isEnabled: boolean): void {
-        if (!this.autoPlayToggleButton || !this.autoPlayToggleLabel) {
-            return;
-        }
-
-        // Update label text
-        this.autoPlayToggleLabel.string = isEnabled ? '自动出牌: 开' : '自动出牌: 关';
-
-        // Update button color
-        const targetNode = this.autoPlayToggleButton.node.getChildByName('Background');
-        if (targetNode) {
-            const sprite = targetNode.getComponent('cc.Sprite');
-            if (sprite) {
-                // Green when enabled, red when disabled
-                (sprite as any).color = isEnabled ? new Color(100, 200, 100) : new Color(200, 100, 100);
-            }
-        }
+        console.log(`[TheDecreeUI] Auto-play switched to: ${isOn ? 'ON' : 'OFF'}`);
     }
 
     // Temporarily disabled - Clear Selection button handler
@@ -770,9 +786,16 @@ export class TheDecreeUIController extends Component {
             this.playButton.node.off(Button.EventType.CLICK, this.onPlayButtonClicked, this);
         }
 
-        // Temporarily disabled
-        // if (this.clearSelectionButton) {
-        //     this.clearSelectionButton.node.off(Button.EventType.CLICK, this.onClearSelectionClicked, this);
-        // }
+        if (this.callOneButton) {
+            this.callOneButton.node.off(Button.EventType.CLICK);
+        }
+        if (this.callTwoButton) {
+            this.callTwoButton.node.off(Button.EventType.CLICK);
+        }
+        if (this.callThreeButton) {
+            this.callThreeButton.node.off(Button.EventType.CLICK);
+        }
+
+        // Switch 组件会自己清理事件
     }
 }

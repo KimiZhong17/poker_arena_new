@@ -719,13 +719,45 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 continue;
             }
 
-            // 对于主玩家（index 0），不需要重新创建卡牌，因为已经显示了高亮状态
-            // 只需要为其他玩家更新显示（显示他们出的牌的正面）
-            if (playerIndex === 0) {
-                console.log(`[TheDecreeModeClient] Skipping updateDisplay for main player (index 0) - cards already displayed with highlight`);
+            // 检查是否是自己
+            const myId = LocalGameStore.getInstance().getMyPlayerId();
+            const isMe = result.playerId === myId;
+
+            if (isMe) {
+                // 自己的牌：检查是否托管
+                const isAuto = LocalGameStore.getInstance().isPlayerAuto(myId);
+
+                if (isAuto) {
+                    // 托管出牌：需要显示出的牌（因为之前没有高亮）
+                    console.log(`[TheDecreeModeClient] Showing my auto-played cards:`, result.cards);
+
+                    // 1. 先找到这些牌在手牌中的索引
+                    const player = playerUINode.getPlayer();
+                    const handCards = player ? player.handCards : [];
+                    const indicesToSelect: number[] = [];
+
+                    for (const playedCard of result.cards) {
+                        const index = handCards.indexOf(playedCard);
+                        if (index !== -1) {
+                            indicesToSelect.push(index);
+                        }
+                    }
+
+                    console.log(`[TheDecreeModeClient] Auto-played card indices:`, indicesToSelect);
+
+                    // 2. 选中这些牌
+                    if (indicesToSelect.length > 0) {
+                        handDisplay.selectCards(indicesToSelect);
+                    }
+
+                    // 3. 高亮显示自己出的牌（锁定未选中的牌）
+                    playerUIManager.lockUnselectedCards(0);
+                } else {
+                    // 手动出牌：牌已经高亮显示了，不需要更新
+                    console.log(`[TheDecreeModeClient] Skipping updateDisplay for my manual play - cards already highlighted`);
+                }
             } else {
-                // 更新显示，传入出的牌（result.cards）
-                // 这样会显示其他玩家出的牌的正面
+                // 其他玩家的牌：显示正面
                 handDisplay.updateDisplay(result.cards);
                 console.log(`[TheDecreeModeClient] ✓ Updated cards display for player at relative index ${playerIndex}, cards:`, result.cards);
             }
@@ -1220,7 +1252,14 @@ export class TheDecreeModeClient extends GameModeClientBase {
             isAuto
         };
 
-        this.networkClient.emit(ClientMessageType.SET_AUTO, request);
+        // 使用 game.networkClient 发送消息
+        const networkClient = this.game.networkClient;
+        if (!networkClient) {
+            console.error('[TheDecreeModeClient] Network client not available');
+            return;
+        }
+
+        networkClient.send(ClientMessageType.SET_AUTO, request);
 
         console.log(`[TheDecreeModeClient] Set auto mode: ${isAuto}`);
     }

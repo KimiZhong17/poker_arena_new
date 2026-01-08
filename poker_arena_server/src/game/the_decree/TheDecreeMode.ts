@@ -374,6 +374,9 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         console.log(`[TheDecree] Round ${this.currentRound.roundNumber} started, dealer: ${dealerId}`);
+
+        // 检查庄家是否托管，如果是则自动叫牌
+        this.checkAndTriggerAutoPlay();
     }
 
     /**
@@ -396,6 +399,10 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         console.log(`[TheDecree] Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
+
+        // 检查所有托管玩家，触发自动出牌
+        this.checkAndTriggerAutoPlay();
+
         return true;
     }
 
@@ -901,6 +908,21 @@ export class TheDecreeMode extends GameModeBase {
             if (timeSinceLastAction > timeoutMs && this.isPlayerTurn(theDecreePlayer.id)) {
                 console.log(`[TheDecree] Player ${theDecreePlayer.name} timeout, enabling auto mode`);
                 this.setPlayerAuto(theDecreePlayer.id, true, 'timeout');
+            }
+        }
+    }
+
+    /**
+     * 检查并触发所有托管玩家的自动操作
+     * 在游戏状态改变后调用（如新回合开始、庄家叫牌后）
+     */
+    private checkAndTriggerAutoPlay(): void {
+        console.log('[TheDecree] Checking auto-play players...');
+        for (const player of this.playerManager.getAllPlayers()) {
+            const theDecreePlayer = player as TheDecreePlayer;
+            if (theDecreePlayer.isAuto && this.isPlayerTurn(theDecreePlayer.id)) {
+                console.log(`[TheDecree] Triggering auto-play for ${theDecreePlayer.name}`);
+                this.scheduleAutoAction(theDecreePlayer.id);
             }
         }
     }
