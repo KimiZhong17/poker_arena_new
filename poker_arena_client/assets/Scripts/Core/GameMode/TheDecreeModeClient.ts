@@ -325,6 +325,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 设置游戏状态为首庄选择阶段
         this.gameState = data.gameState as TheDecreeGameState;
 
+        // 显示消息提示
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.showMessage('请选择一张手牌，牌最大的成为首个庄家', 3.0);
+        }
+
         // 启用卡牌选择（只能选一张）
         // 选择后需要点击"出牌"按钮确认
         if (this.theDecreeUIController) {
@@ -367,6 +372,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 找到dealer的名字
         const dealerName = this.getPlayerName(data.dealerId);
         console.log(`[TheDecreeModeClient] 🎉 ${dealerName} 成为首个庄家！`);
+
+        // 显示消息提示
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.showMessage(`${dealerName} 成为首个庄家！`, 2.5);
+        }
 
         // 存储dealer ID
         this.dealerId = data.dealerId;
@@ -639,6 +649,17 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const isDealer = currentPlayerId === data.dealerId;
         console.log('[TheDecreeModeClient] Is current player the dealer?', isDealer);
 
+        // 显示消息提示
+        const dealerName = this.getPlayerName(data.dealerId);
+        const message = isDealer
+            ? `你叫了 ${data.cardsToPlay} 张牌`
+            : `庄家 ${dealerName} 叫了 ${data.cardsToPlay} 张牌`;
+
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.showMessage(message, 2.5);
+            console.log(`[TheDecreeModeClient] Showing message: "${message}"`);
+        }
+
         // 卡牌选择功能已经在 onDealCards 时启用了
         // 这里只需要更新 UI 状态（启用出牌按钮等）
         console.log(`[TheDecreeModeClient] Dealer called ${data.cardsToPlay} cards, updating UI state...`);
@@ -662,6 +683,20 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     private onPlayerPlayed(data: PlayerPlayedEvent): void {
         console.log('[TheDecreeModeClient] Player played:', data);
+
+        // 获取玩家名字
+        const playerName = this.getPlayerName(data.playerId);
+
+        // 获取当前玩家ID
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentPlayerId = localRoomStore.getMyPlayerId();
+
+        // 如果不是自己出牌，显示提示
+        if (data.playerId !== currentPlayerId) {
+            if (this.theDecreeUIController) {
+                this.theDecreeUIController.showMessage(`${playerName} 已出牌`, 1.5);
+            }
+        }
 
         // 更新 UI 显示其他玩家已出牌（不显示具体牌面）
         // TODO: 更新玩家状态指示
@@ -786,6 +821,13 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 重置 cardsToPlay 为 0，准备下一回合
         this.cardsToPlay = 0;
         console.log('[TheDecreeModeClient] Reset cardsToPlay to 0 at round end');
+
+        // 显示回合结果消息
+        const winnerName = this.getPlayerName(data.winnerId);
+        const loserName = this.getPlayerName(data.loserId);
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.showMessage(`${winnerName} 获胜！${loserName} 输了`, 3.0);
+        }
 
         // 更新所有玩家的分数显示
         const playerUIManager = this.game.playerUIManager;

@@ -4,6 +4,7 @@ import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
 import { LocalGameStore } from '../LocalStore/LocalGameStore';
 import { ClientMessageType } from '../Network/Messages';
 import { Switch } from './Switch';
+import { MessageTip } from './MessageTip';
 const { ccclass, property } = _decorator;
 
 /**
@@ -26,6 +27,9 @@ export class TheDecreeUIController extends Component {
 
     @property(Switch)
     public autoPlaySwitch: Switch | null = null;
+
+    @property(MessageTip)
+    public messageTip: MessageTip | null = null;
 
     // Auto-found references (don't need to assign in editor)
     private callOneButton: Button | null = null;
@@ -179,6 +183,13 @@ export class TheDecreeUIController extends Component {
             const switchNode = this.node.getChildByName('switch_auto');
             this.autoPlaySwitch = switchNode?.getComponent(Switch) || null;
             console.log('[TheDecreeUI] AutoPlaySwitch search result:', !!this.autoPlaySwitch);
+        }
+
+        // Auto-find message tip
+        if (!this.messageTip) {
+            const messageTipNode = this.node.getChildByName('MessageTip');
+            this.messageTip = messageTipNode?.getComponent(MessageTip) || null;
+            console.log('[TheDecreeUI] MessageTip search result:', !!this.messageTip);
         }
 
         // Auto-find Btn_Call123 container node if not assigned
@@ -775,6 +786,20 @@ export class TheDecreeUIController extends Component {
      */
     public enableAllButtons(): void {
         this.updateUIState(); // This will properly enable/disable based on state
+    }
+
+    /**
+     * Show a message tip to the user
+     * @param message The message to display
+     * @param duration Display duration in seconds (0 = use default)
+     */
+    public showMessage(message: string, duration: number = 0): void {
+        if (this.messageTip) {
+            this.messageTip.showMessage(message, duration);
+            console.log(`[TheDecreeUI] Showing message: "${message}"`);
+        } else {
+            console.warn('[TheDecreeUI] MessageTip not found, cannot show message');
+        }
     }
 
     /**

@@ -12,7 +12,7 @@ export class NetworkConfig {
     // 本机测试：'localhost'
     // 局域网游戏：修改为服务器的局域网 IP，例如 '192.168.1.100'
     // private static SERVER_IP: string = 'localhost';192.168.1.5
-    private static SERVER_IP: string = '192.168.1.5';
+    private static SERVER_IP: string = '10.0.38.17'; //'192.168.1.5'
 
     // 服务器端口
     private static SERVER_PORT: number = 3000;
