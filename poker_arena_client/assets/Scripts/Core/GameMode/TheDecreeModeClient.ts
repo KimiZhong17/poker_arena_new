@@ -881,10 +881,59 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 设置游戏状态
         this.gameState = data.gameState as TheDecreeGameState;
 
-        // 切换到结束阶段
-        // TODO: 通知 PlayingStage 游戏结束
+        // 准备游戏结果数据
+        const gameResult = this.prepareGameResult(data);
+
+        // 通过 StageManager 获取 PlayingStage 并通知游戏结束
+        const stageManager = this.game.stageManager;
+        if (stageManager) {
+            const playingStage = stageManager.getCurrentStage();
+            if (playingStage && typeof (playingStage as any).onGameFinished === 'function') {
+                console.log('[TheDecreeModeClient] Notifying PlayingStage that game is finished');
+                (playingStage as any).onGameFinished(gameResult);
+            } else {
+                console.error('[TheDecreeModeClient] PlayingStage not found or onGameFinished method missing!');
+            }
+        } else {
+            console.error('[TheDecreeModeClient] StageManager not found! Cannot switch to EndStage');
+        }
 
         console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    /**
+     * 准备游戏结果数据（用于 EndStage 显示）
+     */
+    private prepareGameResult(data: GameOverEvent): any {
+        // 获取所有玩家信息
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!currentRoom || !currentRoom.players) {
+            console.error('[TheDecreeModeClient] No room data or players found');
+            return {
+                rankings: [],
+                winnerId: data.winnerId,
+                totalRounds: data.totalRounds
+            };
+        }
+
+        const players = currentRoom.players;
+
+        // 构建排名数组（按分数降序排序）
+        const rankings = players.map(player => ({
+            name: player.name,
+            score: data.scores[player.id] || 0,
+            isWinner: player.id === data.winnerId
+        })).sort((a, b) => b.score - a.score);
+
+        console.log('[TheDecreeModeClient] Game result prepared:', rankings);
+
+        return {
+            rankings: rankings,
+            winnerId: data.winnerId,
+            totalRounds: data.totalRounds
+        };
     }
 
     // ==================== UI 辅助方法 ====================

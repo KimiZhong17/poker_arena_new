@@ -537,6 +537,7 @@ export class TheDecreeMode extends GameModeBase {
      * Refill players' hands to 5 cards
      */
     public refillHands(): void {
+        this.deck.length = 0;
         if (!this.currentRound) return;
 
         const playerOrder = this.playerManager.getPlayerOrder();

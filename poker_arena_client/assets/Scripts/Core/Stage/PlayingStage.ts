@@ -4,6 +4,7 @@ import { Game } from '../../Game';
 import { GameStage } from './StageManager';
 import { GameModeClientBase } from '../GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';
+import { EndStage } from './EndStage';
 
 /**
  * 游玩阶段
@@ -228,15 +229,19 @@ export class PlayingStage extends GameStageBase {
     public onGameFinished(gameResult?: any): void {
         console.log('[PlayingStage] Game finished', gameResult);
 
-        // 保存游戏结果（供EndStage使用）
-        if (gameResult) {
-            // TODO: 将结果传递给EndStage
-            console.log('[PlayingStage] Game result:', gameResult);
-        }
-
         // 切换到结束阶段
         const stageManager = this.game.stageManager;
         if (stageManager) {
+            // 先获取 EndStage 实例
+            const endStage = stageManager.getStage(GameStage.END) as EndStage;
+
+            // 如果有游戏结果，先设置给 EndStage
+            if (gameResult && endStage) {
+                console.log('[PlayingStage] Setting game result to EndStage:', gameResult);
+                endStage.setGameResult(gameResult);
+            }
+
+            // 切换到 EndStage
             stageManager.switchToStage(GameStage.END);
         } else {
             console.error('[PlayingStage] StageManager not found on Game!');
