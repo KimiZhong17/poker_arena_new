@@ -190,6 +190,7 @@ export interface GameStartEvent {
 export interface DealCardsEvent {
     playerId: string;
     handCards: number[];
+    allHandCounts?: { [playerId: string]: number };  // 所有玩家的手牌数量（补牌后发送）
 }
 
 /**

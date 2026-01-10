@@ -15,6 +15,7 @@ import { NetworkManager } from './Network/NetworkManager';
 import { NetworkConfig } from './Config/NetworkConfig';
 import { EventCenter } from './Utils/EventCenter';
 import { GameService } from './Services/GameService';
+import { SceneUIController } from './UI/SceneUIController';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -22,6 +23,9 @@ export class Game extends Component {
 
     @property(Node)
     public playerUIManagerNode: Node = null!;
+
+    @property(Node)
+    public sceneUINode: Node = null!;
 
     // Stage nodes
     @property(Node)
@@ -37,6 +41,7 @@ export class Game extends Component {
     public stageManager: StageManager = null!;
     private _gameController: GameController = null!;
     private _playerUIManager: PlayerUIManager = null!;
+    private _sceneUIController: SceneUIController = null!;
 
     // Network
     public networkClient: NetworkClient | null = null;
@@ -131,18 +136,21 @@ export class Game extends Component {
         // 3. Initialize player UI manager (will be used by GameModes)
         this.initializePlayerUIManager();
 
-        // 4. Initialize network client if online mode
+        // 4. Initialize Scene UI (exit button, settings, room ID)
+        this.initializeSceneUI();
+
+        // 5. Initialize network client if online mode
         if (this.isOnlineMode) {
             this.initializeNetworkClient();
         }
 
-        // 5. Create and setup Stage Manager
+        // 6. Create and setup Stage Manager
         this.createStageManager();
 
-        // 6. Setup event listeners for stage switching
+        // 7. Setup event listeners for stage switching
         this.setupStageEventListeners();
 
-        // 7. Enter Ready Stage
+        // 8. Enter Ready Stage
         console.log("[Game] All systems initialized, entering Ready stage");
         this.stageManager.switchToStage(GameStage.READY);
     }
@@ -167,6 +175,79 @@ export class Game extends Component {
         }
 
         console.log("[Game] PlayerUIManager component created (will init with player data later)");
+    }
+
+    /**
+     * Initialize Scene UI (exit button, settings, room ID display)
+     */
+    private initializeSceneUI(): void {
+        console.log("[Game] Initializing Scene UI...");
+
+        // Find or create Scene UI node
+        if (!this.sceneUINode) {
+            console.log("[Game] SceneUI node not manually assigned, creating automatically...");
+            this.sceneUINode = this.createSceneUI();
+        } else {
+            console.log("[Game] Using manually assigned SceneUI node");
+        }
+
+        // Ensure the node is active
+        if (!this.sceneUINode.active) {
+            this.sceneUINode.active = true;
+            console.log("[Game] Activated SceneUI node");
+        }
+
+        // Get or create SceneUIController component
+        this._sceneUIController = this.sceneUINode.getComponent(SceneUIController);
+        if (!this._sceneUIController) {
+            this._sceneUIController = this.sceneUINode.addComponent(SceneUIController);
+            console.log("[Game] Added SceneUIController component to node");
+        } else {
+            console.log("[Game] Found existing SceneUIController component");
+        }
+
+        // Initialize with room ID and mode
+        this._sceneUIController.init(this._roomId, this.isOnlineMode);
+
+        console.log("[Game] Scene UI initialized");
+    }
+
+    /**
+     * Create Scene UI node at Canvas root level
+     */
+    private createSceneUI(): Node {
+        const canvasNode = this.node.parent; // Main's parent is Canvas
+        let sceneUINode: Node | null = null;
+
+        if (canvasNode) {
+            const existingSceneUI = canvasNode.getChildByName("Node_SceneUI");
+            if (existingSceneUI) {
+                console.log("[Game] Found existing Node_SceneUI at Canvas root level");
+                sceneUINode = existingSceneUI;
+            }
+        }
+
+        // If not found, create Node_SceneUI at Canvas root level
+        if (!sceneUINode) {
+            const parentNode = canvasNode || this.node;
+            sceneUINode = new Node("Node_SceneUI");
+            sceneUINode.active = true; // Ensure it's active
+            parentNode.addChild(sceneUINode);
+
+            // Make sure SceneUI is rendered on top
+            const siblingCount = parentNode.children.length;
+            sceneUINode.setSiblingIndex(siblingCount - 1);
+            console.log(`[Game] Created new Node_SceneUI at index: ${sceneUINode.getSiblingIndex()} / ${siblingCount}`);
+        }
+
+        // Add UITransform
+        if (!sceneUINode.getComponent(UITransform)) {
+            sceneUINode.addComponent(UITransform);
+        }
+
+        console.log('[Game] Node_SceneUI configured');
+
+        return sceneUINode;
     }
 
     /**
@@ -494,6 +575,13 @@ export class Game extends Component {
      */
     public get playerUIManager(): PlayerUIManager {
         return this._playerUIManager;
+    }
+
+    /**
+     * Get scene UI controller (for external access)
+     */
+    public get sceneUIController(): SceneUIController {
+        return this._sceneUIController;
     }
 
     /**

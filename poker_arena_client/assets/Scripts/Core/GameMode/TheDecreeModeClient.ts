@@ -235,6 +235,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] Player ID:', data.playerId);
         console.log('[TheDecreeModeClient] Cards:', data.handCards);
         console.log('[TheDecreeModeClient] Card count:', data.handCards.length);
+        console.log('[TheDecreeModeClient] All hand counts:', data.allHandCounts);
         console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
 
         // 服务器发送的是当前玩家的手牌
@@ -289,6 +290,41 @@ export class TheDecreeModeClient extends GameModeClientBase {
             }
         } else {
             console.error(`[TheDecreeModeClient] ✗ PlayerUIController not found for index ${playerIndex}`);
+        }
+
+        // 如果包含所有玩家的手牌数量信息（补牌后），更新其他玩家的手牌显示
+        if (data.allHandCounts) {
+            console.log('[TheDecreeModeClient] Updating all players hand counts...');
+            for (const [playerId, handCount] of Object.entries(data.allHandCounts)) {
+                // 跳过当前玩家（已经更新过了）
+                if (playerId === data.playerId) {
+                    continue;
+                }
+
+                const otherPlayerIndex = this.getPlayerIndex(playerId);
+                if (otherPlayerIndex === -1) {
+                    console.warn(`[TheDecreeModeClient] Player ${playerId} not found in mapping`);
+                    continue;
+                }
+
+                const otherPlayerUIController = playerUIManager.getPlayerUINode(otherPlayerIndex);
+                if (otherPlayerUIController) {
+                    const otherPlayer = otherPlayerUIController.getPlayer();
+                    if (otherPlayer) {
+                        console.log(`[TheDecreeModeClient] Updating hand count for player ${otherPlayer.name}: ${handCount} cards`);
+
+                        // 更新其他玩家的手牌数量（使用 -1 表示未知的牌）
+                        const emptyCards = Array(handCount).fill(-1);
+                        otherPlayer.setHandCards(emptyCards);
+
+                        // 更新显示
+                        playerUIManager.updatePlayerHand(otherPlayerIndex);
+
+                        console.log(`[TheDecreeModeClient] ✓ Updated hand count for player at index ${otherPlayerIndex}`);
+                    }
+                }
+            }
+            console.log('[TheDecreeModeClient] ✓ All players hand counts updated');
         }
 
         console.log('[TheDecreeModeClient] =====================================');

@@ -405,10 +405,18 @@ export class GameRoom {
 
                 // Send updated hand cards to each player
                 if (this.theDecreeGame) {
+                    // Collect all players' hand counts
+                    const handCounts: { [playerId: string]: number } = {};
+                    for (const player of this.theDecreeGame.getAllPlayers()) {
+                        handCounts[player.id] = player.handCards.length;
+                    }
+
+                    // Send each player their own cards + all players' hand counts
                     for (const player of this.theDecreeGame.getAllPlayers()) {
                         this.sendToPlayer(player.id, ServerMessageType.DEAL_CARDS, {
                             playerId: player.id,
-                            handCards: player.handCards
+                            handCards: player.handCards,
+                            allHandCounts: handCounts
                         });
                     }
                 }

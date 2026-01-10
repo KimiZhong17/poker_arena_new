@@ -336,6 +336,18 @@ export class EndStage extends GameStageBase {
     }
 
     /**
+     * 截断过长的玩家名字，用省略号代替
+     * @param name 玩家名字
+     * @param maxLength 最大长度（默认8个字符）
+     */
+    private truncatePlayerName(name: string, maxLength: number = 8): string {
+        if (name.length <= maxLength) {
+            return name;
+        }
+        return name.substring(0, maxLength) + '...';
+    }
+
+    /**
      * 在玩家标签中显示结果
      */
     private displayResultsInPlayerLabels(result: any): void {
@@ -373,18 +385,18 @@ export class EndStage extends GameStageBase {
             const player = rankings[i];
             console.log(`[EndStage] Setting player ${i}:`, player);
 
-            // 设置名字（显示排名）
+            // 设置名字（限制名字长度）
             if (this.nameLabels[i]) {
-                const nameText = `第${i + 1}名  ${player.name}`;
-                this.nameLabels[i]!.string = nameText;
-                console.log(`[EndStage] Set nameLabel[${i}] to: "${nameText}"`);
+                const truncatedName = this.truncatePlayerName(player.name);
+                this.nameLabels[i]!.string = truncatedName;
+                console.log(`[EndStage] Set nameLabel[${i}] to: "${truncatedName}"`);
             } else {
                 console.warn(`[EndStage] nameLabel[${i}] is null!`);
             }
 
             // 设置分数
             if (this.scoreLabels[i]) {
-                const scoreText = `得分: ${player.score}`;
+                const scoreText = `${player.score}`;
                 this.scoreLabels[i]!.string = scoreText;
                 console.log(`[EndStage] Set scoreLabel[${i}] to: "${scoreText}"`);
             } else {
