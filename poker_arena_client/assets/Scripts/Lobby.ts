@@ -1,7 +1,7 @@
 // 必须在最前面导入 polyfills
 import './Utils/polyfills';
 
-import { _decorator, Component, Button, Label, EditBox, Node } from 'cc';
+import { _decorator, Component, Button, Label, EditBox, Node, Toggle } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { RoomService } from './Services/RoomService';
@@ -40,6 +40,10 @@ export class Lobby extends Component {
     private roomPanelInput: EditBox | null = null;
     private btnConfirm: Button | null = null;
     private btnClose: Button | null = null;
+    private tgNumPlayer: Node | null = null; // TG_NumPlayer toggle group node
+    private toggle2: Toggle | null = null;
+    private toggle3: Toggle | null = null;
+    private toggle4: Toggle | null = null;
 
     private authService: AuthService = null!;
     private roomService: RoomService = null!;
@@ -49,6 +53,8 @@ export class Lobby extends Component {
     private currentGameMode: string = '';
 
     private maxPlayers = 4;
+    private roomPanelMode: 'join' | 'create' = 'join'; // Track current mode
+    private selectedPlayerCount = 4; // Store the selected player count for room creation
 
     start() {
         this.authService = AuthService.getInstance();
@@ -168,10 +174,29 @@ export class Lobby extends Component {
         const closeNode = this.roomPanel.getChildByName('btn_close');
         this.btnClose = closeNode?.getComponent(Button) || null;
 
+        // 查找 TG_NumPlayer toggle group
+        this.tgNumPlayer = this.roomPanel.getChildByName('TG_NumPlayer') || null;
+
+        if (this.tgNumPlayer) {
+            // 查找三个 toggle
+            const toggle2Node = this.tgNumPlayer.getChildByName('toggle_2');
+            this.toggle2 = toggle2Node?.getComponent(Toggle) || null;
+
+            const toggle3Node = this.tgNumPlayer.getChildByName('toggle_3');
+            this.toggle3 = toggle3Node?.getComponent(Toggle) || null;
+
+            const toggle4Node = this.tgNumPlayer.getChildByName('toggle_4');
+            this.toggle4 = toggle4Node?.getComponent(Toggle) || null;
+        }
+
         console.log('[Lobby] RoomPanel elements found:', {
             roomPanelInput: !!this.roomPanelInput,
             btnConfirm: !!this.btnConfirm,
-            btnClose: !!this.btnClose
+            btnClose: !!this.btnClose,
+            tgNumPlayer: !!this.tgNumPlayer,
+            toggle2: !!this.toggle2,
+            toggle3: !!this.toggle3,
+            toggle4: !!this.toggle4
         });
 
         // 注册 RoomPanel 按钮事件
@@ -203,7 +228,7 @@ export class Lobby extends Component {
 
     /**
      * Handle create room button click
-     * Create a room via RoomService
+     * Show room panel to select player count
      */
     private onCreateRoomClicked(): void {
         console.log('[Lobby] Create room clicked');
@@ -214,9 +239,9 @@ export class Lobby extends Component {
             return;
         }
 
-        // 通过 RoomService 创建房间
-        console.log('[Lobby] Creating room via RoomService...');
-        this.roomService.createRoom(this.currentGameMode, this.maxPlayers); // 2/3/4 players
+        // 显示房间面板（创建模式）
+        this.roomPanelMode = 'create';
+        this.showRoomPanel();
     }
 
     /**
@@ -232,7 +257,8 @@ export class Lobby extends Component {
             return;
         }
 
-        // 显示房间面板
+        // 显示房间面板（加入模式）
+        this.roomPanelMode = 'join';
         this.showRoomPanel();
     }
 
@@ -253,15 +279,33 @@ export class Lobby extends Component {
         if (this.roomPanel) {
             this.roomPanel.active = true;
 
-            // 清空输入框
-            if (this.roomPanelInput) {
-                this.roomPanelInput.string = '';
+            if (this.roomPanelMode === 'join') {
+                // 加入房间模式：显示输入框，隐藏 toggle group
+                if (this.roomPanelInput) {
+                    this.roomPanelInput.node.active = true;
+                    this.roomPanelInput.string = '';
+                }
+                if (this.tgNumPlayer) {
+                    this.tgNumPlayer.active = false;
+                }
+            } else {
+                // 创建房间模式：隐藏输入框，显示 toggle group
+                if (this.roomPanelInput) {
+                    this.roomPanelInput.node.active = false;
+                }
+                if (this.tgNumPlayer) {
+                    this.tgNumPlayer.active = true;
+                    // 默认选中 toggle_4 (4人房)
+                    if (this.toggle4) {
+                        this.toggle4.isChecked = true;
+                    }
+                }
             }
 
             // 禁用后面的按钮，防止点击穿透
             this.setMainButtonsEnabled(false);
 
-            console.log('[Lobby] RoomPanel shown');
+            console.log(`[Lobby] RoomPanel shown in ${this.roomPanelMode} mode`);
         }
     }
 
@@ -280,31 +324,67 @@ export class Lobby extends Component {
     }
 
     /**
+     * 获取选中的玩家数量
+     */
+    private getSelectedPlayerCount(): number {
+        if (this.toggle2?.isChecked) {
+            return 2;
+        } else if (this.toggle3?.isChecked) {
+            return 3;
+        } else if (this.toggle4?.isChecked) {
+            return 4;
+        }
+        // 默认返回 4
+        return 4;
+    }
+
+    /**
      * RoomPanel 确认按钮点击
      */
     private onRoomPanelConfirmClicked(): void {
         console.log('[Lobby] RoomPanel confirm clicked');
 
-        // 获取输入的房间号
-        const roomId = this.roomPanelInput?.string?.trim() || '';
+        if (this.roomPanelMode === 'join') {
+            // 加入房间模式
+            // 获取输入的房间号
+            const roomId = this.roomPanelInput?.string?.trim() || '';
 
-        // 验证房间号格式（4位数字）
-        if (!this.validateRoomId(roomId)) {
-            console.error('[Lobby] Invalid room ID format');
-            this.showStatus('请输入4位数字房间号');
-            return;
+            // 验证房间号格式（4位数字）
+            if (!this.validateRoomId(roomId)) {
+                console.error('[Lobby] Invalid room ID format');
+                this.showStatus('请输入4位数字房间号');
+                return;
+            }
+
+            // 检查是否已登录
+            if (!this.authService.isLoggedIn()) {
+                console.error('[Lobby] No user logged in');
+                this.showStatus('用户未登录');
+                return;
+            }
+
+            // 通过 RoomService 加入房间
+            console.log(`[Lobby] Joining room: ${roomId}`);
+            this.roomService.joinRoom(roomId);
+        } else {
+            // 创建房间模式
+            // 获取选中的玩家数量
+            const playerCount = this.getSelectedPlayerCount();
+
+            // 检查是否已登录
+            if (!this.authService.isLoggedIn()) {
+                console.error('[Lobby] No user logged in');
+                this.showStatus('用户未登录');
+                return;
+            }
+
+            // 保存选中的玩家数量，供 onRoomCreated 使用
+            this.selectedPlayerCount = playerCount;
+
+            // 通过 RoomService 创建房间
+            console.log(`[Lobby] Creating room with ${playerCount} players`);
+            this.roomService.createRoom(this.currentGameMode, playerCount);
         }
-
-        // 检查是否已登录
-        if (!this.authService.isLoggedIn()) {
-            console.error('[Lobby] No user logged in');
-            this.showStatus('用户未登录');
-            return;
-        }
-
-        // 通过 RoomService 加入房间
-        console.log(`[Lobby] Joining room: ${roomId}`);
-        this.roomService.joinRoom(roomId);
     }
 
     /**
@@ -361,7 +441,7 @@ export class Lobby extends Component {
                 isHost: true,
                 seatIndex: 0
             }],
-            maxPlayers: this.maxPlayers, // 改为2人，方便测试
+            maxPlayers: data.maxPlayers, // 使用服务器返回的玩家数量
             isPrivate: false,
             createdAt: Date.now()
         };
@@ -396,7 +476,7 @@ export class Lobby extends Component {
             state: RoomState.WAITING,
             hostId: data.players.find(p => p.isHost)?.id || data.players[0]?.id || '',
             players: data.players,
-            maxPlayers: this.maxPlayers, // 改为2人，方便测试
+            maxPlayers: data.maxPlayers, // 使用服务器返回的玩家数量
             isPrivate: false,
             createdAt: Date.now()
         };

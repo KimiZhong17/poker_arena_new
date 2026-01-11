@@ -132,6 +132,7 @@ export interface RoomCreatedEvent {
     roomId: string;
     playerId: string;
     playerName: string;
+    maxPlayers: number;
 }
 
 /**
@@ -139,9 +140,11 @@ export interface RoomCreatedEvent {
  */
 export interface RoomJoinedEvent {
     roomId: string;
+    playerId: string;
     myPlayerIdInRoom: string;  // 当前玩家在房间内的ID
     hostId: string;            // 房主ID
     players: PlayerInfo[];
+    maxPlayers: number;
 }
 
 /**

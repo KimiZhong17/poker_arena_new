@@ -101,23 +101,23 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 0
             },
             {
-                name: 'TopLeftSeat',
-                widget: { alignTop: true, alignLeft: true, top: 100, left: 150 },
+                name: 'LeftSeat',
+                widget: { alignLeft: true, alignVerticalCenter: true, left: 50 },
                 active: true,
-                fallbackX: -350,
-                fallbackY: 200,
-                infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
+                fallbackX: -550,
+                fallbackY: 30,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
             },
             {
-                name: 'TopRightSeat',
-                widget: { alignTop: true, alignRight: true, top: 100, right: 150 },
+                name: 'RightSeat',
+                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: true,
-                fallbackX: 350,
-                fallbackY: 200,
-                infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
-            }
+                fallbackX: 550,
+                fallbackY: 30,
+                infoPanelOffsetX: 0,
+                infoPanelOffsetY: -100
+            },
         ];
     }
 
@@ -154,20 +154,11 @@ export class PlayerLayoutConfig {
                 infoPanelOffsetY: 30
             },
             {
-                name: 'TopRightSeat',
+                name: 'RightSeat',
                 widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
                 active: true,
                 fallbackX: 550,
                 fallbackY: 30,
-                infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
-            },
-            {
-                name: 'RightSeat',
-                widget: { alignRight: true, alignVerticalCenter: true, right: 50 },
-                active: false,
-                fallbackX: 550,
-                fallbackY: 50,
                 infoPanelOffsetX: 0,
                 infoPanelOffsetY: -100
             }

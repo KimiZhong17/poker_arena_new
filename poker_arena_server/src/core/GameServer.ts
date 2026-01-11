@@ -165,7 +165,8 @@ export class GameServer {
             const response: RoomCreatedEvent = {
                 roomId: room.id,
                 playerId: player.id,
-                playerName: player.name
+                playerName: player.name,
+                maxPlayers: room.maxPlayers
             };
 
             socket.emit(ServerMessageType.ROOM_CREATED, response);
@@ -230,7 +231,8 @@ export class GameServer {
                 playerId: player.id,
                 myPlayerIdInRoom: player.id,
                 hostId: room.getHostId(),
-                players: room.getPlayersInfo()
+                players: room.getPlayersInfo(),
+                maxPlayers: room.maxPlayers
             };
 
             socket.emit(ServerMessageType.ROOM_JOINED, response);

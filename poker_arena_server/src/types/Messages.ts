@@ -132,6 +132,7 @@ export interface RoomCreatedEvent {
     roomId: string;
     playerId: string;
     playerName: string;
+    maxPlayers: number;
 }
 
 /**
@@ -143,6 +144,7 @@ export interface RoomJoinedEvent {
     myPlayerIdInRoom: string;
     hostId: string;
     players: PlayerInfo[];
+    maxPlayers: number;
 }
 
 /**
