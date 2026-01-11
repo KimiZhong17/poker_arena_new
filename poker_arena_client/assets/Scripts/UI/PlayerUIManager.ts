@@ -317,7 +317,7 @@ export class PlayerUIManager extends Component {
      * @param totalSeats 总座位数
      * @returns 相对座位索引（本地玩家始终为0）
      */
-    private getRelativeSeatIndex(absoluteSeat: number, mySeat: number, totalSeats: number): number {
+    public getRelativeSeatIndex(absoluteSeat: number, mySeat: number, totalSeats: number): number {
         return (absoluteSeat - mySeat + totalSeats) % totalSeats;
     }
 

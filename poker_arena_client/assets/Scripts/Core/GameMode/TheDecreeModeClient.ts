@@ -884,19 +884,31 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const players = currentRoom.players;
         console.log('[TheDecreeModeClient] Updating scores for players:', players.length);
 
+        // 获取本地玩家的座位索引
+        const mySeatIndex = localRoomStore.getMyPlayerId();
+        const myPlayer = players.find(p => p.id === mySeatIndex);
+        const myAbsoluteSeat = myPlayer ? myPlayer.seatIndex : 0;
+        const totalSeats = players.length;
+
+        console.log(`[TheDecreeModeClient] My absolute seat: ${myAbsoluteSeat}, total seats: ${totalSeats}`);
+
         // 遍历所有分数，更新对应玩家的 UI
         for (const player of players) {
             const score = data.scores[player.id];
             if (score !== undefined) {
                 console.log(`[TheDecreeModeClient] Updating score for player ${player.id} (${player.name}): ${score}`);
 
-                // 根据 seatIndex 获取 PlayerUIController
-                const playerUINode = playerUIManager.getPlayerUINode(player.seatIndex);
+                // 将绝对座位索引转换为相对座位索引
+                const relativeSeat = playerUIManager.getRelativeSeatIndex(player.seatIndex, myAbsoluteSeat, totalSeats);
+                console.log(`[TheDecreeModeClient] Player ${player.name} absolute seat: ${player.seatIndex}, relative seat: ${relativeSeat}`);
+
+                // 根据相对座位索引获取 PlayerUIController
+                const playerUINode = playerUIManager.getPlayerUINode(relativeSeat);
                 if (playerUINode) {
                     playerUINode.updateScore(score);
-                    console.log(`[TheDecreeModeClient] ✓ Score updated for player at seat ${player.seatIndex}`);
+                    console.log(`[TheDecreeModeClient] ✓ Score updated for player at relative seat ${relativeSeat}`);
                 } else {
-                    console.warn(`[TheDecreeModeClient] PlayerUINode not found for seat ${player.seatIndex}`);
+                    console.warn(`[TheDecreeModeClient] PlayerUINode not found for relative seat ${relativeSeat}`);
                 }
             } else {
                 console.warn(`[TheDecreeModeClient] No score found for player ${player.id}`);

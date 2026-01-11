@@ -48,7 +48,7 @@ export class Lobby extends Component {
     private networkClient: NetworkClient | null = null;
     private currentGameMode: string = '';
 
-    private maxPlayers = 2;
+    private maxPlayers = 4;
 
     start() {
         this.authService = AuthService.getInstance();
@@ -258,6 +258,9 @@ export class Lobby extends Component {
                 this.roomPanelInput.string = '';
             }
 
+            // 禁用后面的按钮，防止点击穿透
+            this.setMainButtonsEnabled(false);
+
             console.log('[Lobby] RoomPanel shown');
         }
     }
@@ -268,6 +271,10 @@ export class Lobby extends Component {
     private hideRoomPanel(): void {
         if (this.roomPanel) {
             this.roomPanel.active = false;
+
+            // 重新启用后面的按钮
+            this.setMainButtonsEnabled(true);
+
             console.log('[Lobby] RoomPanel hidden');
         }
     }
@@ -314,6 +321,21 @@ export class Lobby extends Component {
     private validateRoomId(roomId: string): boolean {
         const regex = /^\d{4}$/;
         return regex.test(roomId);
+    }
+
+    /**
+     * 启用/禁用主界面按钮（防止点击穿透）
+     */
+    private setMainButtonsEnabled(enabled: boolean): void {
+        if (this.createRoomButton) {
+            this.createRoomButton.interactable = enabled;
+        }
+        if (this.joinRoomButton) {
+            this.joinRoomButton.interactable = enabled;
+        }
+        if (this.backButton) {
+            this.backButton.interactable = enabled;
+        }
     }
 
     // ==================== 网络事件处理 ====================

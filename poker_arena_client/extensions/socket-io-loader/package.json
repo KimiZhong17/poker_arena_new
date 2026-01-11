@@ -1,6 +1,7 @@
 {
   "name": "socket-io-loader",
   "version": "1.0.0",
+  "package_version": 2,
   "description": "自动为预览和构建注入 Socket.IO 客户端库",
   "author": "Poker Arena",
   "main": "./main.js",

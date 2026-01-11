@@ -742,9 +742,23 @@ export class TheDecreeUIController extends Component {
 
     /**
      * Show call buttons (when starting new round)
+     * Also disables buttons based on remaining hand cards
      */
     private showCallButtons(): void {
         console.log('[TheDecreeUI] showCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
+
+        // Get player's hand card count
+        let handCardCount = 0;
+        if (this._game && this._game.playerUIManager) {
+            const playerUINode = this._game.playerUIManager.getPlayerUINode(0);
+            if (playerUINode) {
+                const player = playerUINode.getPlayer();
+                if (player && player.handCards) {
+                    handCardCount = player.handCards.length;
+                    console.log('[TheDecreeUI] Player hand card count:', handCardCount);
+                }
+            }
+        }
 
         if (this.btnCall123Node) {
             this.btnCall123Node.active = true;
@@ -764,6 +778,27 @@ export class TheDecreeUIController extends Component {
                 this.callThreeButton.node.active = true;
                 console.log('[TheDecreeUI] Set callThreeButton.active = true');
             }
+        }
+
+        // Disable buttons based on hand card count
+        // If hand cards < 2, disable call2 and call3
+        // If hand cards < 3, disable call3
+        if (this.callTwoButton) {
+            const shouldDisable = handCardCount < 2;
+            this.callTwoButton.interactable = !shouldDisable;
+            console.log(`[TheDecreeUI] Call2 button ${shouldDisable ? 'disabled' : 'enabled'} (hand cards: ${handCardCount})`);
+        }
+
+        if (this.callThreeButton) {
+            const shouldDisable = handCardCount < 3;
+            this.callThreeButton.interactable = !shouldDisable;
+            console.log(`[TheDecreeUI] Call3 button ${shouldDisable ? 'disabled' : 'enabled'} (hand cards: ${handCardCount})`);
+        }
+
+        // Call1 is always enabled (as long as player has at least 1 card)
+        if (this.callOneButton) {
+            this.callOneButton.interactable = handCardCount >= 1;
+            console.log(`[TheDecreeUI] Call1 button ${handCardCount >= 1 ? 'enabled' : 'disabled'} (hand cards: ${handCardCount})`);
         }
     }
 
