@@ -15,6 +15,7 @@ export enum ClientMessageType {
     LEAVE_ROOM = 'leave_room',
     READY = 'ready',
     START_GAME = 'start_game',
+    RESTART_GAME = 'restart_game',
 
     // 游戏操作
     DEALER_CALL = 'dealer_call',
@@ -94,6 +95,7 @@ export enum ServerMessageType {
 
     // 游戏状态
     GAME_START = 'game_start',
+    GAME_RESTART = 'game_restart',
     GAME_STATE_UPDATE = 'game_state_update',
     REQUEST_FIRST_DEALER_SELECTION = 'request_first_dealer_selection',
     PLAYER_SELECTED_CARD = 'player_selected_card',

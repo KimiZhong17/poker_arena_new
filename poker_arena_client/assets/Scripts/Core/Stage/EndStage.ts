@@ -2,6 +2,7 @@ import { Button, Label, Node } from 'cc';
 import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { GameStage } from './StageManager';
+import { RoomService } from '../../Services/RoomService';
 
 /**
  * 结束阶段
@@ -465,12 +466,31 @@ export class EndStage extends GameStageBase {
     private onPlayAgainClicked(): void {
         console.log('[EndStage] Play again clicked');
 
-        // 切换回准备阶段
-        const stageManager = this.game.stageManager;
-        if (stageManager) {
-            stageManager.switchToStage(GameStage.READY);
+        // 检查是否在线模式
+        const networkClient = this.game.networkClient;
+        if (networkClient && networkClient.getIsConnected()) {
+            // 在线模式：先发送重启请求到服务器，然后立即切换到ReadyStage
+            console.log('[EndStage] Sending restart game request to server');
+            const roomService = RoomService.getInstance();
+            roomService.restartGame();
+
+            // 立即切换到ReadyStage（不等服务器响应）
+            console.log('[EndStage] Immediately switching to Ready stage');
+            const stageManager = this.game.stageManager;
+            if (stageManager) {
+                stageManager.switchToStage(GameStage.READY);
+            } else {
+                console.error('[EndStage] StageManager not found on Game!');
+            }
         } else {
-            console.error('[EndStage] StageManager not found on Game!');
+            // 单机模式：直接切换回准备阶段
+            console.log('[EndStage] Single player mode, switching to Ready stage directly');
+            const stageManager = this.game.stageManager;
+            if (stageManager) {
+                stageManager.switchToStage(GameStage.READY);
+            } else {
+                console.error('[EndStage] StageManager not found on Game!');
+            }
         }
     }
 

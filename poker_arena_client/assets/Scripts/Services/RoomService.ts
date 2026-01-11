@@ -34,7 +34,7 @@ export class RoomService {
 
     /**
      * 初始化网络监听
-     * 使用具名函数进行绑定，以便符合双参数 off(event, handler) 的要求
+     * 使用具名函数进行绑定,以便符合双参数 off(event, handler) 的要求
      */
     private initNetworkListeners(): void {
         const net = NetworkManager.getInstance().getClient(NetworkConfig.getServerUrl());
@@ -157,6 +157,14 @@ export class RoomService {
         const client = this.getNetworkClient();
         if (client && this.isHost()) {
             client.send(ClientMessageType.START_GAME, { roomId: this.getCurrentRoomId() || "" });
+        }
+    }
+
+    public restartGame(): void {
+        const client = this.getNetworkClient();
+        if (client) {
+            // 任何玩家都可以点击重启
+            client.send(ClientMessageType.RESTART_GAME, { roomId: this.getCurrentRoomId() || "" });
         }
     }
 

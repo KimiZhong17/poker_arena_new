@@ -31,6 +31,7 @@ export const GameEvents = {
     // UI 导航事件
     UI_REFRESH_ROOM: 'UI_REFRESH_ROOM',
     UI_NAVIGATE_TO_GAME: 'UI_NAVIGATE_TO_GAME',
+    UI_GAME_RESTART: 'UI_GAME_RESTART',
 
     // 游戏玩法事件
     GAME_DEAL_CARDS: 'GAME_DEAL_CARDS',

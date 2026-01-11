@@ -82,6 +82,11 @@ export class GameServer {
                 this.handleStartGame(socket);
             });
 
+            // 重启游戏
+            socket.on(ClientMessageType.RESTART_GAME, () => {
+                this.handleRestartGame(socket);
+            });
+
             // 庄家叫牌
             socket.on(ClientMessageType.DEALER_CALL, (data: DealerCallRequest) => {
                 this.handleDealerCall(socket, data);
@@ -341,6 +346,52 @@ export class GameServer {
 
         // 开始游戏
         this.startGame(room);
+    }
+
+    /**
+     * 处理重启游戏
+     */
+    private handleRestartGame(socket: Socket): void {
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a room');
+            return;
+        }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return;
+        }
+
+        console.log(`[GameServer] Player ${player.name} clicked restart game`);
+
+        // 立即设置该玩家为已准备
+        room.setPlayerReady(player.id, true);
+
+        // 立即广播该玩家已准备（类似READY消息）
+        const readyEvent: PlayerReadyEvent = {
+            playerId: player.id,
+            isReady: true
+        };
+        room.broadcast(ServerMessageType.PLAYER_READY, readyEvent);
+        console.log(`[GameServer] Player ${player.name} is ready for restart`);
+
+        // 记录该玩家想要重启
+        const allPlayersReady = room.playerWantsRestart(player.id);
+
+        if (allPlayersReady) {
+            // 所有人都点击了，执行游戏状态清理
+            console.log(`[GameServer] All players ready, cleaning up game state...`);
+            const success = room.restartGame();
+            if (!success) {
+                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to restart game');
+            }
+            console.log(`[GameServer] Room ${room.id} game state cleaned up`);
+        } else {
+            // 还有人没点击，等待其他玩家
+            console.log(`[GameServer] Waiting for other players to click restart...`);
+        }
     }
 
     // ==================== 游戏逻辑 ====================

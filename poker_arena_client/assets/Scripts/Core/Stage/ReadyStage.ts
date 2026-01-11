@@ -66,6 +66,9 @@ export class ReadyStage extends GameStageBase {
         console.log('[ReadyStage] Entering ready stage');
         this.isActive = true;
 
+        // 0. 重置 TheDecreeUIController 状态（用于游戏重启）
+        this.resetTheDecreeUI();
+
         // 1. 获取本地玩家信息
         this.initLocalPlayerInfo();
 
@@ -218,6 +221,36 @@ export class ReadyStage extends GameStageBase {
     // ==================== 私有方法 ====================
 
     /**
+     * 重置 TheDecreeUIController 状态
+     * 用于游戏重启时清理上一局的状态
+     */
+    private resetTheDecreeUI(): void {
+        console.log('[ReadyStage] Attempting to reset TheDecreeUIController state');
+
+        // TheDecree 在 Node_PlayStage 下
+        const playStageNode = this.game.node.getChildByName('Node_PlayStage');
+        if (!playStageNode) {
+            console.warn('[ReadyStage] Node_PlayStage not found');
+            return;
+        }
+
+        const theDecreeUINode = playStageNode.getChildByName('TheDecree');
+        if (!theDecreeUINode) {
+            console.warn('[ReadyStage] TheDecree not found under Node_PlayStage');
+            return;
+        }
+
+        const theDecreeUIController = theDecreeUINode.getComponent('TheDecreeUIController') as any;
+        if (theDecreeUIController && typeof theDecreeUIController.resetForRestart === 'function') {
+            console.log('[ReadyStage] Calling resetForRestart()...');
+            theDecreeUIController.resetForRestart();
+            console.log('[ReadyStage] TheDecreeUIController reset complete');
+        } else {
+            console.warn('[ReadyStage] TheDecreeUIController component not found or resetForRestart method missing');
+        }
+    }
+
+    /**
      * 重置所有玩家的准备状态
      */
     private resetReadyStates(): void {
@@ -227,11 +260,16 @@ export class ReadyStage extends GameStageBase {
         const currentRoom = this.localRoomStore.getCurrentRoom();
 
         if (currentRoom) {
-            // 多人模式：使用房间中的玩家ID
+            // 多人模式：使用房间中的玩家ID和实际的准备状态
+            console.log('[ReadyStage] ========== resetReadyStates ==========');
+            console.log('[ReadyStage] Current room players:', currentRoom.players);
             for (const player of currentRoom.players) {
-                this.playerReadyStates.set(player.id, false);
+                // 使用玩家实际的准备状态，而不是强制设为 false
+                this.playerReadyStates.set(player.id, player.isReady);
+                console.log(`[ReadyStage] Player ${player.id} (${player.name}): isReady = ${player.isReady}, isHost = ${player.isHost}`);
             }
             console.log(`[ReadyStage] Reset ready states for ${currentRoom.players.length} players in room`);
+            console.log('[ReadyStage] =====================================');
         } else {
             // 单机模式：使用本地玩家ID和模拟玩家
             this.playerReadyStates.set(this.localPlayerId, false);
@@ -465,18 +503,28 @@ export class ReadyStage extends GameStageBase {
             return true;
         }
 
+        console.log('[ReadyStage] ========== allNonHostPlayersReady ==========');
+        console.log('[ReadyStage] Local player:', this.localPlayerId, 'isHost:', this.isLocalPlayerHost);
+        console.log('[ReadyStage] Player ready states:', Array.from(this.playerReadyStates.entries()));
+
         // 检查所有非房主玩家是否准备
         for (const [playerId, isReady] of this.playerReadyStates) {
             // 跳过房主
             if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
+                console.log(`[ReadyStage] Skipping host player: ${playerId}`);
                 continue;
             }
 
+            console.log(`[ReadyStage] Checking player ${playerId}: isReady = ${isReady}`);
             if (!isReady) {
+                console.log('[ReadyStage] Not all non-host players ready');
+                console.log('[ReadyStage] =====================================');
                 return false;
             }
         }
 
+        console.log('[ReadyStage] All non-host players ready!');
+        console.log('[ReadyStage] =====================================');
         return true;
     }
 

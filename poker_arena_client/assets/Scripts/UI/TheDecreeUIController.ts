@@ -12,7 +12,7 @@ const { ccclass, property } = _decorator;
  * Manages all UI interactions for The Decree game mode
  *
  * Usage:
- * 1. Attach this component to ObjectTheDecreeNode
+ * 1. Attach this component to TheDecree
  * 2. UI buttons will be automatically found by name, or you can manually assign them in the editor
  */
 @ccclass('TheDecreeUIController')
@@ -857,5 +857,40 @@ export class TheDecreeUIController extends Component {
         }
 
         // Switch 组件会自己清理事件
+    }
+
+    /**
+     * Reset UI state for game restart
+     * Call this when returning to ReadyStage
+     */
+    public resetForRestart(): void {
+        console.log('[TheDecreeUI] ========================================');
+        console.log('[TheDecreeUI] resetForRestart() called');
+        console.log('[TheDecreeUI] Before reset: _hasSubmittedFirstDealerSelection =', this._hasSubmittedFirstDealerSelection);
+        console.log('[TheDecreeUI] Before reset: _selectedCardIndices =', this._selectedCardIndices);
+
+        // Reset first dealer selection flag
+        this._hasSubmittedFirstDealerSelection = false;
+
+        // Clear selected cards
+        this._selectedCardIndices = [];
+
+        // Hide call buttons
+        this.hideCallButtons();
+
+        // 重置托管开关状态并禁用（游戏开始时会重新启用）
+        if (this.autoPlaySwitch) {
+            this.autoPlaySwitch.setValue(false, true); // silent = true，不触发回调
+            this.autoPlaySwitch.node.active = false; // 隐藏托管开关
+            console.log('[TheDecreeUI] Auto-play switch reset and hidden');
+        }
+
+        // 不调用 updateUIState()，因为在 ReadyStage 时游戏模式还没有初始化
+        // updateUIState() 会在游戏开始时自动调用
+
+        console.log('[TheDecreeUI] After reset: _hasSubmittedFirstDealerSelection =', this._hasSubmittedFirstDealerSelection);
+        console.log('[TheDecreeUI] After reset: _selectedCardIndices =', this._selectedCardIndices);
+        console.log('[TheDecreeUI] UI state reset complete');
+        console.log('[TheDecreeUI] ========================================');
     }
 }

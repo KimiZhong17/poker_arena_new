@@ -30,6 +30,9 @@ export class GameRoom {
     private createdAt: number = Date.now();
     private lastActivityAt: number = Date.now();
 
+    // 重启游戏时，记录哪些玩家点击了"再来一局"
+    private playersWantRestart: Set<string> = new Set();
+
     // 游戏实例
     private theDecreeGame: TheDecreeMode | null = null;
 
@@ -150,11 +153,16 @@ export class GameRoom {
 
     /**
      * 检查所有玩家是否都准备好
+     * 注意：房主不需要准备，只检查非房主玩家
      */
     public isAllPlayersReady(): boolean {
         if (this.players.size < 2) return false;
 
         for (const player of this.players.values()) {
+            // 跳过房主
+            console.log(`>>>>>>>>>>>>>>>>>>>>>> Checking if player ${player.name} is ready: ${player.isReady} (isHost: ${player.isHost})`);
+            if (player.isHost) continue;
+
             if (!player.isReady) return false;
         }
 
@@ -241,10 +249,8 @@ export class GameRoom {
         this.state = RoomState.FINISHED;
         console.log(`[Room ${this.id}] Game ended`);
 
-        // 重置玩家状态
-        for (const player of this.players.values()) {
-            player.isReady = false;
-        }
+        // 不再重置玩家状态，因为玩家可能已经点击了"再来一局"并设置为已准备
+        // 如果需要重置，应该在 restartGame() 中处理
 
         this.state = RoomState.WAITING;
 
@@ -253,6 +259,45 @@ export class GameRoom {
             this.theDecreeGame.cleanup();
             this.theDecreeGame = null;
         }
+    }
+
+    /**
+     * 重启游戏
+     * 只清理游戏状态，不改变玩家准备状态（已经通过PLAYER_READY事件设置）
+     */
+    public restartGame(): boolean {
+        console.log(`[Room ${this.id}] Cleaning up game state for restart...`);
+
+        // 清理当前游戏
+        if (this.theDecreeGame) {
+            this.theDecreeGame.cleanup();
+            this.theDecreeGame = null;
+        }
+
+        // 重置房间状态
+        this.state = RoomState.WAITING;
+
+        // 清空重启投票
+        this.playersWantRestart.clear();
+
+        console.log(`[Room ${this.id}] Game state cleaned up, ready for new game`);
+
+        // 不再广播GAME_RESTART事件，因为玩家已经通过PLAYER_READY事件知道状态了
+        // 玩家在点击"再来一局"时已经立即切换到ReadyStage
+
+        return true;
+    }
+
+    /**
+     * 玩家点击"再来一局"
+     * @returns 是否所有玩家都已点击
+     */
+    public playerWantsRestart(playerId: string): boolean {
+        this.playersWantRestart.add(playerId);
+        console.log(`[Room ${this.id}] Player ${playerId} wants restart (${this.playersWantRestart.size}/${this.players.size})`);
+
+        // 检查是否所有玩家都点击了
+        return this.playersWantRestart.size >= this.players.size;
     }
 
     // ==================== TheDecree Game Integration ====================
