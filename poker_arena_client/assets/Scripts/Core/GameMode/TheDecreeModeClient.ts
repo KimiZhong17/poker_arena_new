@@ -180,6 +180,12 @@ export class TheDecreeModeClient extends GameModeClientBase {
             this.communityCardsNode.active = true;
         }
 
+        // 显示自动出牌开关
+        if (this.theDecreeUIController && this.theDecreeUIController.autoPlaySwitch) {
+            this.theDecreeUIController.autoPlaySwitch.node.active = true;
+            console.log('[TheDecreeModeClient] Auto-play switch shown');
+        }
+
         // 隐藏其他游戏模式的节点（如果存在）
         const guandanNode = this.findNodeByName(this.game.node, 'Guandan');
         if (guandanNode) {

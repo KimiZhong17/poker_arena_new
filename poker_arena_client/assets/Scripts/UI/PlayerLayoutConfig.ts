@@ -18,6 +18,16 @@ export interface WidgetAlignment {
 }
 
 /**
+ * State Label 对齐方式
+ */
+export enum StateLabelAlignment {
+    LEFT = 'left',      // 在面板左侧
+    RIGHT = 'right',    // 在面板右侧
+    TOP = 'top',        // 在面板上方
+    BOTTOM = 'bottom'   // 在面板下方
+}
+
+/**
  * 玩家手牌位置配置（基于 Widget 锚点）
  */
 export interface PlayerPosition {
@@ -32,6 +42,9 @@ export interface PlayerPosition {
     // 可选：InfoPanel 的偏移位置（相对于座位节点）
     infoPanelOffsetX?: number;
     infoPanelOffsetY?: number;
+
+    // 可选：State Label 的对齐方式
+    stateLabelAlignment?: StateLabelAlignment;
 }
 
 /**
@@ -71,8 +84,9 @@ export class PlayerLayoutConfig {
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280,
-                infoPanelOffsetX: -300,
-                infoPanelOffsetY: 0
+                infoPanelOffsetX: -500,
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 底部玩家：右侧
             },
             {
                 name: 'TopLeftSeat',
@@ -81,7 +95,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 0,
                 fallbackY: 280,
                 infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.BOTTOM  // 顶部玩家：下方
             }
         ];
     }
@@ -97,8 +112,9 @@ export class PlayerLayoutConfig {
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280,
-                infoPanelOffsetX: -300,
-                infoPanelOffsetY: 0
+                infoPanelOffsetX: -500,
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 底部玩家：右侧
             },
             {
                 name: 'LeftSeat',
@@ -107,7 +123,8 @@ export class PlayerLayoutConfig {
                 fallbackX: -550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: -100,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 左侧玩家：右侧
             },
             {
                 name: 'RightSeat',
@@ -116,7 +133,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: -100,
+                stateLabelAlignment: StateLabelAlignment.LEFT  // 右侧玩家：左侧
             },
         ];
     }
@@ -132,8 +150,9 @@ export class PlayerLayoutConfig {
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280,
-                infoPanelOffsetX: -300,
-                infoPanelOffsetY: 0
+                infoPanelOffsetX: -500,
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 底部玩家：右侧
             },
             {
                 name: 'LeftSeat',
@@ -142,7 +161,8 @@ export class PlayerLayoutConfig {
                 fallbackX: -550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 左侧玩家：右侧
             },
             {
                 name: 'TopLeftSeat',
@@ -151,7 +171,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 0,
                 fallbackY: 280,
                 infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.BOTTOM  // 顶部玩家：下方
             },
             {
                 name: 'RightSeat',
@@ -160,7 +181,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.LEFT  // 右侧玩家：左侧
             }
         ];
     }
@@ -176,8 +198,9 @@ export class PlayerLayoutConfig {
                 active: true,
                 fallbackX: 0,
                 fallbackY: -280,
-                infoPanelOffsetX: -300,
-                infoPanelOffsetY: 0
+                infoPanelOffsetX: -500,
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 底部玩家：右侧
             },
             {
                 name: 'LeftSeat',
@@ -186,7 +209,8 @@ export class PlayerLayoutConfig {
                 fallbackX: -400,
                 fallbackY: -80,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: -100,
+                stateLabelAlignment: StateLabelAlignment.RIGHT  // 左下玩家：右侧
             },
             {
                 name: 'TopLeftSeat',
@@ -195,7 +219,8 @@ export class PlayerLayoutConfig {
                 fallbackX: -250,
                 fallbackY: 220,
                 infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.BOTTOM  // 左上玩家：下方
             },
             {
                 name: 'TopRightSeat',
@@ -204,7 +229,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 250,
                 fallbackY: 220,
                 infoPanelOffsetX: -200,
-                infoPanelOffsetY: 30
+                infoPanelOffsetY: 0,
+                stateLabelAlignment: StateLabelAlignment.BOTTOM  // 右上玩家：下方
             },
             {
                 name: 'RightSeat',
@@ -213,7 +239,8 @@ export class PlayerLayoutConfig {
                 fallbackX: 400,
                 fallbackY: -80,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100
+                infoPanelOffsetY: -100,
+                stateLabelAlignment: StateLabelAlignment.LEFT  // 右下玩家：左侧
             }
         ];
     }

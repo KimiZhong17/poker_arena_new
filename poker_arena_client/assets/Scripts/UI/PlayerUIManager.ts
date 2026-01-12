@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerUIController } from './PlayerUIController';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
-import { PlayerPosition } from './PlayerLayoutConfig';
+import { PlayerPosition, StateLabelAlignment } from './PlayerLayoutConfig';
 import { DealerIndicator } from './DealerIndicator';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 
@@ -193,6 +193,7 @@ export class PlayerUIManager extends Component {
             if (playerInfo) {
                 // 有玩家：显示玩家信息
                 const isMyPlayer = absoluteSeat === this._mySeatIndex;
+                const stateLabelAlignment = this._layoutConfig[relativeSeat]?.stateLabelAlignment ?? StateLabelAlignment.RIGHT;
 
                 // 检查是否已经初始化过（避免重复调用 init 导致UI重建）
                 if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === playerInfo.id) {
@@ -202,7 +203,7 @@ export class PlayerUIManager extends Component {
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Updated ${playerInfo.name} (ready: ${playerInfo.isReady})`);
                 } else {
                     // 第一次初始化或玩家更换
-                    infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM);
+                    infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM, stateLabelAlignment);
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Initialized ${playerInfo.name} (ready: ${playerInfo.isReady})`);
                 }
             } else {
@@ -214,6 +215,7 @@ export class PlayerUIManager extends Component {
                     isReady: false,
                     isHost: false
                 };
+                const stateLabelAlignment = this._layoutConfig[relativeSeat]?.stateLabelAlignment ?? StateLabelAlignment.RIGHT;
 
                 // 检查是否已经是空座位状态
                 if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === '') {
@@ -221,7 +223,7 @@ export class PlayerUIManager extends Component {
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Already empty`);
                 } else {
                     // 设置为空座位
-                    infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM);
+                    infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM, stateLabelAlignment);
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Set to empty`);
                 }
             }

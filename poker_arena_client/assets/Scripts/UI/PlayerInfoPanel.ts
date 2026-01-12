@@ -1,5 +1,6 @@
-import { _decorator, Component, Node, Label, Sprite, SpriteFrame, UITransform, Color } from 'cc';
+import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Color, Prefab, instantiate, assetManager, Widget } from 'cc';
 import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
+import { StateLabelAlignment } from './PlayerLayoutConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -15,136 +16,195 @@ export enum InfoPanelMode {
  * PlayerInfoPanel - 玩家信息面板组件
  *
  * 职责：
- * - 显示玩家的基本信息（名字、头像）
+ * - 显示玩家的基本信息（名字、头像、分数）
  * - 支持两种显示模式：
- *   - ROOM模式：显示座位号、准备状态（房主/已准备/未准备）
- *   - GAME模式：显示分数、牌型、剩余牌数
+ *   - ROOM模式：显示准备状态（房主/已准备/未准备）
+ *   - GAME模式：显示分数
  *
- * 生命周期：
- * - 从玩家进入房间开始创建，一直到离开房间
- * - 在不同阶段切换显示模式
+ * 使用 Prefab 结构：
+ * - PlayerInfoPanelPrefab_0：主玩家版本（带背景）
+ * - PlayerInfoPanelPrefab_1：其他玩家版本
+ *
+ * Prefab 结构：
+ * - Label_PlayerName：玩家名称
+ * - Label_PlayerScore：玩家分数
+ * - Label_PlayerState：玩家状态（准备状态）
+ * - Sprite_PlayerImage：玩家头像（预留）
  */
 @ccclass('PlayerInfoPanel')
 export class PlayerInfoPanel extends Component {
-    // ===== UI元素 =====
+    // ===== UI元素引用 =====
     private nameLabel: Label | null = null;
+    private scoreLabel: Label | null = null;
+    private stateLabel: Label | null = null;
     private avatarSprite: Sprite | null = null;
-
-    // ROOM模式专用
-    private seatLabel: Label | null = null;      // 座位号
-    private statusLabel: Label | null = null;    // 准备状态
-
-    // GAME模式专用
-    private scoreLabel: Label | null = null;     // 分数
-    private handTypeLabel: Label | null = null;  // 牌型
-    private cardCountLabel: Label | null = null; // 剩余牌数
 
     // ===== 状态 =====
     private currentMode: InfoPanelMode = InfoPanelMode.ROOM;
     private playerInfo: PlayerInfo | null = null;
     private isMyPlayer: boolean = false;
+    private prefabLoaded: boolean = false;
+    private stateLabelAlignment: StateLabelAlignment = StateLabelAlignment.RIGHT;  // 默认右侧
 
     /**
      * 初始化信息面板
      * @param playerInfo 玩家信息
      * @param isMyPlayer 是否是本地玩家
      * @param mode 显示模式
+     * @param stateLabelAlignment State Label 的对齐方式
      */
-    public init(playerInfo: PlayerInfo, isMyPlayer: boolean = false, mode: InfoPanelMode = InfoPanelMode.ROOM): void {
+    public init(
+        playerInfo: PlayerInfo,
+        isMyPlayer: boolean = false,
+        mode: InfoPanelMode = InfoPanelMode.ROOM,
+        stateLabelAlignment: StateLabelAlignment = StateLabelAlignment.RIGHT
+    ): void {
         this.playerInfo = playerInfo;
         this.isMyPlayer = isMyPlayer;
         this.currentMode = mode;
+        this.stateLabelAlignment = stateLabelAlignment;
 
-        // 创建UI元素
-        this.createUIElements();
-
-        // 更新显示
-        this.refresh();
+        // 加载并创建 Prefab
+        this.loadPrefab();
     }
 
     /**
-     * 创建UI元素
+     * 加载对应的 Prefab
      */
-    private createUIElements(): void {
-        // 清空现有子节点
-        this.node.removeAllChildren();
+    private loadPrefab(): void {
+        // 1. 确定资源名 (注意：路径是相对于 Bundle 根目录的)
+        // 如果 Prefab 就在 Presets 文件夹下，直接用文件名；
+        // 如果在 Presets/SubFolder 下，则用 'SubFolder/FileName'
+        const prefabName = this.isMyPlayer ? 'PlayerInfoPanelPrefab_0' : 'PlayerInfoPanelPrefab_1';
+        
+        // 2. 指定 Bundle 名称
+        const bundleName = 'UI_Presets';
 
-        // 创建头像（可选）
-        const avatarNode = new Node('Avatar');
-        avatarNode.addComponent(UITransform);
-        this.avatarSprite = avatarNode.addComponent(Sprite);
-        avatarNode.setPosition(0, 35, 0);
-        this.node.addChild(avatarNode);
+        console.log(`[PlayerInfoPanel] Start loading prefab: ${prefabName} from bundle: ${bundleName}`);
 
-        // 创建名字标签（始终显示）
-        const nameNode = new Node('NameLabel');
-        nameNode.addComponent(UITransform);
-        this.nameLabel = nameNode.addComponent(Label);
-        this.nameLabel.fontSize = 20;
-        this.nameLabel.color = new Color(255, 255, 255, 255);
-        nameNode.setPosition(0, 0, 0);
-        this.node.addChild(nameNode);
+        // 3. 先获取或加载 Bundle
+        assetManager.loadBundle(bundleName, (err, bundle) => {
+            if (err) {
+                console.error(`[PlayerInfoPanel] Failed to load Bundle: ${bundleName}`, err);
+                return;
+            }
 
-        // 根据模式创建不同的UI元素
-        if (this.currentMode === InfoPanelMode.ROOM) {
-            this.createRoomModeUI();
+            // 4. 从 Bundle 中加载特定的 Prefab
+            bundle.load(prefabName, Prefab, (err, prefab) => {
+                if (err) {
+                    console.error(`[PlayerInfoPanel] Failed to load prefab: ${prefabName} in bundle: ${bundleName}`, err);
+                    return;
+                }
+
+                // 清空现有子节点
+                this.node.removeAllChildren();
+
+                // 实例化 Prefab
+                const prefabInstance = instantiate(prefab);
+                this.node.addChild(prefabInstance);
+
+                // 重置 Prefab 实例的本地位置，确保使用父节点设置的位置
+                prefabInstance.setPosition(0, 0, 0);
+
+                // 查找 UI 元素
+                this.findUIElements(prefabInstance);
+
+                this.prefabLoaded = true;
+
+                // 更新显示
+                this.refresh();
+
+                console.log(`[PlayerInfoPanel] Prefab loaded successfully from ${bundleName}: ${prefabName}`);
+            });
+        });
+    }
+
+    /**
+     * 查找 Prefab 中的 UI 元素
+     */
+    private findUIElements(root: Node): void {
+        // 查找名称标签
+        const nameNode = root.getChildByName('Label_PlayerName');
+        if (nameNode) {
+            this.nameLabel = nameNode.getComponent(Label);
         } else {
-            this.createGameModeUI();
+            console.warn('[PlayerInfoPanel] Label_PlayerName not found in prefab');
+        }
+
+        // 查找分数标签
+        const scoreNode = root.getChildByName('Label_PlayerScore');
+        if (scoreNode) {
+            this.scoreLabel = scoreNode.getComponent(Label);
+        } else {
+            console.warn('[PlayerInfoPanel] Label_PlayerScore not found in prefab');
+        }
+
+        // 查找状态标签（注意：Prefab 中的名称是 Label_PlayerState）
+        const stateNode = root.getChildByName('Label_PlayerState') || root.getChildByName('Label_State');
+        if (stateNode) {
+            this.stateLabel = stateNode.getComponent(Label);
+            // 应用 state label 的对齐方式
+            this.applyStateLabelAlignment(stateNode);
+        } else {
+            console.warn('[PlayerInfoPanel] Label_PlayerState or Label_State not found in prefab');
+        }
+
+        // 查找头像精灵
+        const avatarNode = root.getChildByName('Sprite_PlayerImage');
+        if (avatarNode) {
+            this.avatarSprite = avatarNode.getComponent(Sprite);
+        } else {
+            console.warn('[PlayerInfoPanel] Sprite_PlayerImage not found in prefab');
         }
     }
 
     /**
-     * 创建房间模式UI
+     * 应用 State Label 的对齐方式
      */
-    private createRoomModeUI(): void {
-        // 座位标签
-        const seatNode = new Node('SeatLabel');
-        seatNode.addComponent(UITransform);
-        this.seatLabel = seatNode.addComponent(Label);
-        this.seatLabel.fontSize = 18;
-        this.seatLabel.color = new Color(200, 200, 200, 255);
-        seatNode.setPosition(0, -25, 0);
-        this.node.addChild(seatNode);
+    private applyStateLabelAlignment(stateNode: Node): void {
+        // 获取或添加 Widget 组件
+        let widget = stateNode.getComponent(Widget);
+        if (!widget) {
+            widget = stateNode.addComponent(Widget);
+        }
 
-        // 状态标签（房主/已准备/未准备）
-        const statusNode = new Node('StatusLabel');
-        statusNode.addComponent(UITransform);
-        this.statusLabel = statusNode.addComponent(Label);
-        this.statusLabel.fontSize = 18;
-        statusNode.setPosition(0, -50, 0);
-        this.node.addChild(statusNode);
-    }
+        // 重置所有对齐
+        widget.isAlignLeft = false;
+        widget.isAlignRight = false;
+        widget.isAlignTop = false;
+        widget.isAlignBottom = false;
+        widget.isAlignHorizontalCenter = false;
+        widget.isAlignVerticalCenter = false;
 
-    /**
-     * 创建游戏模式UI
-     */
-    private createGameModeUI(): void {
-        // 分数标签
-        const scoreNode = new Node('ScoreLabel');
-        scoreNode.addComponent(UITransform);
-        this.scoreLabel = scoreNode.addComponent(Label);
-        this.scoreLabel.fontSize = 18;
-        this.scoreLabel.color = new Color(255, 255, 255, 255);
-        scoreNode.setPosition(0, -25, 0);
-        this.node.addChild(scoreNode);
+        // 根据配置设置对齐方式
+        // 注意：负值表示向外偏移（显示在面板外侧）
+        switch (this.stateLabelAlignment) {
+            case StateLabelAlignment.LEFT:
+                widget.isAlignLeft = true;
+                widget.isAlignVerticalCenter = true;
+                widget.left = -200;  // 负值：显示在面板左侧外部
+                break;
+            case StateLabelAlignment.RIGHT:
+                widget.isAlignRight = true;
+                widget.isAlignVerticalCenter = true;
+                widget.right = -200;  // 负值：显示在面板右侧外部
+                break;
+            case StateLabelAlignment.TOP:
+                widget.isAlignTop = true;
+                widget.isAlignHorizontalCenter = true;
+                widget.top = -80;  // 负值：显示在面板上方外部
+                break;
+            case StateLabelAlignment.BOTTOM:
+                widget.isAlignBottom = true;
+                widget.isAlignHorizontalCenter = true;
+                widget.bottom = -80;  // 负值：显示在面板下方外部
+                break;
+        }
 
-        // 牌型标签
-        const handTypeNode = new Node('HandTypeLabel');
-        handTypeNode.addComponent(UITransform);
-        this.handTypeLabel = handTypeNode.addComponent(Label);
-        this.handTypeLabel.fontSize = 16;
-        this.handTypeLabel.color = new Color(255, 215, 0, 255); // 金色
-        handTypeNode.setPosition(0, -50, 0);
-        this.node.addChild(handTypeNode);
+        // 强制更新 Widget
+        widget.updateAlignment();
 
-        // 剩余牌数标签（可选）
-        const cardCountNode = new Node('CardCountLabel');
-        cardCountNode.addComponent(UITransform);
-        this.cardCountLabel = cardCountNode.addComponent(Label);
-        this.cardCountLabel.fontSize = 16;
-        this.cardCountLabel.color = new Color(150, 150, 150, 255);
-        cardCountNode.setPosition(0, -75, 0);
-        this.node.addChild(cardCountNode);
+        console.log(`[PlayerInfoPanel] Applied state label alignment: ${this.stateLabelAlignment}`);
     }
 
     /**
@@ -154,7 +214,6 @@ export class PlayerInfoPanel extends Component {
         if (this.currentMode === mode) return;
 
         this.currentMode = mode;
-        this.createUIElements(); // 重新创建UI元素
         this.refresh();
     }
 
@@ -170,7 +229,7 @@ export class PlayerInfoPanel extends Component {
      * 刷新显示
      */
     public refresh(): void {
-        if (!this.playerInfo) return;
+        if (!this.playerInfo || !this.prefabLoaded) return;
 
         // 更新名字（如果是自己，加上标识）
         if (this.nameLabel) {
@@ -218,22 +277,22 @@ export class PlayerInfoPanel extends Component {
     private refreshRoomMode(): void {
         if (!this.playerInfo) return;
 
-        // 显示座位
-        if (this.seatLabel) {
-            this.seatLabel.string = `座位 ${this.playerInfo.seatIndex + 1}`;
+        // 隐藏分数标签
+        if (this.scoreLabel) {
+            this.scoreLabel.string = '';
         }
 
         // 显示状态
-        if (this.statusLabel) {
+        if (this.stateLabel) {
             if (this.playerInfo.isHost) {
-                this.statusLabel.string = '房主';
-                this.statusLabel.color = new Color(255, 215, 0, 255); // 金色
+                this.stateLabel.string = '房主';
+                this.stateLabel.color = new Color(255, 215, 0, 255); // 金色
             } else if (this.playerInfo.isReady) {
-                this.statusLabel.string = '已准备';
-                this.statusLabel.color = new Color(0, 255, 0, 255); // 绿色
+                this.stateLabel.string = '已准备';
+                this.stateLabel.color = new Color(0, 255, 0, 255); // 绿色
             } else {
-                this.statusLabel.string = '未准备';
-                this.statusLabel.color = new Color(150, 150, 150, 255); // 灰色
+                this.stateLabel.string = '未准备';
+                this.stateLabel.color = new Color(150, 150, 150, 255); // 灰色
             }
         }
     }
@@ -242,16 +301,14 @@ export class PlayerInfoPanel extends Component {
      * 刷新游戏模式显示
      */
     private refreshGameMode(): void {
-        // 游戏模式下，分数、牌型等由外部调用 updateScore、setHandType 等方法更新
-        // 这里可以清空之前的显示
+        // 游戏模式下，显示分数
         if (this.scoreLabel) {
             this.scoreLabel.string = '分数: 0';
         }
-        if (this.handTypeLabel) {
-            this.handTypeLabel.string = '';
-        }
-        if (this.cardCountLabel) {
-            this.cardCountLabel.string = '';
+
+        // 暂时不显示状态
+        if (this.stateLabel) {
+            this.stateLabel.string = '';
         }
     }
 
@@ -268,16 +325,18 @@ export class PlayerInfoPanel extends Component {
 
     /**
      * 设置牌型显示（仅GAME模式）
+     * TODO: 后续扩展，可能需要额外的 Label
      */
     public setHandType(handTypeText: string, color?: string): void {
-        if (this.handTypeLabel && this.currentMode === InfoPanelMode.GAME) {
-            this.handTypeLabel.string = handTypeText;
+        // 暂时使用 stateLabel 显示牌型
+        if (this.stateLabel && this.currentMode === InfoPanelMode.GAME) {
+            this.stateLabel.string = handTypeText;
             if (color) {
                 const hexColor = color.replace('#', '');
                 const r = parseInt(hexColor.substring(0, 2), 16);
                 const g = parseInt(hexColor.substring(2, 4), 16);
                 const b = parseInt(hexColor.substring(4, 6), 16);
-                this.handTypeLabel.color = new Color(r, g, b, 255);
+                this.stateLabel.color = new Color(r, g, b, 255);
             }
         }
     }
@@ -286,22 +345,23 @@ export class PlayerInfoPanel extends Component {
      * 清除牌型显示（仅GAME模式）
      */
     public clearHandType(): void {
-        if (this.handTypeLabel && this.currentMode === InfoPanelMode.GAME) {
-            this.handTypeLabel.string = '';
+        if (this.stateLabel && this.currentMode === InfoPanelMode.GAME) {
+            this.stateLabel.string = '';
         }
     }
 
     /**
      * 更新剩余牌数（仅GAME模式）
+     * TODO: 后续扩展，可能需要额外的 Label
      */
     public updateCardCount(count: number): void {
-        if (this.cardCountLabel && this.currentMode === InfoPanelMode.GAME) {
-            this.cardCountLabel.string = `剩余: ${count}`;
-        }
+        // 暂时不实现，后续扩展
+        console.log(`[PlayerInfoPanel] TODO: updateCardCount(${count})`);
     }
 
     /**
      * 设置头像
+     * TODO: 实现头像加载逻辑
      */
     public setAvatar(spriteFrame: SpriteFrame): void {
         if (this.avatarSprite) {
@@ -314,10 +374,7 @@ export class PlayerInfoPanel extends Component {
      */
     public clear(): void {
         if (this.nameLabel) this.nameLabel.string = '';
-        if (this.seatLabel) this.seatLabel.string = '';
-        if (this.statusLabel) this.statusLabel.string = '';
         if (this.scoreLabel) this.scoreLabel.string = '';
-        if (this.handTypeLabel) this.handTypeLabel.string = '';
-        if (this.cardCountLabel) this.cardCountLabel.string = '';
+        if (this.stateLabel) this.stateLabel.string = '';
     }
 }
