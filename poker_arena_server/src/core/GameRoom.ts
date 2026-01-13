@@ -33,6 +33,12 @@ export class GameRoom {
     // 重启游戏时，记录哪些玩家点击了"再来一局"
     private playersWantRestart: Set<string> = new Set();
 
+    // 记录玩家的托管状态（在游戏开始前设置）
+    private playerAutoStates: Map<string, boolean> = new Map();
+
+    // 游戏结束定时器
+    private endGameTimer: NodeJS.Timeout | null = null;
+
     // 游戏实例
     private theDecreeGame: TheDecreeMode | null = null;
 
@@ -249,6 +255,9 @@ export class GameRoom {
         this.state = RoomState.FINISHED;
         console.log(`[Room ${this.id}] Game ended`);
 
+        // 清除定时器引用
+        this.endGameTimer = null;
+
         // 不再重置玩家状态，因为玩家可能已经点击了"再来一局"并设置为已准备
         // 如果需要重置，应该在 restartGame() 中处理
 
@@ -267,6 +276,13 @@ export class GameRoom {
      */
     public restartGame(): boolean {
         console.log(`[Room ${this.id}] Cleaning up game state for restart...`);
+
+        // 清除 endGame 定时器（如果存在）
+        if (this.endGameTimer) {
+            clearTimeout(this.endGameTimer);
+            this.endGameTimer = null;
+            console.log(`[Room ${this.id}] Cleared endGame timer`);
+        }
 
         // 清理当前游戏
         if (this.theDecreeGame) {
@@ -483,7 +499,7 @@ export class GameRoom {
                 });
 
                 // End game after a delay
-                setTimeout(() => this.endGame(), 5000);
+                this.endGameTimer = setTimeout(() => this.endGame(), 5000);
             },
 
             onPlayerAutoChanged: (playerId, isAuto, reason) => {
@@ -503,6 +519,12 @@ export class GameRoom {
         // Initialize game with player info
         const playerInfos = this.getPlayersInfo();
         this.theDecreeGame.initGame(playerInfos);
+
+        // Apply saved auto states before starting the game
+        for (const [playerId, isAuto] of this.playerAutoStates) {
+            console.log(`[Room ${this.id}] Applying saved auto state for player ${playerId}: ${isAuto}`);
+            this.theDecreeGame.setPlayerAuto(playerId, isAuto, 'manual');
+        }
 
         // Start game
         this.theDecreeGame.startGame();
@@ -578,21 +600,21 @@ export class GameRoom {
      * Handle set auto mode action
      */
     public handleSetAuto(playerId: string, isAuto: boolean): boolean {
-        if (!this.theDecreeGame) {
-            this.sendToPlayer(playerId, ServerMessageType.ERROR, {
-                code: 'GAME_NOT_STARTED',
-                message: 'Game has not started yet'
-            });
-            return false;
-        }
-
         const player = this.players.get(playerId);
         if (!player) {
             return false;
         }
 
         console.log(`[Room ${this.id}] Player ${player.name} ${isAuto ? 'enabled' : 'disabled'} auto mode`);
-        this.theDecreeGame.setPlayerAuto(playerId, isAuto, 'manual');
+
+        // 如果游戏已经开始，直接设置托管状态
+        if (this.theDecreeGame) {
+            this.theDecreeGame.setPlayerAuto(playerId, isAuto, 'manual');
+        } else {
+            // 如果游戏还没开始，保存托管状态，等游戏开始后应用
+            this.playerAutoStates.set(playerId, isAuto);
+            console.log(`[Room ${this.id}] Saved auto state for player ${player.name} (will apply when game starts)`);
+        }
 
         return true;
     }

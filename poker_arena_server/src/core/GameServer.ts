@@ -386,8 +386,12 @@ export class GameServer {
             const success = room.restartGame();
             if (!success) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to restart game');
+                return;
             }
             console.log(`[GameServer] Room ${room.id} game state cleaned up`);
+
+            // 不自动启动游戏，等待房主点击"开始游戏"按钮
+            console.log(`[GameServer] Waiting for host to start the game...`);
         } else {
             // 还有人没点击，等待其他玩家
             console.log(`[GameServer] Waiting for other players to click restart...`);

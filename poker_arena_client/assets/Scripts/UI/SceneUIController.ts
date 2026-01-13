@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Button, Label, UITransform, Color, Sprite, SpriteFrame } from 'cc';
 import { SceneManager } from '../SceneManager';
 import { EventCenter } from '../Utils/EventCenter';
+import { RoomService } from '../Services/RoomService';
 
 const { ccclass, property } = _decorator;
 
@@ -83,7 +84,13 @@ export class SceneUIController extends Component {
                 console.log('[SceneUIController] Using manually assigned exit button');
             }
             if (this.exitButton) {
+                console.log('[SceneUIController] Exit button found/created, binding click event');
+                console.log('[SceneUIController] Exit button node:', this.exitButton.node);
+                console.log('[SceneUIController] Exit button node name:', this.exitButton.node?.name);
                 this.exitButton.node.on(Button.EventType.CLICK, this.onExitButtonClicked, this);
+                console.log('[SceneUIController] Exit button click event bound successfully');
+            } else {
+                console.error('[SceneUIController] Failed to find or create exit button!');
             }
         }
 
@@ -254,21 +261,40 @@ export class SceneUIController extends Component {
      * 退出按钮点击事件
      */
     private onExitButtonClicked(): void {
-        console.log('[SceneUIController] Exit button clicked');
+        console.log('[SceneUIController] ========== EXIT BUTTON CLICKED ==========');
+        console.log('[SceneUIController] isOnlineMode:', this._isOnlineMode);
+        console.log('[SceneUIController] roomId:', this._roomId);
 
         // 发送退出房间事件
         EventCenter.emit('EXIT_ROOM_REQUESTED');
+        console.log('[SceneUIController] EXIT_ROOM_REQUESTED event emitted');
 
-        // 根据模式返回不同场景
-        if (this._isOnlineMode) {
-            // 在线模式：返回大厅
-            console.log('[SceneUIController] Returning to Lobby (online mode)');
-            this._sceneManager.goToLobby();
-        } else {
-            // 离线模式：返回大厅
-            console.log('[SceneUIController] Returning to Hall (offline mode)');
-            this._sceneManager.goToHall();
-        }
+        // 延迟场景切换，避免在事件处理过程中销毁组件导致错误
+        this.scheduleOnce(() => {
+            console.log('[SceneUIController] Executing delayed scene transition...');
+            // 根据模式返回不同场景
+            if (this._isOnlineMode) {
+                // 在线模式：通知服务器离开房间，然后返回大厅
+                console.log('[SceneUIController] Leaving room (online mode)');
+                const roomService = RoomService.getInstance();
+                roomService.leaveRoom();
+
+                // 返回大厅（需要传递游戏模式参数）
+                console.log('[SceneUIController] Navigating to Lobby...');
+                this._sceneManager.goToLobby({
+                    gameMode: 'the_decree',
+                    minPlayers: 4,
+                    maxPlayers: 4
+                });
+            } else {
+                // 离线模式：直接返回大厅
+                console.log('[SceneUIController] Returning to Hall (offline mode)');
+                this._sceneManager.goToHall();
+            }
+            console.log('[SceneUIController] Scene transition initiated');
+        }, 0);
+
+        console.log('[SceneUIController] ========== EXIT BUTTON HANDLER END ==========');
     }
 
     /**
@@ -334,11 +360,11 @@ export class SceneUIController extends Component {
      */
     onDestroy(): void {
         // 移除事件监听
-        if (this.exitButton) {
+        if (this.exitButton && this.exitButton.node) {
             this.exitButton.node.off(Button.EventType.CLICK, this.onExitButtonClicked, this);
         }
 
-        if (this.settingsButton) {
+        if (this.settingsButton && this.settingsButton.node) {
             this.settingsButton.node.off(Button.EventType.CLICK, this.onSettingsButtonClicked, this);
         }
     }

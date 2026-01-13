@@ -878,11 +878,11 @@ export class TheDecreeUIController extends Component {
         // Hide call buttons
         this.hideCallButtons();
 
-        // 重置托管开关状态并禁用（游戏开始时会重新启用）
+        // 重置托管开关状态（但保持可见，因为游戏开始时需要显示）
         if (this.autoPlaySwitch) {
             this.autoPlaySwitch.setValue(false, true); // silent = true，不触发回调
-            this.autoPlaySwitch.node.active = false; // 隐藏托管开关
-            console.log('[TheDecreeUI] Auto-play switch reset and hidden');
+            // 不隐藏托管开关，让它在游戏开始时自然显示
+            console.log('[TheDecreeUI] Auto-play switch reset to false');
         }
 
         // 不调用 updateUIState()，因为在 ReadyStage 时游戏模式还没有初始化

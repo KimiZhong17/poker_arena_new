@@ -56,11 +56,28 @@ export class Lobby extends Component {
     private roomPanelMode: 'join' | 'create' = 'join'; // Track current mode
     private selectedPlayerCount = 4; // Store the selected player count for room creation
 
-    start() {
+    onLoad() {
+        // 在 onLoad 中初始化单例，确保它们总是可用
+        this.sceneManager = SceneManager.getInstance();
         this.authService = AuthService.getInstance();
         this.roomService = RoomService.getInstance();
         this.localUserStore = LocalUserStore.getInstance();
-        this.sceneManager = SceneManager.getInstance();
+    }
+
+    start() {
+        // 确保 sceneManager 已初始化（防御性编程）
+        if (!this.sceneManager) {
+            this.sceneManager = SceneManager.getInstance();
+        }
+        if (!this.authService) {
+            this.authService = AuthService.getInstance();
+        }
+        if (!this.roomService) {
+            this.roomService = RoomService.getInstance();
+        }
+        if (!this.localUserStore) {
+            this.localUserStore = LocalUserStore.getInstance();
+        }
 
         // Check if user is logged in
         if (!this.authService.isLoggedIn()) {
@@ -143,14 +160,14 @@ export class Lobby extends Component {
     private setupNetworkEvents(): void {
         if (!this.networkClient) return;
 
-        // 监听房间创建成功
-        this.networkClient.on('room_created', this.onRoomCreated.bind(this));
+        // 监听房间创建成功（使用箭头函数，不需要 bind）
+        this.networkClient.on('room_created', this.onRoomCreated);
 
         // 监听房间加入成功
-        this.networkClient.on('room_joined', this.onRoomJoined.bind(this));
+        this.networkClient.on('room_joined', this.onRoomJoined);
 
         // 监听错误
-        this.networkClient.on('error', this.onNetworkError.bind(this));
+        this.networkClient.on('error', this.onNetworkError);
     }
 
     /**
@@ -423,7 +440,7 @@ export class Lobby extends Component {
     /**
      * 房间创建成功
      */
-    private onRoomCreated(data: RoomCreatedEvent): void {
+    private onRoomCreated = (data: RoomCreatedEvent) => {
         console.log('[Lobby] Room created successfully:', data);
 
         // 保存房间信息到 LocalRoomStore
@@ -452,6 +469,12 @@ export class Lobby extends Component {
         console.log('[Lobby] Room data saved to LocalRoomStore:', roomData);
         console.log('[Lobby] Player ID saved to LocalRoomStore:', data.playerId);
 
+        // 确保 sceneManager 已初始化
+        if (!this.sceneManager) {
+            console.error('[Lobby] SceneManager is null, reinitializing...');
+            this.sceneManager = SceneManager.getInstance();
+        }
+
         // 跳转到游戏场景（在线模式）
         this.sceneManager.goToGame({
             roomId: data.roomId,
@@ -463,7 +486,7 @@ export class Lobby extends Component {
     /**
      * 房间加入成功
      */
-    private onRoomJoined(data: RoomJoinedEvent): void {
+    private onRoomJoined = (data: RoomJoinedEvent) => {
         console.log('[Lobby] Successfully joined room:', data);
 
         // 保存房间信息到 LocalRoomStore
@@ -490,6 +513,12 @@ export class Lobby extends Component {
         // 隐藏面板
         this.hideRoomPanel();
 
+        // 确保 sceneManager 已初始化
+        if (!this.sceneManager) {
+            console.error('[Lobby] SceneManager is null, reinitializing...');
+            this.sceneManager = SceneManager.getInstance();
+        }
+
         // 跳转到游戏场景（在线模式）
         this.sceneManager.goToGame({
             roomId: data.roomId,
@@ -501,7 +530,7 @@ export class Lobby extends Component {
     /**
      * 网络错误处理
      */
-    private onNetworkError(error: ErrorEvent): void {
+    private onNetworkError = (error: ErrorEvent) => {
         console.error('[Lobby] Network error:', error);
 
         // 根据错误码显示友好提示
@@ -560,11 +589,11 @@ export class Lobby extends Component {
             this.btnClose.node.off(Button.EventType.CLICK, this.onRoomPanelCloseClicked, this);
         }
 
-        // Clean up network event listeners
+        // Clean up network event listeners（使用箭头函数，不需要 bind）
         if (this.networkClient) {
-            this.networkClient.off('room_created', this.onRoomCreated.bind(this));
-            this.networkClient.off('room_joined', this.onRoomJoined.bind(this));
-            this.networkClient.off('error', this.onNetworkError.bind(this));
+            this.networkClient.off('room_created', this.onRoomCreated);
+            this.networkClient.off('room_joined', this.onRoomJoined);
+            this.networkClient.off('error', this.onNetworkError);
 
             // 不要断开连接！NetworkManager 会管理连接的生命周期
             // this.networkClient.disconnect();

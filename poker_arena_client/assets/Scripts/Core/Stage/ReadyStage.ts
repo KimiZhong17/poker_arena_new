@@ -405,7 +405,7 @@ export class ReadyStage extends GameStageBase {
      * 清理按钮事件
      */
     private cleanupButtons(): void {
-        if (this.btnStart) {
+        if (this.btnStart && this.btnStart.node) {
             this.btnStart.node.off(Button.EventType.CLICK, this.onStartButtonClicked, this);
             this.btnStart = null;
             console.log('[ReadyStage] Start button unregistered');
