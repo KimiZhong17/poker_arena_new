@@ -8,7 +8,8 @@ import {
     ServerMessageType,
     PlayerReadyEvent,
     PlayerLeftEvent,
-    PlayerJoinedEvent
+    PlayerJoinedEvent,
+    HostChangedEvent
 } from '../Network/Messages';
 import { NetworkManager } from '../Network/NetworkManager';
 import { NetworkConfig } from '../Config/NetworkConfig';
@@ -44,6 +45,7 @@ export class RoomService {
         net.off(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.off(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.off(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
+        net.off(ServerMessageType.HOST_CHANGED, this.onHostChanged);
         net.off(ServerMessageType.ERROR, this.onError);
 
         // --- 再绑定 ---
@@ -53,6 +55,7 @@ export class RoomService {
         net.on(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.on(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.on(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
+        net.on(ServerMessageType.HOST_CHANGED, this.onHostChanged);
         net.on(ServerMessageType.ERROR, this.onError);
     }
 
@@ -101,6 +104,12 @@ export class RoomService {
         }
     };
 
+    private onHostChanged = (data: HostChangedEvent) => {
+        console.log('[RoomService] Host changed to:', data.newHostId);
+        this.localRoomStore.updateHostId(data.newHostId);
+        EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
+    };
+
     private onError = (data: any) => {
         console.error('[RoomService] Error from server:', data);
         alert(`服务器错误: ${data.message || data.code || '未知错误'}`);
@@ -136,10 +145,22 @@ export class RoomService {
 
     public joinRoom(roomId: string): void {
         const client = this.getNetworkClient();
-        if (client) client.send(ClientMessageType.JOIN_ROOM, { 
-            roomId, 
-            playerName: this.localUserStore.getUsername() 
+        if (client) client.send(ClientMessageType.JOIN_ROOM, {
+            roomId,
+            playerName: this.localUserStore.getUsername()
         });
+    }
+
+    public reconnectToRoom(roomId: string, playerId: string): void {
+        const client = this.getNetworkClient();
+        if (client) {
+            console.log(`[RoomService] Attempting to reconnect to room ${roomId} as player ${playerId}`);
+            client.send(ClientMessageType.RECONNECT, {
+                roomId,
+                playerId,
+                playerName: this.localUserStore.getUsername()
+            });
+        }
     }
 
     public leaveRoom(): void {

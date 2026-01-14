@@ -244,6 +244,21 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] All hand counts:', data.allHandCounts);
         console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
 
+        // 检查 playerId 是否在映射中，如果不在，重新初始化映射
+        if (!this.playerIdToIndexMap.has(data.playerId)) {
+            console.warn(`[TheDecreeModeClient] Player ${data.playerId} not in mapping, reinitializing...`);
+            console.log('[TheDecreeModeClient] Current mapping before reinit:', Array.from(this.playerIdToIndexMap.entries()));
+            this.upgradePlayerUIToPlayingMode();
+            console.log('[TheDecreeModeClient] Current mapping after reinit:', Array.from(this.playerIdToIndexMap.entries()));
+
+            // 再次检查是否成功添加
+            if (!this.playerIdToIndexMap.has(data.playerId)) {
+                console.error(`[TheDecreeModeClient] Failed to add player ${data.playerId} to mapping after reinit!`);
+                console.error('[TheDecreeModeClient] This means the player is not in LocalRoomStore');
+                return;
+            }
+        }
+
         // 服务器发送的是当前玩家的手牌
         // 更新 Player 数据和 PlayerUIManager 显示
         const playerUIManager = this.game.playerUIManager;

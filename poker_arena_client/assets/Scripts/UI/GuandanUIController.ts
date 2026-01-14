@@ -283,13 +283,13 @@ export class GuandanUIController extends Component {
      * Clean up
      */
     onDestroy() {
-        if (this.playButton) {
+        if (this.playButton && this.playButton.node) {
             this.playButton.node.off(Button.EventType.CLICK, this.onPlayButtonClicked, this);
         }
-        if (this.passButton) {
+        if (this.passButton && this.passButton.node) {
             this.passButton.node.off(Button.EventType.CLICK, this.onPassButtonClicked, this);
         }
-        if (this.clearSelectionButton) {
+        if (this.clearSelectionButton && this.clearSelectionButton.node) {
             this.clearSelectionButton.node.off(Button.EventType.CLICK, this.onClearSelectionClicked, this);
         }
     }

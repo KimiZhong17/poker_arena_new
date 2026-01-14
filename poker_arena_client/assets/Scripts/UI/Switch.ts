@@ -226,6 +226,8 @@ export class Switch extends Component {
      * Clean up
      */
     onDestroy() {
-        this.node.off(Node.EventType.TOUCH_END, this.onSwitchClicked, this);
+        if (this.node) {
+            this.node.off(Node.EventType.TOUCH_END, this.onSwitchClicked, this);
+        }
     }
 }

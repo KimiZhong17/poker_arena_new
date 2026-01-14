@@ -16,6 +16,7 @@ export enum ClientMessageType {
     READY = 'ready',
     START_GAME = 'start_game',
     RESTART_GAME = 'restart_game',
+    RECONNECT = 'reconnect',  // 重连到房间
 
     // 游戏操作
     DEALER_CALL = 'dealer_call',
@@ -43,6 +44,15 @@ export interface CreateRoomRequest {
  */
 export interface JoinRoomRequest {
     roomId: string;
+    playerName: string;
+}
+
+/**
+ * 重连房间请求
+ */
+export interface ReconnectRequest {
+    roomId: string;
+    playerId: string;  // 原来的玩家ID
     playerName: string;
 }
 
@@ -92,6 +102,7 @@ export enum ServerMessageType {
     PLAYER_JOINED = 'player_joined',
     PLAYER_LEFT = 'player_left',
     PLAYER_READY = 'player_ready',
+    HOST_CHANGED = 'host_changed',
 
     // 游戏状态
     GAME_START = 'game_start',
@@ -180,6 +191,13 @@ export interface PlayerLeftEvent {
 export interface PlayerReadyEvent {
     playerId: string;
     isReady: boolean;
+}
+
+/**
+ * 房主变更事件
+ */
+export interface HostChangedEvent {
+    newHostId: string;
 }
 
 /**

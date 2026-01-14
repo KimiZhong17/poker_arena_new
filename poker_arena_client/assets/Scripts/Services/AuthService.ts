@@ -66,13 +66,14 @@ export class AuthService {
     /**
      * 游客登录
      * 客户端生成UUID作为唯一标识，连接服务器后由服务器验证/分配正式ID
+     * @param customNickname 可选的自定义昵称
      */
-    public async loginAsGuest(): Promise<boolean> {
-        console.log('[AuthService] Guest login');
+    public async loginAsGuest(customNickname?: string): Promise<boolean> {
+        console.log('[AuthService] Guest login', customNickname ? `with nickname: ${customNickname}` : '');
 
         try {
             // LocalUserStore 会生成UUID，确保唯一性
-            const success = await this.localUserStore.loginAsGuest();
+            const success = await this.localUserStore.loginAsGuest(customNickname);
 
             if (success) {
                 const guestId = this.localUserStore.getUsername();

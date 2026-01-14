@@ -157,12 +157,12 @@ export class EndStage extends GameStageBase {
      * 清理按钮事件
      */
     private cleanupButtons(): void {
-        if (this.btnPlayAgain) {
+        if (this.btnPlayAgain && this.btnPlayAgain.node) {
             this.btnPlayAgain.node.off(Button.EventType.CLICK, this.onPlayAgainClicked, this);
             this.btnPlayAgain = null;
         }
 
-        if (this.btnReturnLobby) {
+        if (this.btnReturnLobby && this.btnReturnLobby.node) {
             this.btnReturnLobby.node.off(Button.EventType.CLICK, this.onReturnLobbyClicked, this);
             this.btnReturnLobby = null;
         }

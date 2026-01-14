@@ -53,6 +53,7 @@ export class Login extends Component {
 
     /**
      * Handle guest login button click
+     * 注意：昵称输入面板由外部提供，这里预留接口
      */
     public async onGuestLoginButtonClicked() {
         console.log("Guest login button clicked.");
@@ -62,7 +63,12 @@ export class Login extends Component {
         }
 
         try {
-            const success = await this.authService.loginAsGuest();
+            // TODO: 这里应该弹出昵称输入面板，获取用户输入的昵称
+            // 示例：const nickname = await this.showNicknameInputDialog();
+            // 目前先使用undefined，会使用默认生成的昵称
+            const nickname = undefined;
+
+            const success = await this.authService.loginAsGuest(nickname);
 
             if (success) {
                 this.sceneManager.goToHall();

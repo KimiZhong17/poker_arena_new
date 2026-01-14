@@ -67,7 +67,9 @@ export class GameRoom {
         }
 
         player.roomId = this.id;
-        player.seatIndex = this.players.size;
+
+        // 找到第一个空闲的座位索引
+        player.seatIndex = this.findAvailableSeatIndex();
 
         // 第一个玩家是房主
         if (this.players.size === 0) {
@@ -79,34 +81,58 @@ export class GameRoom {
         this.players.set(player.id, player);
         this.updateActivity();
 
-        console.log(`[Room ${this.id}] Player ${player.name} joined (${this.players.size}/${this.maxPlayers})`);
+        console.log(`[Room ${this.id}] Player ${player.name} joined (${this.players.size}/${this.maxPlayers}), seatIndex: ${player.seatIndex}`);
 
         return true;
     }
 
     /**
-     * 移除玩家
+     * 找到第一个空闲的座位索引
      */
-    public removePlayer(playerId: string): PlayerSession | null {
+    private findAvailableSeatIndex(): number {
+        const occupiedSeats = new Set(
+            Array.from(this.players.values()).map(p => p.seatIndex)
+        );
+
+        for (let i = 0; i < this.maxPlayers; i++) {
+            if (!occupiedSeats.has(i)) {
+                return i;
+            }
+        }
+
+        // 如果所有座位都被占用，返回 players.size（这不应该发生）
+        return this.players.size;
+    }
+
+    /**
+     * 移除玩家
+     * @returns { player: 被移除的玩家, newHostId: 新房主ID（如果房主变更） }
+     */
+    public removePlayer(playerId: string): { player: PlayerSession | null; newHostId: string | null } {
         const player = this.players.get(playerId);
-        if (!player) return null;
+        if (!player) return { player: null, newHostId: null };
 
         this.players.delete(playerId);
         player.roomId = null;
 
         console.log(`[Room ${this.id}] Player ${player.name} left (${this.players.size}/${this.maxPlayers})`);
 
+        let newHostId: string | null = null;
+
         // 如果房主离开，转移房主权限
         if (this.hostId === playerId && this.players.size > 0) {
             const newHost = Array.from(this.players.values())[0];
+            const oldHostId = this.hostId;
             newHost.isHost = true;
+            newHost.isReady = true; // 新房主自动准备
             this.hostId = newHost.id;
-            console.log(`[Room ${this.id}] Host transferred to ${newHost.name}`);
+            newHostId = newHost.id;
+            console.log(`[Room ${this.id}] Host transferred from ${oldHostId} to ${newHost.name}`);
         }
 
         this.updateActivity();
 
-        return player;
+        return { player, newHostId };
     }
 
     /**

@@ -44,7 +44,10 @@ export class LocalRoomStore {
     private currentRoom: RoomData | null = null;
     private myPlayerIdInRoom: string | null = null;  // 当前用户在房间内的玩家ID（服务器分配）
 
-    private constructor() {}
+    private constructor() {
+        // 启动时尝试从localStorage加载房间信息
+        this.loadRoomFromStorage();
+    }
 
     public static getInstance(): LocalRoomStore {
         if (!LocalRoomStore.instance) {
@@ -59,6 +62,9 @@ export class LocalRoomStore {
     public setCurrentRoom(roomData: RoomData): void {
         this.currentRoom = roomData;
         console.log('[RoomStateStore] Current room set:', roomData);
+
+        // 保存到localStorage以便断线重连
+        this.saveRoomToStorage();
     }
 
     /**
@@ -140,12 +146,42 @@ export class LocalRoomStore {
     }
 
     /**
+     * 更新房主ID（从服务器同步）
+     * @param newHostId 新房主ID
+     */
+    public updateHostId(newHostId: string): void {
+        if (!this.currentRoom) {
+            console.warn('[RoomStateStore] No current room, cannot update host');
+            return;
+        }
+
+        // 更新旧房主的 isHost 状态
+        const oldHost = this.currentRoom.players.find(p => p.id === this.currentRoom!.hostId);
+        if (oldHost) {
+            oldHost.isHost = false;
+        }
+
+        // 更新新房主的 isHost 状态和准备状态
+        const newHost = this.currentRoom.players.find(p => p.id === newHostId);
+        if (newHost) {
+            newHost.isHost = true;
+            newHost.isReady = true; // 新房主自动准备
+        }
+
+        this.currentRoom.hostId = newHostId;
+        console.log(`[RoomStateStore] Host updated to: ${newHostId}`);
+    }
+
+    /**
      * 清空当前房间（离开房间或游戏结束时调用）
      */
     public clearCurrentRoom(): void {
         this.currentRoom = null;
         this.myPlayerIdInRoom = null;  // 同时清空玩家ID
         console.log('[RoomStateStore] Current room cleared');
+
+        // 清除localStorage中的房间信息
+        this.clearRoomFromStorage();
     }
 
     // ==================== 当前用户玩家ID管理 ====================
@@ -157,6 +193,9 @@ export class LocalRoomStore {
     public setMyPlayerId(playerId: string): void {
         this.myPlayerIdInRoom = playerId;
         console.log(`[LocalRoomStore] My player ID set: ${playerId}`);
+
+        // 保存到localStorage以便断线重连
+        this.saveRoomToStorage();
     }
 
     /**
@@ -209,6 +248,105 @@ export class LocalRoomStore {
     public getPlayerCount(): number {
         if (!this.currentRoom) return 0;
         return this.currentRoom.players.length;
+    }
+
+    // ==================== 本地存储（用于断线重连） ====================
+
+    /**
+     * 保存房间信息到localStorage
+     * 只在游戏进行中（PLAYING状态）时保存，以便断线重连
+     */
+    private saveRoomToStorage(): void {
+        if (!this.currentRoom) return;
+
+        // 只在游戏进行中时保存房间信息
+        if (this.currentRoom.state !== RoomState.PLAYING) {
+            console.log('[LocalRoomStore] Room not in PLAYING state, skip saving to storage');
+            return;
+        }
+
+        try {
+            const roomInfo = {
+                roomId: this.currentRoom.id,
+                myPlayerId: this.myPlayerIdInRoom,
+                state: this.currentRoom.state,
+                savedAt: Date.now()
+            };
+
+            localStorage.setItem('poker_arena_reconnect_room', JSON.stringify(roomInfo));
+            console.log('[LocalRoomStore] Room info saved to storage for reconnection:', roomInfo);
+        } catch (error) {
+            console.error('[LocalRoomStore] Failed to save room to storage:', error);
+        }
+    }
+
+    /**
+     * 从localStorage加载房间信息
+     * 用于断线重连
+     */
+    private loadRoomFromStorage(): void {
+        try {
+            const roomInfoStr = localStorage.getItem('poker_arena_reconnect_room');
+            if (!roomInfoStr) return;
+
+            const roomInfo = JSON.parse(roomInfoStr);
+
+            // 检查保存时间，超过5分钟的数据视为过期
+            const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
+            if (Date.now() - roomInfo.savedAt > RECONNECT_TIMEOUT) {
+                console.log('[LocalRoomStore] Reconnect data expired, clearing...');
+                this.clearRoomFromStorage();
+                return;
+            }
+
+            // 只恢复基本信息，完整信息需要从服务器获取
+            console.log('[LocalRoomStore] Found reconnect data:', roomInfo);
+            // 注意：这里不直接设置currentRoom，而是在重连成功后由服务器返回完整数据
+        } catch (error) {
+            console.error('[LocalRoomStore] Failed to load room from storage:', error);
+        }
+    }
+
+    /**
+     * 清除localStorage中的房间信息
+     */
+    private clearRoomFromStorage(): void {
+        try {
+            localStorage.removeItem('poker_arena_reconnect_room');
+            console.log('[LocalRoomStore] Room info cleared from storage');
+        } catch (error) {
+            console.error('[LocalRoomStore] Failed to clear room from storage:', error);
+        }
+    }
+
+    /**
+     * 获取保存的重连信息
+     * 用于判断是否需要重连
+     */
+    public getReconnectInfo(): { roomId: string; myPlayerId: string; state: RoomState } | null {
+        try {
+            const roomInfoStr = localStorage.getItem('poker_arena_reconnect_room');
+            if (!roomInfoStr) return null;
+
+            const roomInfo = JSON.parse(roomInfoStr);
+
+            // 检查保存时间
+            const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
+            if (Date.now() - roomInfo.savedAt > RECONNECT_TIMEOUT) {
+                console.log('[LocalRoomStore] Reconnect data expired');
+                this.clearRoomFromStorage();
+                return null;
+            }
+
+            return {
+                roomId: roomInfo.roomId,
+                myPlayerId: roomInfo.myPlayerId,
+                state: roomInfo.state
+            };
+        } catch (error) {
+            console.error('[LocalRoomStore] Failed to get reconnect info:', error);
+            return null;
+        }
     }
 
     // ==================== 注意 ====================

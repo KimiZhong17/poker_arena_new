@@ -84,28 +84,52 @@ export class LocalUserStore {
     /**
      * 游客登录
      * 使用UUID生成全局唯一的游客ID，避免冲突
+     * @param customNickname 可选的自定义昵称
      */
-    public async loginAsGuest(): Promise<boolean> {
+    public async loginAsGuest(customNickname?: string): Promise<boolean> {
         await this.delay(300);
 
-        // 生成全局唯一的游客ID
-        const guestId = IdGenerator.generateGuestId();
-        // 生成友好的显示名称（从UUID提取短ID）
-        const displayName = IdGenerator.generateGuestDisplayName(guestId);
+        // 生成当前标签页的会话ID（用于多标签页测试）
+        const sessionId = this.getOrCreateSessionId();
+
+        // 尝试从localStorage加载已有的游客ID
+        let guestId = this.loadGuestIdFromStorage();
+
+        // 如果没有已保存的游客ID，生成新的
+        if (!guestId) {
+            guestId = IdGenerator.generateGuestId();
+            console.log(`[LocalUserStore] Generated new guest ID: ${guestId}`);
+        } else {
+            console.log(`[LocalUserStore] Loaded existing guest ID: ${guestId}`);
+        }
+
+        // 为当前标签页添加会话后缀（用于多标签页测试）
+        const uniqueGuestId = `${guestId}_${sessionId}`;
+
+        // 使用自定义昵称或生成默认昵称
+        let displayName = customNickname && customNickname.trim()
+            ? customNickname.trim()
+            : IdGenerator.generateGuestDisplayName(guestId);
+
+        // 如果是多标签页，在昵称后添加标识
+        if (sessionId !== '1') {
+            displayName = `${displayName}#${sessionId}`;
+        }
 
         this.userData = {
-            username: guestId,          // 使用完整UUID作为username（唯一标识）
-            nickname: displayName,       // 使用友好名称作为昵称（显示）
+            username: uniqueGuestId,     // 使用带会话ID的唯一标识
+            nickname: displayName,       // 使用自定义或友好名称作为昵称（显示）
             level: 1,
             exp: 0,
             isGuest: true,
-            guestId: guestId            // 保存完整的游客ID
+            guestId: guestId            // 保存原始的游客ID（不含会话后缀）
         };
 
         this.isLoggedIn = true;
-        // 游客不保存到 localStorage
+        // 游客也保存到 localStorage，以便下次自动登录
+        this.saveToStorage();
 
-        console.log(`[LocalUserStore] Guest logged in: ${guestId} (显示名: ${displayName})`);
+        console.log(`[LocalUserStore] Guest logged in: ${uniqueGuestId} (显示名: ${displayName})`);
         return true;
     }
 
@@ -243,6 +267,72 @@ export class LocalUserStore {
     }
 
     // ==================== 本地存储 ====================
+
+    /**
+     * 获取或创建当前标签页的会话ID
+     * 用于支持同一浏览器多标签页测试
+     */
+    private getOrCreateSessionId(): string {
+        // 使用sessionStorage（每个标签页独立）
+        let sessionId = sessionStorage.getItem('poker_arena_session_id');
+
+        if (!sessionId) {
+            // 从localStorage获取已使用的会话ID列表
+            const usedSessionIds = this.getUsedSessionIds();
+
+            // 生成新的会话ID（从1开始递增）
+            let newSessionId = 1;
+            while (usedSessionIds.has(newSessionId.toString())) {
+                newSessionId++;
+            }
+
+            sessionId = newSessionId.toString();
+            sessionStorage.setItem('poker_arena_session_id', sessionId);
+
+            // 记录到localStorage
+            usedSessionIds.add(sessionId);
+            localStorage.setItem('poker_arena_used_sessions', JSON.stringify(Array.from(usedSessionIds)));
+
+            console.log(`[LocalUserStore] Created new session ID: ${sessionId}`);
+        } else {
+            console.log(`[LocalUserStore] Using existing session ID: ${sessionId}`);
+        }
+
+        return sessionId;
+    }
+
+    /**
+     * 获取已使用的会话ID集合
+     */
+    private getUsedSessionIds(): Set<string> {
+        try {
+            const usedSessionsStr = localStorage.getItem('poker_arena_used_sessions');
+            if (usedSessionsStr) {
+                return new Set(JSON.parse(usedSessionsStr));
+            }
+        } catch (error) {
+            console.error('[LocalUserStore] Failed to load used session IDs:', error);
+        }
+        return new Set(['1']); // 默认包含会话1
+    }
+
+    /**
+     * 从localStorage加载已保存的游客ID
+     */
+    private loadGuestIdFromStorage(): string | null {
+        try {
+            const userData = localStorage.getItem('poker_arena_user');
+            if (userData) {
+                const parsed = JSON.parse(userData);
+                if (parsed.isGuest && parsed.guestId) {
+                    return parsed.guestId;
+                }
+            }
+        } catch (error) {
+            console.error('[LocalUserStore] Failed to load guest ID from storage:', error);
+        }
+        return null;
+    }
 
     /**
      * 保存到 localStorage

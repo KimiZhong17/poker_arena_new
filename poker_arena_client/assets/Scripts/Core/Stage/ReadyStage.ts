@@ -304,6 +304,13 @@ export class ReadyStage extends GameStageBase {
         const currentRoom = this.localRoomStore.getCurrentRoom();
         if (!currentRoom) return;
 
+        // 更新本地玩家的房主状态
+        const localPlayer = currentRoom.players.find(p => p.id === this.localPlayerId);
+        if (localPlayer) {
+            this.isLocalPlayerHost = localPlayer.isHost;
+            console.log(`[ReadyStage] Local player host status updated: ${this.isLocalPlayerHost}`);
+        }
+
         // 更新玩家准备状态
         this.playerReadyStates.clear();
         for (const player of currentRoom.players) {

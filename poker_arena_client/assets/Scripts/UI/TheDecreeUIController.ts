@@ -841,18 +841,18 @@ export class TheDecreeUIController extends Component {
      * Clean up
      */
     onDestroy() {
-        // Unregister events
-        if (this.playButton) {
+        // Unregister events with null checks
+        if (this.playButton && this.playButton.node) {
             this.playButton.node.off(Button.EventType.CLICK, this.onPlayButtonClicked, this);
         }
 
-        if (this.callOneButton) {
+        if (this.callOneButton && this.callOneButton.node) {
             this.callOneButton.node.off(Button.EventType.CLICK);
         }
-        if (this.callTwoButton) {
+        if (this.callTwoButton && this.callTwoButton.node) {
             this.callTwoButton.node.off(Button.EventType.CLICK);
         }
-        if (this.callThreeButton) {
+        if (this.callThreeButton && this.callThreeButton.node) {
             this.callThreeButton.node.off(Button.EventType.CLICK);
         }
 

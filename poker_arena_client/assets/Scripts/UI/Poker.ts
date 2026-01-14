@@ -67,7 +67,9 @@ export class Poker extends Component {
      */
     public disableClick(): void {
         this._isInteractive = false;
-        this.node.off(Node.EventType.TOUCH_END, this.onCardTouched, this);
+        if (this.node) {
+            this.node.off(Node.EventType.TOUCH_END, this.onCardTouched, this);
+        }
 
         // Reset to original position
         if (this._isSelected) {
