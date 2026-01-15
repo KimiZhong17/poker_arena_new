@@ -339,9 +339,9 @@ export class EndStage extends GameStageBase {
     /**
      * 截断过长的玩家名字，用省略号代替
      * @param name 玩家名字
-     * @param maxLength 最大长度（默认8个字符）
+     * @param maxLength 最大长度（默认9个字符）
      */
-    private truncatePlayerName(name: string, maxLength: number = 8): string {
+    private truncatePlayerName(name: string, maxLength: number = 9): string {
         if (name.length <= maxLength) {
             return name;
         }

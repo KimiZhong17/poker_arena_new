@@ -165,7 +165,9 @@ export class LocalUserStore {
      * 获取用户名
      */
     public getUsername(): string {
-        return this.userData?.username || 'Guest';
+        const username = this.userData?.username || 'Guest';
+        console.log(`[LocalUserStore] getUsername() returning: ${username}`);
+        return username;
     }
 
     /**
@@ -313,7 +315,7 @@ export class LocalUserStore {
         } catch (error) {
             console.error('[LocalUserStore] Failed to load used session IDs:', error);
         }
-        return new Set(['1']); // 默认包含会话1
+        return new Set(); // 空集合，从1开始分配
     }
 
     /**
@@ -345,6 +347,12 @@ export class LocalUserStore {
             const dataToSave = { ...this.userData };
             delete dataToSave.currentRoomPlayerId;
 
+            // 如果是游客，移除昵称中的会话后缀（#N），只保存基础昵称
+            if (dataToSave.isGuest && dataToSave.nickname) {
+                // 移除 #N 后缀（如果存在）
+                dataToSave.nickname = dataToSave.nickname.replace(/#\d+$/, '');
+            }
+
             localStorage.setItem('poker_arena_user', JSON.stringify(dataToSave));
             localStorage.setItem('poker_arena_logged_in', 'true');
         } catch (error) {
@@ -363,7 +371,27 @@ export class LocalUserStore {
             if (userData && loggedIn === 'true') {
                 this.userData = JSON.parse(userData);
                 this.isLoggedIn = true;
-                console.log('[LocalUserStore] Loaded from storage:', this.userData?.username);
+
+                // 如果是游客，需要为当前标签页添加会话后缀
+                if (this.userData && this.userData.isGuest && this.userData.guestId) {
+                    const sessionId = this.getOrCreateSessionId();
+                    const uniqueGuestId = `${this.userData.guestId}_${sessionId}`;
+
+                    // 更新username为带会话后缀的版本
+                    this.userData.username = uniqueGuestId;
+
+                    // 更新昵称（如果需要添加会话标识）
+                    if (sessionId !== '1') {
+                        // 检查昵称是否已经有会话标识
+                        if (!this.userData.nickname.includes('#')) {
+                            this.userData.nickname = `${this.userData.nickname}#${sessionId}`;
+                        }
+                    }
+
+                    console.log('[LocalUserStore] Loaded guest from storage with session suffix:', this.userData.username);
+                } else {
+                    console.log('[LocalUserStore] Loaded from storage:', this.userData?.username);
+                }
             }
         } catch (error) {
             console.error('[LocalUserStore] Failed to load from storage:', error);
@@ -379,6 +407,27 @@ export class LocalUserStore {
             localStorage.removeItem('poker_arena_logged_in');
         } catch (error) {
             console.error('[LocalUserStore] Failed to clear storage:', error);
+        }
+    }
+
+    /**
+     * 清除所有缓存（包括会话ID）
+     * 用于测试或重置
+     */
+    public static clearAllCache(): void {
+        try {
+            // 清除localStorage
+            localStorage.removeItem('poker_arena_user');
+            localStorage.removeItem('poker_arena_logged_in');
+            localStorage.removeItem('poker_arena_used_sessions');
+            localStorage.removeItem('poker_arena_reconnect_room');
+
+            // 清除sessionStorage
+            sessionStorage.removeItem('poker_arena_session_id');
+
+            console.log('[LocalUserStore] All cache cleared');
+        } catch (error) {
+            console.error('[LocalUserStore] Failed to clear all cache:', error);
         }
     }
 

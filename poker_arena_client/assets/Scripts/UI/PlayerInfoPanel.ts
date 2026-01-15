@@ -263,7 +263,7 @@ export class PlayerInfoPanel extends Component {
         }
 
         // 其他名字如果太长，也进行截断
-        const maxLength = 8;
+        const maxLength = 9;
         if (name.length > maxLength) {
             return name.substring(0, maxLength) + '...';
         }

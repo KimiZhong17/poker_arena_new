@@ -37,18 +37,18 @@ export class IdGenerator {
 
     /**
      * 生成短ID（用于显示）
-     * 从完整UUID中提取前8位
+     * 从完整UUID中提取前4位（更简洁）
      */
     public static generateShortId(fullId: string): string {
         // 如果是guest_开头，去掉前缀
         const uuid = fullId.startsWith('guest_') ? fullId.substring(6) : fullId;
-        // 返回前8位
-        return uuid.substring(0, 8);
+        // 返回前4位（缩短以便多标签页测试时更易读）
+        return uuid.substring(0, 4);
     }
 
     /**
      * 生成游客显示名称
-     * 格式: 游客_abc123
+     * 格式: 游客_abc1
      */
     public static generateGuestDisplayName(guestId: string): string {
         const shortId = this.generateShortId(guestId);

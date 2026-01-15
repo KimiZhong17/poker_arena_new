@@ -7,8 +7,8 @@ export class IdValidator {
     // UUID v4 正则表达式
     private static readonly UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    // 游客ID格式: guest_xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    private static readonly GUEST_ID_REGEX = /^guest_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    // 游客ID格式: guest_xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx 或 guest_xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx_N（带会话后缀）
+    private static readonly GUEST_ID_REGEX = /^guest_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(_\d+)?$/i;
 
     /**
      * 验证游客ID格式是否正确
@@ -51,8 +51,8 @@ export class IdValidator {
             return false;
         }
 
-        // 检查是否包含非法字符（只允许字母、数字、中文、下划线、连字符、空格）
-        const validNameRegex = /^[\w\u4e00-\u9fa5\s\-_]+$/;
+        // 检查是否包含非法字符（只允许字母、数字、中文、下划线、连字符、空格、井号）
+        const validNameRegex = /^[\w\u4e00-\u9fa5\s\-_#]+$/;
         return validNameRegex.test(name);
     }
 

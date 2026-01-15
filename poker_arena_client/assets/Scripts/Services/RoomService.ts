@@ -136,10 +136,12 @@ export class RoomService {
 
     public createRoom(gameMode: string, maxPlayers: number): void {
         const client = this.getNetworkClient();
-        if (client) client.send(ClientMessageType.CREATE_ROOM, { 
-            playerName: this.localUserStore.getUsername(), 
-            gameMode: gameMode as 'the_decree', 
-            maxPlayers 
+        const playerName = this.localUserStore.getNickname();  // 使用昵称而不是用户名
+        console.log(`[RoomService] Creating room with playerName: ${playerName}`);
+        if (client) client.send(ClientMessageType.CREATE_ROOM, {
+            playerName: playerName,
+            gameMode: gameMode as 'the_decree',
+            maxPlayers
         });
     }
 
@@ -147,7 +149,7 @@ export class RoomService {
         const client = this.getNetworkClient();
         if (client) client.send(ClientMessageType.JOIN_ROOM, {
             roomId,
-            playerName: this.localUserStore.getUsername()
+            playerName: this.localUserStore.getNickname()  // 使用昵称而不是用户名
         });
     }
 
@@ -158,7 +160,7 @@ export class RoomService {
             client.send(ClientMessageType.RECONNECT, {
                 roomId,
                 playerId,
-                playerName: this.localUserStore.getUsername()
+                playerName: this.localUserStore.getNickname()  // 使用昵称而不是用户名
             });
         }
     }

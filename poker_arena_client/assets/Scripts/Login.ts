@@ -1,8 +1,22 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
+import { LocalUserStore } from './LocalStore/LocalUserStore';
 
 const { ccclass, property } = _decorator;
+
+// 暴露调试函数到全局作用域
+(window as any).clearPokerArenaCache = function() {
+    LocalUserStore.clearAllCache();
+    console.log('[Debug] Cache cleared, reloading page...');
+    location.reload();
+};
+
+(window as any).getUserData = function() {
+    const userData = LocalUserStore.getInstance().getUserData();
+    console.log('[Debug] Current user data in memory:', userData);
+    return userData;
+};
 
 /**
  * Login scene controller
