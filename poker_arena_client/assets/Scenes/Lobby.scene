@@ -258,7 +258,7 @@
       "y": 1,
       "z": 1
     },
-    "_mobility": 0,
+    "_mobility": 1,
     "_layer": 1073741824,
     "_euler": {
       "__type__": "cc.Vec3",
@@ -303,17 +303,17 @@
     "_resourceType": 1,
     "_remoteURL": "",
     "_clip": {
-      "__uuid__": "72709741-9b4a-449c-a291-935726d9cee6",
+      "__uuid__": "4366b1f6-c997-410a-b7cb-b9d6828297c6",
       "__expectedType__": "cc.VideoClip"
     },
     "_playOnAwake": true,
     "_volume": 0,
     "_mute": true,
-    "_playbackRate": 1,
+    "_playbackRate": 0.8,
     "_loop": true,
     "_fullScreenOnAwake": false,
     "_stayOnBottom": true,
-    "_keepAspectRatio": false,
+    "_keepAspectRatio": true,
     "videoPlayerEvent": [],
     "_id": "dcRUJADihMi6VbwKs3WvJi"
   },
