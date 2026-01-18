@@ -1,7 +1,7 @@
 // 必须在最前面导入 polyfills
 import './Utils/polyfills';
 
-import { _decorator, Component, Button, Label, EditBox, Node, Toggle } from 'cc';
+import { _decorator, Component, Button, Label, EditBox, Node, Toggle, profiler } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { RoomService } from './Services/RoomService';
@@ -65,6 +65,9 @@ export class Lobby extends Component {
     }
 
     start() {
+        // 隐藏左下角性能统计面板
+        profiler.hideStats();
+
         // 确保 sceneManager 已初始化（防御性编程）
         if (!this.sceneManager) {
             this.sceneManager = SceneManager.getInstance();

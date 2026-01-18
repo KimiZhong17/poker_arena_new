@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Button, Label } from 'cc';
+import { _decorator, Component, Node, Button, Label, EditBox } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { LocalUserStore } from './LocalStore/LocalUserStore';
@@ -32,6 +32,13 @@ export class Login extends Component {
     @property(Label)
     errorLabel: Label = null!;
 
+    @property(Node)
+    nicknameInputPanel: Node = null!;
+
+    private nicknameEditBox: EditBox = null!;
+    private nicknameCloseButton: Button = null!;
+    private nicknameConfirmButton: Button = null!;
+
     private authService: AuthService = null!;
     private sceneManager: SceneManager = null!;
 
@@ -45,13 +52,66 @@ export class Login extends Component {
             return;
         }
 
+        // 自动查找昵称输入面板中的子节点
+        this.findNicknameInputComponents();
+
         // Bind button events
         this.guestButton?.node.on(Button.EventType.CLICK, this.onGuestLoginButtonClicked, this);
         this.wechatButton?.node.on(Button.EventType.CLICK, this.onWeChatLoginButtonClicked, this);
+        this.nicknameCloseButton?.node.on(Button.EventType.CLICK, this.onNicknameCloseButtonClicked, this);
+        this.nicknameConfirmButton?.node.on(Button.EventType.CLICK, this.onNicknameConfirmButtonClicked, this);
 
         // Hide error label initially
         if (this.errorLabel) {
             this.errorLabel.node.active = false;
+        }
+
+        // Hide nickname input panel initially
+        if (this.nicknameInputPanel) {
+            this.nicknameInputPanel.active = false;
+        }
+    }
+
+    /**
+     * 自动查找昵称输入面板中的组件
+     */
+    private findNicknameInputComponents() {
+        if (!this.nicknameInputPanel) {
+            console.warn('[Login] nicknameInputPanel not found');
+            return;
+        }
+
+        // 查找 input_nick_name 节点及其 EditBox 组件
+        const inputNode = this.nicknameInputPanel.getChildByName('input_nick_name');
+        if (inputNode) {
+            this.nicknameEditBox = inputNode.getComponent(EditBox);
+            if (!this.nicknameEditBox) {
+                console.warn('[Login] EditBox component not found on input_nick_name');
+            }
+        } else {
+            console.warn('[Login] input_nick_name node not found');
+        }
+
+        // 查找 btn_close 节点及其 Button 组件
+        const closeButtonNode = this.nicknameInputPanel.getChildByName('btn_close');
+        if (closeButtonNode) {
+            this.nicknameCloseButton = closeButtonNode.getComponent(Button);
+            if (!this.nicknameCloseButton) {
+                console.warn('[Login] Button component not found on btn_close');
+            }
+        } else {
+            console.warn('[Login] btn_close node not found');
+        }
+
+        // 查找 btn_confirm 节点及其 Button 组件
+        const confirmButtonNode = this.nicknameInputPanel.getChildByName('btn_confirm');
+        if (confirmButtonNode) {
+            this.nicknameConfirmButton = confirmButtonNode.getComponent(Button);
+            if (!this.nicknameConfirmButton) {
+                console.warn('[Login] Button component not found on btn_confirm');
+            }
+        } else {
+            console.warn('[Login] btn_confirm node not found');
         }
     }
 
@@ -63,26 +123,82 @@ export class Login extends Component {
         if (this.wechatButton?.node && this.wechatButton.isValid) {
             this.wechatButton.node.off(Button.EventType.CLICK, this.onWeChatLoginButtonClicked, this);
         }
+        if (this.nicknameCloseButton?.node && this.nicknameCloseButton.isValid) {
+            this.nicknameCloseButton.node.off(Button.EventType.CLICK, this.onNicknameCloseButtonClicked, this);
+        }
+        if (this.nicknameConfirmButton?.node && this.nicknameConfirmButton.isValid) {
+            this.nicknameConfirmButton.node.off(Button.EventType.CLICK, this.onNicknameConfirmButtonClicked, this);
+        }
     }
 
     /**
      * Handle guest login button click
-     * 注意：昵称输入面板由外部提供，这里预留接口
+     * 显示昵称输入面板
      */
     public async onGuestLoginButtonClicked() {
         console.log("Guest login button clicked.");
 
+        // 显示昵称输入面板
+        if (this.nicknameInputPanel) {
+            this.nicknameInputPanel.active = true;
+
+            // 清空输入框
+            if (this.nicknameEditBox) {
+                this.nicknameEditBox.string = '';
+            }
+        }
+    }
+
+    /**
+     * Handle nickname close button click
+     * 关闭昵称输入面板，不执行登录
+     */
+    public onNicknameCloseButtonClicked() {
+        console.log("Nickname close button clicked.");
+
+        // 隐藏昵称输入面板
+        if (this.nicknameInputPanel) {
+            this.nicknameInputPanel.active = false;
+        }
+
+        // 清空输入框
+        if (this.nicknameEditBox) {
+            this.nicknameEditBox.string = '';
+        }
+    }
+
+    /**
+     * Handle nickname confirm button click
+     * 确认昵称并执行登录
+     */
+    public async onNicknameConfirmButtonClicked() {
+        console.log("Nickname confirm button clicked.");
+
+        // 获取用户输入的昵称
+        const nickname = this.nicknameEditBox?.string?.trim();
+
+        // 验证昵称
+        if (nickname && nickname.length > 0) {
+            if (nickname.length > 8) {
+                this.showError('昵称不能超过8个字符');
+                return;
+            }
+        }
+
+        // 隐藏昵称输入面板
+        if (this.nicknameInputPanel) {
+            this.nicknameInputPanel.active = false;
+        }
+
+        // 禁用按钮
         if (this.guestButton) {
             this.guestButton.interactable = false;
         }
 
         try {
-            // TODO: 这里应该弹出昵称输入面板，获取用户输入的昵称
-            // 示例：const nickname = await this.showNicknameInputDialog();
-            // 目前先使用undefined，会使用默认生成的昵称
-            const nickname = undefined;
-
-            const success = await this.authService.loginAsGuest(nickname);
+            // 使用用户输入的昵称登录，如果为空则使用默认昵称
+            const nicknameToUse = nickname && nickname.length > 0 ? nickname : undefined;
+            const success = await this.authService.loginAsGuest(nicknameToUse);
 
             if (success) {
                 this.sceneManager.goToHall();
