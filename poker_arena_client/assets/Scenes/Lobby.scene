@@ -303,7 +303,7 @@
     "_resourceType": 1,
     "_remoteURL": "",
     "_clip": {
-      "__uuid__": "4366b1f6-c997-410a-b7cb-b9d6828297c6",
+      "__uuid__": "7731e9c5-e2be-4ced-8700-f5fc9b474ded",
       "__expectedType__": "cc.VideoClip"
     },
     "_playOnAwake": true,
@@ -312,7 +312,7 @@
     "_playbackRate": 0.8,
     "_loop": true,
     "_fullScreenOnAwake": false,
-    "_stayOnBottom": true,
+    "_stayOnBottom": false,
     "_keepAspectRatio": true,
     "videoPlayerEvent": [],
     "_id": "dcRUJADihMi6VbwKs3WvJi"
