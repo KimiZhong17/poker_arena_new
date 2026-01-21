@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, UITransform, Widget } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
@@ -475,9 +475,9 @@ export class Game extends Component {
             // 保持默认锚点 (0.5, 0.5) - Widget 会根据对齐方式自动调整位置
 
             // 添加或获取 Widget 组件（必须使用字符串方式）
-            let handWidget = handNode.getComponent('cc.Widget') as any;
+            let handWidget = handNode.getComponent('cc.Widget') as Widget;
             if (!handWidget) {
-                handWidget = handNode.addComponent('cc.Widget') as any;
+                handWidget = handNode.addComponent('cc.Widget') as Widget;
                 console.log(`[Game] Added Widget to ${config.name}`);
 
                 // 立即验证
@@ -505,6 +505,7 @@ export class Game extends Component {
 
             // 应用 widget 配置
             const w = config.widget;
+            console.log(`[Game] ${config.name} widget config:`, JSON.stringify(w));
             if (w.alignLeft !== undefined) {
                 handWidget.isAlignLeft = w.alignLeft;
                 if (w.left !== undefined) {
@@ -532,9 +533,17 @@ export class Game extends Component {
             }
             if (w.alignHorizontalCenter !== undefined) {
                 handWidget.isAlignHorizontalCenter = w.alignHorizontalCenter;
+                if (w.horizontalCenter !== undefined) {
+                    handWidget.horizontalCenter = w.horizontalCenter;
+                    console.log(`[Game] ${config.name} horizontalCenter set to ${w.horizontalCenter}`);
+                }
             }
             if (w.alignVerticalCenter !== undefined) {
                 handWidget.isAlignVerticalCenter = w.alignVerticalCenter;
+                if (w.verticalCenter !== undefined) {
+                    handWidget.verticalCenter = w.verticalCenter;
+                    console.log(`[Game] ${config.name} verticalCenter set to ${w.verticalCenter}`);
+                }
             }
 
             // 强制立即更新 Widget 对齐

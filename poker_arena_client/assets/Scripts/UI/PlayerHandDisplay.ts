@@ -319,7 +319,7 @@ export class PlayerHandDisplay extends Component {
         const offsets = [
             { x: 0, y: 0 },       // Player 0 (Bottom): no offset (keep in place, highlight handled by Poker component)
             { x: 150, y: 0 },     // Player 1 (Left): right only
-            { x: 100, y: 0 },     // Player 2 (Top): right and down (symmetry with hand pile)
+            { x: 0, y: 25 },      // Player 2 (Top): right and down (symmetry with hand pile)
             { x: -150, y: 0 }     // Player 3 (Right): left only
         ];
 
@@ -339,8 +339,8 @@ export class PlayerHandDisplay extends Component {
         // 3: Right - centered
         const offsets = [
             { x: 0, y: 0 },       // Player 0 (Bottom): centered
-            { x: -100, y: 0 },    // Player 1 (Top in 2p, Left in 3-4p): left (symmetry with played cards)
-            { x: -100, y: 0 },    // Player 2 (Top in 3-4p): left (symmetry with played cards)
+            { x: 0, y: 0 },    // Player 1 (Top in 2p, Left in 3-4p): left (symmetry with played cards)
+            { x: 0, y: 0 },    // Player 2 (Top in 3-4p): left (symmetry with played cards)
             { x: 0, y: 0 }        // Player 3 (Right): centered
         ];
 
@@ -402,7 +402,7 @@ export class PlayerHandDisplay extends Component {
             for (let i = 0; i < this._playedCards.length; i++) {
                 const cardValue = this._playedCards[i];
                 console.log(`[displayStack] Creating card ${i}: 0x${cardValue.toString(16)}`);
-                const cardNode = this.createCardNode(cardValue, true); // Show front
+                const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
 
                 // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
                 const x = playedStartX + playedCardSpacing * i;
@@ -423,13 +423,24 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Create a poker card node
+     * @param cardValue Card value
+     * @param showFront Whether to show front or back
+     * @param isPlayedCard Whether this is a played card (for separate scaling)
      */
-    private createCardNode(cardValue: number, showFront: boolean): Node {
+    private createCardNode(cardValue: number, showFront: boolean, isPlayedCard: boolean = false): Node {
         const pokerNode = instantiate(this._pokerPrefab);
         const pokerCtrl = pokerNode.addComponent(Poker);
 
-        // 使用预制体的默认缩放（与公牌保持一致）
-        // 不再强制设置 setScale，让预制体的缩放生效
+        // 如果是其他玩家（STACK模式），缩小卡牌（基于预制体原本缩放进行调整）
+        if (this._displayMode === HandDisplayMode.STACK) {
+            if (isPlayedCard) {
+                // 出牌的缩放比例（可以单独调整）
+                pokerNode.setScale(pokerNode.scale.x * 0.8, pokerNode.scale.y * 0.8, 1);
+            } else {
+                // 手牌的缩放比例（可以单独调整）
+                pokerNode.setScale(pokerNode.scale.x * 0.5, pokerNode.scale.y * 0.5, 1);
+            }
+        }
 
         // CRITICAL: Set the same layer as container for proper rendering
         // Must set layer for node AND all children recursively

@@ -8,6 +8,7 @@ export interface WidgetAlignment {
     alignHorizontalCenter?: boolean;
     left?: number;
     right?: number;
+    horizontalCenter?: number;
 
     // 垂直对齐
     alignTop?: boolean;
@@ -15,6 +16,7 @@ export interface WidgetAlignment {
     alignVerticalCenter?: boolean;
     top?: number;
     bottom?: number;
+    verticalCenter?: number;
 }
 
 /**
@@ -90,12 +92,12 @@ export class PlayerLayoutConfig {
             },
             {
                 name: 'TopLeftSeat',
-                widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 10, horizontalCenter: -50 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: 280,
-                infoPanelOffsetX: -200,
-                infoPanelOffsetY: 0,
+                infoPanelOffsetX: -150,
+                infoPanelOffsetY: -20,
                 stateLabelAlignment: StateLabelAlignment.BOTTOM  // 顶部玩家：下方
             }
         ];
@@ -166,12 +168,12 @@ export class PlayerLayoutConfig {
             },
             {
                 name: 'TopLeftSeat',
-                widget: { alignTop: true, alignHorizontalCenter: true, top: 30 },
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 10, horizontalCenter: -100 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: 280,
-                infoPanelOffsetX: -200,
-                infoPanelOffsetY: 0,
+                infoPanelOffsetX: -150,
+                infoPanelOffsetY: -20,
                 stateLabelAlignment: StateLabelAlignment.BOTTOM  // 顶部玩家：下方
             },
             {
