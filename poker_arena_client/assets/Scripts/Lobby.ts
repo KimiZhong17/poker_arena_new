@@ -1,7 +1,7 @@
 // 必须在最前面导入 polyfills
 import './Utils/polyfills';
 
-import { _decorator, Component, Button, Label, EditBox, Node, Toggle, profiler } from 'cc';
+import { _decorator, Component, Button, Label, EditBox, Node, Toggle, profiler, assetManager, SpriteFrame, Prefab } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { RoomService } from './Services/RoomService';
@@ -62,6 +62,44 @@ export class Lobby extends Component {
         this.authService = AuthService.getInstance();
         this.roomService = RoomService.getInstance();
         this.localUserStore = LocalUserStore.getInstance();
+
+        // 🎯 优化：预加载游戏资源，减少进入房间时的加载时间
+        this.preloadGameAssets();
+    }
+
+    /**
+     * 预加载游戏资源（在后台静默加载）
+     * 这样当用户点击"加入房间"或"创建房间"时，资源已经在内存中了
+     */
+    private preloadGameAssets(): void {
+        console.log('[Lobby] 🚀 Starting to preload game assets...');
+
+        assetManager.loadBundle("Pokers", (err, bundle) => {
+            if (err) {
+                console.error('[Lobby] ❌ Failed to preload Poker bundle:', err);
+                return;
+            }
+
+            console.log('[Lobby] ✅ Poker bundle preloaded successfully');
+
+            // 预加载所有扑克牌精灵
+            bundle.loadDir("", SpriteFrame, (err, sprites) => {
+                if (!err) {
+                    console.log(`[Lobby] ✅ Preloaded ${sprites.length} poker sprites`);
+                } else {
+                    console.error('[Lobby] ❌ Failed to preload sprites:', err);
+                }
+            });
+
+            // 预加载扑克牌预制体
+            bundle.load("PokerPrefab", Prefab, (err, prefab) => {
+                if (!err) {
+                    console.log('[Lobby] ✅ Preloaded poker prefab');
+                } else {
+                    console.error('[Lobby] ❌ Failed to preload prefab:', err);
+                }
+            });
+        });
     }
 
     start() {

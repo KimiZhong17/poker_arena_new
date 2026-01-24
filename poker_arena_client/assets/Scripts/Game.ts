@@ -16,6 +16,7 @@ import { NetworkConfig } from './Config/NetworkConfig';
 import { EventCenter } from './Utils/EventCenter';
 import { GameService } from './Services/GameService';
 import { SceneUIController } from './UI/SceneUIController';
+import { LoadingUI } from './UI/LoadingUI';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -27,6 +28,10 @@ export class Game extends Component {
     @property(Node)
     public sceneUINode: Node = null!;
 
+    // 🎯 优化：加载进度UI
+    @property(LoadingUI)
+    public loadingUI: LoadingUI | null = null;
+
     // Stage nodes
     @property(Node)
     public nodeReadyStage: Node = null!;
@@ -35,7 +40,7 @@ export class Game extends Component {
     public nodePlayingStage: Node = null!;
 
     @property(Node)
-    public nodeEndStage: Node = null!;
+    public nodeEndStage: Node = null!;;
     
     // Managers
     public stageManager: StageManager = null!;
@@ -62,6 +67,12 @@ export class Game extends Component {
     public onLoad(): void {
         console.log("Main onLoad");
 
+        // 显示加载界面
+        if (this.loadingUI) {
+            this.loadingUI.show();
+            this.loadingUI.updateProgress(0, '正在加载资源...');
+        }
+
         // Get game configuration from scene transition
         const sceneManager = SceneManager.getInstance();
         const transitionData = sceneManager.getTransitionData<{
@@ -86,6 +97,10 @@ export class Game extends Component {
             this._pokerBundle = bundle;
             console.log("Poker bundle loaded.");
 
+            if (this.loadingUI) {
+                this.loadingUI.updateProgress(0.3, '正在加载扑克牌...');
+            }
+
             this._onLoadPokerAtlas();
             this._onLoadPokerPrefab();
         });
@@ -101,6 +116,11 @@ export class Game extends Component {
             sprites.forEach((sprite) => {
                 this._pokerSprites.set(sprite.name, sprite);
             });
+
+            if (this.loadingUI) {
+                this.loadingUI.updateProgress(0.6, '正在准备游戏...');
+            }
+
             this._checkAllLoaded();
         });
     }
@@ -113,6 +133,11 @@ export class Game extends Component {
             }
             this._pokerPrefab = prefab;
             console.log("Poker prefab loaded.");
+
+            if (this.loadingUI) {
+                this.loadingUI.updateProgress(0.9, '即将进入房间...');
+            }
+
             this._checkAllLoaded();
         });
     }
@@ -126,6 +151,10 @@ export class Game extends Component {
 
     private _enterGame(): void {
         console.log("[Game] Entering game - initializing systems...");
+
+        if (this.loadingUI) {
+            this.loadingUI.updateProgress(1.0, '加载完成！');
+        }
 
         // 1. Initialize PokerFactory (global singleton)
         this.node.addComponent(PokerFactory).init(this._pokerSprites, this._pokerPrefab);
@@ -153,6 +182,13 @@ export class Game extends Component {
         // 8. Enter Ready Stage
         console.log("[Game] All systems initialized, entering Ready stage");
         this.stageManager.switchToStage(GameStage.READY);
+
+        // 延迟隐藏加载界面（让用户看到100%）
+        this.scheduleOnce(() => {
+            if (this.loadingUI) {
+                this.loadingUI.hide();
+            }
+        }, 0.5);
     }
 
     /**

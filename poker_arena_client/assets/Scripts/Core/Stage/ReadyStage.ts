@@ -124,32 +124,35 @@ export class ReadyStage extends GameStageBase {
 
     /**
      * 初始化 PlayerUIManager（显示玩家座位和信息）
+     * 🎯 优化：立即显示空座位UI，不等待网络数据
      */
     private initPlayerUIManager(): void {
-        const currentRoom = this.localRoomStore.getCurrentRoom();
-        if (!currentRoom) {
-            console.warn('[ReadyStage] No current room, skipping PlayerUIManager initialization');
-            return;
-        }
-
         const playerUIManager = this.game.playerUIManager;
         if (!playerUIManager) {
             console.warn('[ReadyStage] PlayerUIManager not found on Game');
             return;
         }
 
-        // 获取本地玩家信息
-        const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
-        if (!myPlayerInfo) {
-            console.warn('[ReadyStage] Cannot find my player info yet, will retry on UI_REFRESH_ROOM');
-            // 延迟初始化：等待 UI_REFRESH_ROOM 事件时再尝试
+        const currentRoom = this.localRoomStore.getCurrentRoom();
+
+        // 🚀 优化：如果没有房间数据，先显示空座位（提升响应速度）
+        if (!currentRoom) {
+            console.log('[ReadyStage] 🚀 No room data yet, showing empty seats first for better UX');
+            this.showEmptySeats(playerUIManager);
             return;
         }
 
-        // 获取布局配置
+        // 获取本地玩家信息
+        const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
+        if (!myPlayerInfo) {
+            console.warn('[ReadyStage] 🚀 Cannot find my player info yet, showing empty seats');
+            this.showEmptySeats(playerUIManager);
+            return;
+        }
+
+        // 有完整数据，正常初始化
         const layoutConfig = PlayerLayoutConfig.getStandardLayout(currentRoom.maxPlayers);
 
-        // 初始化 PlayerUIManager
         console.log(`[ReadyStage] Initializing PlayerUIManager with ${currentRoom.players.length} players, maxPlayers: ${currentRoom.maxPlayers}, mySeat: ${myPlayerInfo.seatIndex}`);
         playerUIManager.initForReadyStage(
             currentRoom.players,
@@ -157,6 +160,36 @@ export class ReadyStage extends GameStageBase {
             myPlayerInfo.seatIndex,
             layoutConfig
         );
+    }
+
+    /**
+     * 🎯 快速显示空座位（提升响应速度）
+     * 让用户立即看到UI，而不是等待网络数据
+     */
+    private showEmptySeats(playerUIManager: any): void {
+        const maxPlayers = this.totalPlayers || 4; // 默认4人房
+        const emptyPlayers: any[] = [];
+
+        for (let i = 0; i < maxPlayers; i++) {
+            emptyPlayers.push({
+                id: '',
+                name: '等待玩家...',
+                seatIndex: i,
+                isReady: false,
+                isHost: false
+            });
+        }
+
+        const layoutConfig = PlayerLayoutConfig.getStandardLayout(maxPlayers);
+
+        playerUIManager.initForReadyStage(
+            emptyPlayers,
+            maxPlayers,
+            0, // 默认本地玩家在0号位
+            layoutConfig
+        );
+
+        console.log('[ReadyStage] ✅ Empty seats displayed, waiting for room data...');
     }
 
     /**
@@ -299,6 +332,7 @@ export class ReadyStage extends GameStageBase {
 
     /**
      * 从 LocalRoomStore 刷新玩家状态
+     * 🎯 优化：当房间数据到达时，更新之前显示的空座位
      */
     private refreshPlayerStates(): void {
         const currentRoom = this.localRoomStore.getCurrentRoom();
@@ -319,15 +353,26 @@ export class ReadyStage extends GameStageBase {
 
         console.log('[ReadyStage] Player states refreshed from LocalRoomStore');
 
-        // 更新 PlayerUIManager 显示
+        // 🚀 优化：如果之前显示的是空座位，现在用真实数据更新
         const playerUIManager = this.game.playerUIManager;
         if (playerUIManager) {
+            const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
+
             // 如果 PlayerUIManager 还没初始化（_maxSeats 为 0），尝试初始化
             if ((playerUIManager as any)._maxSeats === 0) {
                 console.log('[ReadyStage] PlayerUIManager not yet initialized, initializing now...');
-                this.initPlayerUIManager();
+                if (myPlayerInfo) {
+                    const layoutConfig = PlayerLayoutConfig.getStandardLayout(currentRoom.maxPlayers);
+                    playerUIManager.initForReadyStage(
+                        currentRoom.players,
+                        currentRoom.maxPlayers,
+                        myPlayerInfo.seatIndex,
+                        layoutConfig
+                    );
+                }
             } else {
                 // 已初始化，只需更新座位信息
+                console.log('[ReadyStage] 🔄 Updating seats with real player data');
                 playerUIManager.updateSeats(currentRoom.players);
             }
         }
