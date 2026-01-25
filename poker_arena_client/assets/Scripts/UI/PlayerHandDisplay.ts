@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3 } from 'cc';
+import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3, Label, Color, Sprite, SpriteFrame } from 'cc';
 import { Poker, CardClickCallback } from './Poker';
 import { PokerFactory } from './PokerFactory';
 import { Player } from '../LocalStore/LocalPlayerStore';
@@ -47,10 +47,14 @@ export class PlayerHandDisplay extends Component {
     private _playerIndex: number = 0;     // Player index (0-3) for positioning
     private _enableGrouping: boolean = true; // Whether to group cards by point value (true for Guandan, false for TheDecree)
 
+    // Card count display (for STACK mode)
+    private _showCardCount: boolean = false; // Whether to show card count label
+    private _cardCountLabel: Node | null = null; // Label node for displaying card count
+
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
@@ -59,12 +63,15 @@ export class PlayerHandDisplay extends Component {
         this._playerIndex = playerIndex;
         this._enableGrouping = enableGrouping;
 
+        // Auto-enable card count display for STACK mode if not explicitly set
+        this._showCardCount = displayMode === HandDisplayMode.STACK ? true : showCardCount;
+
         // If handContainer not set, use current node
         if (!this.handContainer) {
             this.handContainer = this.node;
         }
 
-        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}, grouping: ${enableGrouping}`);
+        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}, grouping: ${enableGrouping}, showCardCount: ${this._showCardCount}`);
     }
 
     /**
@@ -318,9 +325,9 @@ export class PlayerHandDisplay extends Component {
         // 3: Right - move left only (no vertical offset)
         const offsets = [
             { x: 0, y: 0 },       // Player 0 (Bottom): no offset (keep in place, highlight handled by Poker component)
-            { x: 150, y: 0 },     // Player 1 (Left): right only
-            { x: 0, y: 25 },      // Player 2 (Top): right and down (symmetry with hand pile)
-            { x: -150, y: 0 }     // Player 3 (Right): left only
+            { x: 90, y: -16 },     // Player 1 (Left): right only
+            { x: 90, y: -16 },      // Player 2 (Top): right and down (symmetry with hand pile)
+            { x: -90, y: -16 }     // Player 3 (Right): left only
         ];
 
         return offsets[this._playerIndex] || { x: 0, y: 0 };
@@ -365,7 +372,7 @@ export class PlayerHandDisplay extends Component {
         // Only show card backs if there are remaining cards
         if (remainingCards > 0) {
             const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
-            const stackOffset = 2; // Pixel offset for stacking effect
+            const stackOffset = 1; // Pixel offset for stacking effect
 
             for (let i = 0; i < maxStackDisplay; i++) {
                 const cardNode = this.createCardNode(0, false); // 0 = back only
@@ -380,11 +387,16 @@ export class PlayerHandDisplay extends Component {
             }
 
             console.log(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
+
+            // 2. Create card count label if enabled
+            if (this._showCardCount) {
+                this.createCardCountLabel(remainingCards, baseOffset);
+            }
         } else {
             console.log(`[displayStack] No remaining cards to display (all ${cardCount} cards have been played)`);
         }
 
-        // 2. If there are played cards, display them face-up in a spread with overlap
+        // 3. If there are played cards, display them face-up in a spread with overlap
         if (this._playedCards.length > 0) {
             const playedCardSpacing = 30; // Smaller spacing for played cards overlap
             const playedCardWidth = 140;
@@ -422,6 +434,60 @@ export class PlayerHandDisplay extends Component {
     }
 
     /**
+     * Create and display card count label at the top of the stack
+     * @param cardCount Number of cards to display
+     * @param baseOffset Base offset for positioning
+     */
+    private createCardCountLabel(cardCount: number, baseOffset: { x: number; y: number }): void {
+        // Remove existing label if any
+        if (this._cardCountLabel) {
+            this._cardCountLabel.destroy();
+            this._cardCountLabel = null;
+        }
+
+        // Create a new node for the label
+        const labelNode = new Node('CardCountLabel');
+        labelNode.layer = this.handContainer.layer;
+
+        // Add UITransform first for proper sizing
+        const uiTransform = labelNode.addComponent(UITransform);
+        uiTransform.setContentSize(80, 50);
+        uiTransform.setAnchorPoint(0.5, 0.5);
+
+        // Add Label component
+        const label = labelNode.addComponent(Label);
+        label.useSystemFont = true;
+        label.string = cardCount.toString();
+        label.fontSize = 24;
+        label.lineHeight = 30;
+        label.color = new Color(255, 215, 0, 255);
+        label.horizontalAlign = Label.HorizontalAlign.CENTER;
+        label.verticalAlign = Label.VerticalAlign.CENTER;
+
+        // Enable outline for better visibility
+        label.enableOutline = true;
+        label.outlineColor = new Color(45, 27, 16, 255);
+        label.outlineWidth = 2;
+
+        // Position the label above the card stack
+        // Use the same positioning logic as card nodes: baseOffset + stackOffset
+        // Card height is 190px, scaled to 0.5 = 95px actual height
+        // Position label above the topmost card (which is at baseOffset + 4 * stackOffset for 5 cards)
+        const maxStackDisplay = Math.min(5, cardCount);
+        const stackOffset = 1;
+        const topCardX = baseOffset.x + (maxStackDisplay - 1) * stackOffset;
+        const topCardY = baseOffset.y + (maxStackDisplay - 1) * stackOffset;
+
+        labelNode.setPosition(topCardX, topCardY, 0);
+        
+        // Add to container
+        this.handContainer.addChild(labelNode);
+        this._cardCountLabel = labelNode;
+
+        console.log(`[createCardCountLabel] Created label "${cardCount}" at position (${topCardX}, ${topCardY})`);
+    }
+
+    /**
      * Create a poker card node
      * @param cardValue Card value
      * @param showFront Whether to show front or back
@@ -446,7 +512,7 @@ export class PlayerHandDisplay extends Component {
         // Must set layer for node AND all children recursively
         this.setNodeLayerRecursive(pokerNode, this.handContainer.layer);
 
-        const pokerBack = this._pokerSprites.get("CardBack3");
+        const pokerBack = this._pokerSprites.get("CardBack3_NoLogo");
 
         if (showFront) {
             // Get sprite name for this card
@@ -495,6 +561,12 @@ export class PlayerHandDisplay extends Component {
         this._pokerNodes = [];
         this._pokerComponents = [];
         this._selectedIndices.clear();
+
+        // Clear card count label if exists
+        if (this._cardCountLabel) {
+            this._cardCountLabel.destroy();
+            this._cardCountLabel = null;
+        }
     }
 
     // ==================== Card Selection (Click Handling) ====================

@@ -92,11 +92,11 @@ export class PlayerLayoutConfig {
             },
             {
                 name: 'TopLeftSeat',
-                widget: { alignTop: true, alignHorizontalCenter: true, top: 10, horizontalCenter: -50 },
+                widget: { alignTop: true, alignHorizontalCenter: true, top: 20, horizontalCenter: -50 },
                 active: true,
                 fallbackX: 0,
                 fallbackY: 280,
-                infoPanelOffsetX: -150,
+                infoPanelOffsetX: -100,
                 infoPanelOffsetY: -20,
                 stateLabelAlignment: StateLabelAlignment.BOTTOM  // 顶部玩家：下方
             }
@@ -125,7 +125,7 @@ export class PlayerLayoutConfig {
                 fallbackX: -550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100,
+                infoPanelOffsetY: 0,
                 stateLabelAlignment: StateLabelAlignment.RIGHT  // 左侧玩家：右侧
             },
             {
@@ -135,7 +135,7 @@ export class PlayerLayoutConfig {
                 fallbackX: 550,
                 fallbackY: 30,
                 infoPanelOffsetX: 0,
-                infoPanelOffsetY: -100,
+                infoPanelOffsetY: 0,
                 stateLabelAlignment: StateLabelAlignment.LEFT  // 右侧玩家：左侧
             },
         ];
