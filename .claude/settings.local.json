@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find poker_arena_client/assets/Scripts -name \"*.ts\" -type f -exec wc -l {} +)",
+      "Bash(grep -rn \"const.*=.*{.*x.*y\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"return.*{.*x.*y\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"new Color\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"const offsets\\\\|const positions\\\\|const colors\\\\|const sizes\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"interface.*{\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"private.*:.*number\\\\|public.*:.*number\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"private.*readonly\\\\|public.*readonly\" poker_arena_client/assets/Scripts/**/*.ts)",
+      "Bash(grep -rn \"private.*=.*\\\\[\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(grep -rn \"const.*=.*\\\\[\" poker_arena_client/assets/Scripts/UI/*.ts)",
+      "Bash(find poker_arena_client/assets/Scripts -name \"*.ts\" -type f -exec grep -l \"position\\\\|offset\\\\|spacing\\\\|width\\\\|height\\\\|color\\\\|size\" {} ;)",
+      "Bash(grep -rn --include=\"*.ts\" \"*\" poker_arena_client/assets/Scripts/)"
+    ]
+  }
+}
