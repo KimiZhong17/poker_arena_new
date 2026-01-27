@@ -9,7 +9,7 @@ import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
-import { PlayerLayoutConfig } from './UI/PlayerLayoutConfig';
+import { PlayerLayoutConfig } from './Config/PlayerLayoutConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { NetworkManager } from './Network/NetworkManager';
 import { NetworkConfig } from './Config/NetworkConfig';
@@ -478,15 +478,15 @@ export class Game extends Component {
      * 根据游戏模式使用对应的布局配置
      */
     private createOrUpdateHandNodes(playerUINode: Node): void {
-        // 默认使用5人布局创建所有可能的节点
-        // 如果是 The Decree 模式，使用4人布局
+        // 根据游戏模式选择布局
+        // TheDecree: 2-4人，Guandan: 5-6人
         let layoutConfig;
         if (this._gameMode === 'the_decree') {
-            layoutConfig = PlayerLayoutConfig.getFourPlayerLayout();
-            console.log(`[Game] Using 4-player layout for The Decree mode`);
+            layoutConfig = PlayerLayoutConfig.getTheDecreeLayout(4);
+            console.log(`[Game] Using TheDecree 4-player layout`);
         } else {
-            layoutConfig = PlayerLayoutConfig.getFivePlayerLayout();
-            console.log(`[Game] Using 5-player layout`);
+            layoutConfig = PlayerLayoutConfig.getGuandanLayout(5);
+            console.log(`[Game] Using Guandan 5-player layout`);
         }
 
         const activeCount = layoutConfig.filter(c => c.active).length;

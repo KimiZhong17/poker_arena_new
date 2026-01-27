@@ -1,6 +1,7 @@
 import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Color, Prefab, instantiate, assetManager, Widget } from 'cc';
 import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
-import { StateLabelAlignment } from './PlayerLayoutConfig';
+import { StateLabelAlignment } from '../Config/PlayerLayoutConfig';
+import { UIColors, StateLabelOffsets, PlayerNameConfig } from '../Config/UIConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -182,22 +183,22 @@ export class PlayerInfoPanel extends Component {
             case StateLabelAlignment.LEFT:
                 widget.isAlignLeft = true;
                 widget.isAlignVerticalCenter = true;
-                widget.left = -200;  // 负值：显示在面板左侧外部
+                widget.left = StateLabelOffsets.left;
                 break;
             case StateLabelAlignment.RIGHT:
                 widget.isAlignRight = true;
                 widget.isAlignVerticalCenter = true;
-                widget.right = -200;  // 负值：显示在面板右侧外部
+                widget.right = StateLabelOffsets.right;
                 break;
             case StateLabelAlignment.TOP:
                 widget.isAlignTop = true;
                 widget.isAlignHorizontalCenter = true;
-                widget.top = -80;  // 负值：显示在面板上方外部
+                widget.top = StateLabelOffsets.top;
                 break;
             case StateLabelAlignment.BOTTOM:
                 widget.isAlignBottom = true;
                 widget.isAlignHorizontalCenter = true;
-                widget.bottom = -80;  // 负值：显示在面板下方外部
+                widget.bottom = StateLabelOffsets.bottom;
                 break;
         }
 
@@ -254,18 +255,17 @@ export class PlayerInfoPanel extends Component {
      */
     private getShortenedName(name: string): string {
         // 如果名字以 guest_ 开头，只取前几位
-        if (name.startsWith('guest_')) {
-            const afterGuest = name.substring(6); // 去掉 "guest_"
-            if (afterGuest.length > 3) {
-                return `guest_${afterGuest.substring(0, 3)}`;
+        if (name.startsWith(PlayerNameConfig.guestPrefix)) {
+            const afterGuest = name.substring(PlayerNameConfig.guestPrefix.length);
+            if (afterGuest.length > PlayerNameConfig.guestDisplayLength) {
+                return `${PlayerNameConfig.guestPrefix}${afterGuest.substring(0, PlayerNameConfig.guestDisplayLength)}`;
             }
             return name;
         }
 
         // 其他名字如果太长，也进行截断
-        const maxLength = 9;
-        if (name.length > maxLength) {
-            return name.substring(0, maxLength) + '...';
+        if (name.length > PlayerNameConfig.maxNameLength) {
+            return name.substring(0, PlayerNameConfig.maxNameLength) + PlayerNameConfig.truncationSuffix;
         }
 
         return name;
@@ -286,13 +286,13 @@ export class PlayerInfoPanel extends Component {
         if (this.stateLabel) {
             if (this.playerInfo.isHost) {
                 this.stateLabel.string = '房主';
-                this.stateLabel.color = new Color(255, 215, 0, 255); // 金色
+                this.stateLabel.color = UIColors.playerState.host;
             } else if (this.playerInfo.isReady) {
                 this.stateLabel.string = '已准备';
-                this.stateLabel.color = new Color(0, 255, 0, 255); // 绿色
+                this.stateLabel.color = UIColors.playerState.ready;
             } else {
                 this.stateLabel.string = '未准备';
-                this.stateLabel.color = new Color(150, 150, 150, 255); // 灰色
+                this.stateLabel.color = UIColors.playerState.notReady;
             }
         }
     }

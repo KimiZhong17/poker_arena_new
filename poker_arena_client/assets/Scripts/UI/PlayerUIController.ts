@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
+import { PlayerPosition } from '../Config/PlayerLayoutConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -29,6 +30,7 @@ export class PlayerUIController extends Component {
     private _handDisplay: PlayerHandDisplay | null = null;  // 手牌显示组件
     private _infoPanelComponent: PlayerInfoPanel | null = null;  // 信息面板组件
     private _playerIndex: number = 0;  // 玩家索引（0-4）
+    private _positionConfig: PlayerPosition | null = null;  // 座位位置配置
 
     // ===== 初始化方法 =====
     /**
@@ -39,6 +41,7 @@ export class PlayerUIController extends Component {
      * @param pokerPrefab 扑克牌预制体
      * @param levelRank 当前关卡等级（Guandan用）
      * @param enableGrouping 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
+     * @param positionConfig 座位位置配置（包含偏移量等）
      */
     public init(
         player: Player,
@@ -46,10 +49,12 @@ export class PlayerUIController extends Component {
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
         levelRank: number,
-        enableGrouping: boolean = true
+        enableGrouping: boolean = true,
+        positionConfig?: PlayerPosition
     ): void {
         this._player = player;
         this._playerIndex = playerIndex;
+        this._positionConfig = positionConfig || null;
 
         console.log(`[PlayerUIController] Initializing for ${player.name} (index: ${playerIndex})`);
 
@@ -129,7 +134,7 @@ export class PlayerUIController extends Component {
 
         this._handDisplay = this.handContainer.addComponent(PlayerHandDisplay);
         this._handDisplay.handContainer = this.handContainer;
-        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping);
+        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping, false, this._positionConfig);
 
         console.log(`[PlayerUIController] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
     }

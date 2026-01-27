@@ -1,7 +1,17 @@
-import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3, Label, Color, Sprite, SpriteFrame } from 'cc';
+import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3, Label, Sprite, SpriteFrame } from 'cc';
 import { Poker, CardClickCallback } from './Poker';
 import { PokerFactory } from './PokerFactory';
 import { Player } from '../LocalStore/LocalPlayerStore';
+import {
+    CardDimensions,
+    CardSpacing,
+    CardScale,
+    CardOpacity,
+    CardSpriteNames,
+    getCardSpacing,
+} from '../Config/CardDisplayConfig';
+import { PlayerPosition } from '../Config/PlayerLayoutConfig';
+import { UIColors, UIFonts, UISizes } from '../Config/UIConfig';
 const { ccclass, property } = _decorator;
 
 /**
@@ -46,6 +56,7 @@ export class PlayerHandDisplay extends Component {
     private _playedCards: number[] = [];  // Cards that have been played this round
     private _playerIndex: number = 0;     // Player index (0-3) for positioning
     private _enableGrouping: boolean = true; // Whether to group cards by point value (true for Guandan, false for TheDecree)
+    private _positionConfig: PlayerPosition | null = null; // Position config for offsets
 
     // Card count display (for STACK mode)
     private _showCardCount: boolean = false; // Whether to show card count label
@@ -54,7 +65,7 @@ export class PlayerHandDisplay extends Component {
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false, positionConfig?: PlayerPosition): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
@@ -62,6 +73,7 @@ export class PlayerHandDisplay extends Component {
         this._levelRank = levelRank;
         this._playerIndex = playerIndex;
         this._enableGrouping = enableGrouping;
+        this._positionConfig = positionConfig || null;
 
         // Auto-enable card count display for STACK mode if not explicitly set
         this._showCardCount = displayMode === HandDisplayMode.STACK ? true : showCardCount;
@@ -89,16 +101,7 @@ export class PlayerHandDisplay extends Component {
         const cards = this._player.handCards;
 
         // Dynamically adjust card spacing based on hand size and game mode
-        if (!this._enableGrouping) {
-            // TheDecree mode: 5 cards with overlap, smaller spacing for overlapping effect
-            this._cardSpacing = 100; // 50px offset per card (cards will overlap since width is 140px)
-        } else if (cards.length <= 7) {
-            this._cardSpacing = 100; // Wider spacing for few cards (Guandan)
-        } else if (cards.length <= 15) {
-            this._cardSpacing = 70;  // Medium spacing
-        } else {
-            this._cardSpacing = 50;  // Tight spacing for many cards (Guandan)
-        }
+        this._cardSpacing = getCardSpacing(cards.length, !this._enableGrouping);
 
         if (this._displayMode === HandDisplayMode.SPREAD) {
             console.log(`Displaying ${cards.length} cards in SPREAD mode with spacing: ${this._cardSpacing}`);
@@ -122,10 +125,10 @@ export class PlayerHandDisplay extends Component {
      */
     private displaySpread(cards: number[]): void {
         const cardCount = cards.length;
-        const cardWidth = 140;  // Adjust based on your card sprite size
-        const cardSpacing = this._cardSpacing; // Use dynamic spacing
-        const verticalOffset = 30; // Vertical offset for stacked cards
-        const wildCardGap = 10; // Extra gap before wild cards (red heart level cards)
+        const cardWidth = CardDimensions.width;
+        const cardSpacing = this._cardSpacing;
+        const verticalOffset = CardSpacing.stack.verticalOffset;
+        const wildCardGap = CardSpacing.stack.wildCardGap;
 
         // If grouping is disabled (TheDecree mode), display cards in order received from server
         // Server has already sorted the cards, so we don't need to sort again
@@ -315,22 +318,10 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Get offset for played cards based on player position
-     * @returns Vec3 offset to apply to played cards
+     * @returns offset to apply to played cards
      */
     private getPlayedCardOffset(): { x: number; y: number } {
-        // Define offsets based on player index
-        // 0: Bottom (player) - no offset, keep in place with highlight (handled by Poker.setSelected)
-        // 1: Left - move right only (no vertical offset)
-        // 2: Top - move right (to create symmetry with hand pile on left)
-        // 3: Right - move left only (no vertical offset)
-        const offsets = [
-            { x: 0, y: 0 },       // Player 0 (Bottom): no offset (keep in place, highlight handled by Poker component)
-            { x: 90, y: -16 },     // Player 1 (Left): right only
-            { x: 90, y: -16 },      // Player 2 (Top): right and down (symmetry with hand pile)
-            { x: -90, y: -16 }     // Player 3 (Right): left only
-        ];
-
-        return offsets[this._playerIndex] || { x: 0, y: 0 };
+        return this._positionConfig?.playedCardOffset || { x: 0, y: 0 };
     }
 
     /**
@@ -339,19 +330,7 @@ export class PlayerHandDisplay extends Component {
      * @returns Base offset to apply to all cards in the hand pile
      */
     private getHandPileBaseOffset(): { x: number; y: number } {
-        // Define base offsets for hand pile based on player index
-        // 0: Bottom (player) - centered
-        // 1: Top (2-player) or Left (3-4 player) - for top player, shift left to create symmetry
-        // 2: Top (3-4 player) - shift left to create symmetry with played cards on right
-        // 3: Right - centered
-        const offsets = [
-            { x: 0, y: 0 },       // Player 0 (Bottom): centered
-            { x: 0, y: 0 },    // Player 1 (Top in 2p, Left in 3-4p): left (symmetry with played cards)
-            { x: 0, y: 0 },    // Player 2 (Top in 3-4p): left (symmetry with played cards)
-            { x: 0, y: 0 }        // Player 3 (Right): centered
-        ];
-
-        return offsets[this._playerIndex] || { x: 0, y: 0 };
+        return this._positionConfig?.handPileOffset || { x: 0, y: 0 };
     }
 
     /**
@@ -371,8 +350,8 @@ export class PlayerHandDisplay extends Component {
         // 1. Show stacked card backs (representing the remaining hand cards)
         // Only show card backs if there are remaining cards
         if (remainingCards > 0) {
-            const maxStackDisplay = Math.min(5, remainingCards); // Show max 5 cards in stack
-            const stackOffset = 1; // Pixel offset for stacking effect
+            const maxStackDisplay = Math.min(CardScale.stackDisplay.maxCards, remainingCards);
+            const stackOffset = CardScale.stackDisplay.offset;
 
             for (let i = 0; i < maxStackDisplay; i++) {
                 const cardNode = this.createCardNode(0, false); // 0 = back only
@@ -398,8 +377,8 @@ export class PlayerHandDisplay extends Component {
 
         // 3. If there are played cards, display them face-up in a spread with overlap
         if (this._playedCards.length > 0) {
-            const playedCardSpacing = 30; // Smaller spacing for played cards overlap
-            const playedCardWidth = 140;
+            const playedCardSpacing = CardSpacing.playedCards.spacing;
+            const playedCardWidth = CardDimensions.width;
             // 重叠显示：总宽度 = (卡片数-1) * 间距 + 卡片宽度
             const playedCardsWidth = (this._playedCards.length - 1) * playedCardSpacing + playedCardWidth;
             const playedStartX = -playedCardsWidth / 2 + playedCardWidth / 2;
@@ -451,35 +430,32 @@ export class PlayerHandDisplay extends Component {
 
         // Add UITransform first for proper sizing
         const uiTransform = labelNode.addComponent(UITransform);
-        uiTransform.setContentSize(80, 50);
+        uiTransform.setContentSize(UISizes.cardCountLabel.width, UISizes.cardCountLabel.height);
         uiTransform.setAnchorPoint(0.5, 0.5);
 
         // Add Label component
         const label = labelNode.addComponent(Label);
         label.useSystemFont = true;
         label.string = cardCount.toString();
-        label.fontSize = 24;
-        label.lineHeight = 30;
-        label.color = new Color(255, 215, 0, 255);
+        label.fontSize = UIFonts.cardCount.fontSize;
+        label.lineHeight = UIFonts.cardCount.lineHeight;
+        label.color = UIColors.cardCount.text;
         label.horizontalAlign = Label.HorizontalAlign.CENTER;
         label.verticalAlign = Label.VerticalAlign.CENTER;
 
         // Enable outline for better visibility
         label.enableOutline = true;
-        label.outlineColor = new Color(45, 27, 16, 255);
-        label.outlineWidth = 2;
+        label.outlineColor = UIColors.cardCount.outline;
+        label.outlineWidth = UIFonts.cardCount.outlineWidth;
 
         // Position the label above the card stack
-        // Use the same positioning logic as card nodes: baseOffset + stackOffset
-        // Card height is 190px, scaled to 0.5 = 95px actual height
-        // Position label above the topmost card (which is at baseOffset + 4 * stackOffset for 5 cards)
-        const maxStackDisplay = Math.min(5, cardCount);
-        const stackOffset = 1;
+        const maxStackDisplay = Math.min(CardScale.stackDisplay.maxCards, cardCount);
+        const stackOffset = CardScale.stackDisplay.offset;
         const topCardX = baseOffset.x + (maxStackDisplay - 1) * stackOffset;
         const topCardY = baseOffset.y + (maxStackDisplay - 1) * stackOffset;
 
         labelNode.setPosition(topCardX, topCardY, 0);
-        
+
         // Add to container
         this.handContainer.addChild(labelNode);
         this._cardCountLabel = labelNode;
@@ -500,11 +476,13 @@ export class PlayerHandDisplay extends Component {
         // 如果是其他玩家（STACK模式），缩小卡牌（基于预制体原本缩放进行调整）
         if (this._displayMode === HandDisplayMode.STACK) {
             if (isPlayedCard) {
-                // 出牌的缩放比例（可以单独调整）
-                pokerNode.setScale(pokerNode.scale.x * 0.8, pokerNode.scale.y * 0.8, 1);
+                // 出牌的缩放比例
+                const scale = CardScale.stack.playedCards;
+                pokerNode.setScale(pokerNode.scale.x * scale, pokerNode.scale.y * scale, 1);
             } else {
-                // 手牌的缩放比例（可以单独调整）
-                pokerNode.setScale(pokerNode.scale.x * 0.5, pokerNode.scale.y * 0.5, 1);
+                // 手牌的缩放比例
+                const scale = CardScale.stack.handCards;
+                pokerNode.setScale(pokerNode.scale.x * scale, pokerNode.scale.y * scale, 1);
             }
         }
 
@@ -512,11 +490,10 @@ export class PlayerHandDisplay extends Component {
         // Must set layer for node AND all children recursively
         this.setNodeLayerRecursive(pokerNode, this.handContainer.layer);
 
-        const pokerBack = this._pokerSprites.get("CardBack3_NoLogo");
+        const pokerBack = this._pokerSprites.get(CardSpriteNames.back);
 
         if (showFront) {
             // Get sprite name for this card
-            // console.log(`Creating card node for value: ${cardValue.toString(16)}`);
             const spriteName = PokerFactory.getCardSpriteName(cardValue);
             const pokerFront = this._pokerSprites.get(spriteName);
 
@@ -699,11 +676,11 @@ export class PlayerHandDisplay extends Component {
 
             // If card is NOT selected, dim it
             if (!this._selectedIndices.has(index)) {
-                poker.setOpacity(100); // 100/255 = ~39% opacity (dimmed)
+                poker.setOpacity(CardOpacity.dimmed);
                 console.log(`[PlayerHandDisplay] Dimmed card at index ${index}`);
             } else {
                 // Keep selected cards at full opacity
-                poker.setOpacity(255);
+                poker.setOpacity(CardOpacity.normal);
                 console.log(`[PlayerHandDisplay] Kept card at index ${index} at full opacity`);
             }
         });

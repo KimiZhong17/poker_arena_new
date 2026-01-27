@@ -6,7 +6,7 @@ import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
 import { EventCenter, GameEvents } from '../../Utils/EventCenter';
-import { PlayerLayoutConfig } from '../../UI/PlayerLayoutConfig';
+import { PlayerLayoutConfig } from '../../Config/PlayerLayoutConfig';
 
 /**
  * 准备阶段

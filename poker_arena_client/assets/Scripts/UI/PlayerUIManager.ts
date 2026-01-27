@@ -2,7 +2,8 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerUIController } from './PlayerUIController';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
-import { PlayerPosition, StateLabelAlignment } from './PlayerLayoutConfig';
+import { PlayerPosition, StateLabelAlignment } from '../Config/PlayerLayoutConfig';
+import { getDealerIndicatorOffset } from '../Config/UIConfig';
 import { DealerIndicator } from './DealerIndicator';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 
@@ -297,7 +298,10 @@ export class PlayerUIManager extends Component {
             // 初始化 PlayerUIController（传入已存在的 InfoPanel）
             playerUIController.handContainer = handContainer;
             playerUIController.infoPanel = infoPanel.node;
-            playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping);
+
+            // 获取对应的位置配置
+            const positionConfig = this._layoutConfig[relativeSeat];
+            playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping, positionConfig);
 
             this._playerUINodes[relativeSeat] = playerUIController;
 
@@ -381,7 +385,8 @@ export class PlayerUIManager extends Component {
             }
 
             // 初始化 PlayerUIController
-            playerUIController.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping);
+            const positionConfig = layoutConfig[i];
+            playerUIController.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping, positionConfig);
 
             this._playerUINodes.push(playerUIController);
         }
@@ -505,51 +510,8 @@ export class PlayerUIManager extends Component {
      * @param playerIndex 玩家索引（相对位置）
      */
     private getDealerIndicatorOffset(playerIndex: number): { x: number, y: number } {
-        // 获取玩家数量
         const playerCount = this._playerUINodes.length;
-
-        // 根据玩家索引和总人数返回不同的 offset
-        // 假设：
-        // - index 0 (底部，当前玩家): indicator 在右侧
-        // - index 1 (顶部，对手): indicator 在左侧
-        // - index 2 (左侧): indicator 在右侧
-        // - index 3 (右侧): indicator 在左侧
-
-        switch (playerCount) {
-            case 2:
-                // 2人游戏：底部 vs 顶部
-                if (playerIndex === 0) {
-                    return { x: -300, y: 50 };   // 底部玩家：右侧
-                } else {
-                    return { x: -200, y: -50 };  // 顶部玩家：左侧
-                }
-
-            case 3:
-                // 3人游戏：底部、左上、右上
-                if (playerIndex === 0) {
-                    return { x: -300, y: 50 };    // 底部：右侧
-                } else if (playerIndex === 1) {
-                    return { x: 80, y: -100 }; // 左上：左侧
-                } else {
-                    return { x: -80, y: -100 };  // 右上：右侧
-                }
-
-            case 4:
-                // 4人游戏：底部、左侧、顶部、右侧
-                if (playerIndex === 0) {
-                    return { x: -300, y: 50 };     // 底部：右侧
-                } else if (playerIndex === 1) {
-                    return { x: 80, y: -100 };     // 左侧：右侧
-                } else if (playerIndex === 2) {
-                    return { x: -200, y: -50 };  // 顶部：左侧
-                } else {
-                    return { x: -80, y: -100 };    // 右侧：左侧
-                }
-
-            default:
-                // 默认配置
-                return { x: -150, y: 50 };
-        }
+        return getDealerIndicatorOffset(playerCount, playerIndex);
     }
 
     /**

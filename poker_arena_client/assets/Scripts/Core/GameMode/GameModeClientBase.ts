@@ -1,5 +1,5 @@
 import { Game } from "../../Game";
-import { PlayerLayoutConfig } from "../../UI/PlayerLayoutConfig";
+import { PlayerLayoutConfig } from "../../Config/PlayerLayoutConfig";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
