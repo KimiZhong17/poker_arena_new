@@ -6,7 +6,7 @@ import { LocalUserStore } from '../../LocalStore/LocalUserStore';
 import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
 import { EventCenter, GameEvents } from '../../Utils/EventCenter';
-import { PlayerLayoutConfig } from '../../Config/PlayerLayoutConfig';
+import { SeatLayoutConfig } from '../../Config/SeatConfig';
 
 /**
  * 准备阶段
@@ -151,7 +151,7 @@ export class ReadyStage extends GameStageBase {
         }
 
         // 有完整数据，正常初始化
-        const layoutConfig = PlayerLayoutConfig.getStandardLayout(currentRoom.maxPlayers);
+        const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
 
         console.log(`[ReadyStage] Initializing PlayerUIManager with ${currentRoom.players.length} players, maxPlayers: ${currentRoom.maxPlayers}, mySeat: ${myPlayerInfo.seatIndex}`);
         playerUIManager.initForReadyStage(
@@ -180,7 +180,7 @@ export class ReadyStage extends GameStageBase {
             });
         }
 
-        const layoutConfig = PlayerLayoutConfig.getStandardLayout(maxPlayers);
+        const layoutConfig = SeatLayoutConfig.getLayout(maxPlayers);
 
         playerUIManager.initForReadyStage(
             emptyPlayers,
@@ -362,7 +362,7 @@ export class ReadyStage extends GameStageBase {
             if ((playerUIManager as any)._maxSeats === 0) {
                 console.log('[ReadyStage] PlayerUIManager not yet initialized, initializing now...');
                 if (myPlayerInfo) {
-                    const layoutConfig = PlayerLayoutConfig.getStandardLayout(currentRoom.maxPlayers);
+                    const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
                     playerUIManager.initForReadyStage(
                         currentRoom.players,
                         currentRoom.maxPlayers,

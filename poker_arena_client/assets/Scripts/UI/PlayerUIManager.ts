@@ -2,8 +2,7 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerUIController } from './PlayerUIController';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
-import { PlayerPosition, StateLabelAlignment } from '../Config/PlayerLayoutConfig';
-import { getDealerIndicatorOffset } from '../Config/UIConfig';
+import { SeatPosition, StateLabelAlignment } from '../Config/SeatConfig';
 import { DealerIndicator } from './DealerIndicator';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 
@@ -46,7 +45,7 @@ export class PlayerUIManager extends Component {
     private _mySeatIndex: number = 0;  // 本地玩家的座位索引
     private _seatNodes: Map<number, Node> = new Map();  // 座位节点映射（相对索引 -> Node）
     private _infoPanels: Map<number, PlayerInfoPanel> = new Map();  // 信息面板映射（相对索引 -> InfoPanel）
-    private _layoutConfig: PlayerPosition[] = [];  // 布局配置
+    private _layoutConfig: SeatPosition[] = [];  // 布局配置
 
     /**
      * 初始化 PlayerUIManager
@@ -62,7 +61,7 @@ export class PlayerUIManager extends Component {
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
         levelRank: number = 0,
-        layoutConfig: PlayerPosition[],
+        layoutConfig: SeatPosition[],
         enableGrouping: boolean = true
     ): void {
         if (this._initialized) {
@@ -99,7 +98,7 @@ export class PlayerUIManager extends Component {
         playerInfos: PlayerInfo[],
         maxPlayers: number,
         mySeatIndex: number,
-        layoutConfig: PlayerPosition[]
+        layoutConfig: SeatPosition[]
     ): void {
         console.log(`[PlayerUIManager] InitForReadyStage: maxPlayers=${maxPlayers}, mySeat=${mySeatIndex}`);
 
@@ -140,8 +139,8 @@ export class PlayerUIManager extends Component {
                 infoPanelNode.layer = this.node.layer;
 
                 // 应用 InfoPanel 偏移（如果配置中有设置）
-                const offsetX = config.infoPanelOffsetX ?? 0;
-                const offsetY = config.infoPanelOffsetY ?? 0;
+                const offsetX = config.infoPanelOffset?.x ?? 0;
+                const offsetY = config.infoPanelOffset?.y ?? 0;
                 infoPanelNode.setPosition(offsetX, offsetY, 0);
 
                 seatNode.addChild(infoPanelNode);
@@ -334,7 +333,7 @@ export class PlayerUIManager extends Component {
     /**
      * 创建玩家UI节点
      */
-    private createPlayerUINodes(players: Player[], layoutConfig: PlayerPosition[]): void {
+    private createPlayerUINodes(players: Player[], layoutConfig: SeatPosition[]): void {
         this._playerUINodes = [];
 
         for (let i = 0; i < players.length; i++) {
@@ -364,9 +363,9 @@ export class PlayerUIManager extends Component {
             console.log(`[PlayerUIManager] ${config.name} checking Widget: ${!!existingWidget}`);
             if (!existingWidget) {
                 // 只有在没有 Widget 的情况下才使用 fallback 坐标
-                if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
-                    playerNode.setPosition(config.fallbackX, config.fallbackY, 0);
-                    console.log(`[PlayerUIManager] ${config.name} using fallback position (${config.fallbackX}, ${config.fallbackY})`);
+                if (config.fallbackPosition) {
+                    playerNode.setPosition(config.fallbackPosition.x, config.fallbackPosition.y, 0);
+                    console.log(`[PlayerUIManager] ${config.name} using fallback position (${config.fallbackPosition.x}, ${config.fallbackPosition.y})`);
                 }
             } else {
                 console.log(`[PlayerUIManager] ${config.name} has Widget, position will be managed automatically`);
@@ -510,8 +509,8 @@ export class PlayerUIManager extends Component {
      * @param playerIndex 玩家索引（相对位置）
      */
     private getDealerIndicatorOffset(playerIndex: number): { x: number, y: number } {
-        const playerCount = this._playerUINodes.length;
-        return getDealerIndicatorOffset(playerCount, playerIndex);
+        const seatConfig = this._layoutConfig[playerIndex];
+        return seatConfig?.dealerIndicatorOffset || { x: -150, y: 50 };
     }
 
     /**

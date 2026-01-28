@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'c
 import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
-import { PlayerPosition } from '../Config/PlayerLayoutConfig';
+import { SeatPosition } from '../Config/SeatConfig';
 
 const { ccclass, property } = _decorator;
 
@@ -30,7 +30,7 @@ export class PlayerUIController extends Component {
     private _handDisplay: PlayerHandDisplay | null = null;  // 手牌显示组件
     private _infoPanelComponent: PlayerInfoPanel | null = null;  // 信息面板组件
     private _playerIndex: number = 0;  // 玩家索引（0-4）
-    private _positionConfig: PlayerPosition | null = null;  // 座位位置配置
+    private _positionConfig: SeatPosition | null = null;  // 座位位置配置
 
     // ===== 初始化方法 =====
     /**
@@ -50,7 +50,7 @@ export class PlayerUIController extends Component {
         pokerPrefab: Prefab,
         levelRank: number,
         enableGrouping: boolean = true,
-        positionConfig?: PlayerPosition
+        positionConfig?: SeatPosition
     ): void {
         this._player = player;
         this._playerIndex = playerIndex;

@@ -103,56 +103,6 @@ export const PlayerNameConfig = {
     truncationSuffix: '...',    // 截断后缀
 } as const;
 
-// ==================== 庄家指示器位置偏移配置 ====================
-export const DealerIndicatorOffsets = {
-    // 2人游戏
-    twoPlayer: [
-        { x: -300, y: 50 },     // 底部玩家
-        { x: -200, y: -50 },    // 顶部玩家
-    ],
-
-    // 3人游戏
-    threePlayer: [
-        { x: -300, y: 50 },     // 底部玩家
-        { x: 80, y: -100 },     // 左上玩家
-        { x: -80, y: -100 },    // 右上玩家
-    ],
-
-    // 4人游戏
-    fourPlayer: [
-        { x: -300, y: 50 },     // 底部玩家
-        { x: 80, y: -100 },     // 左侧玩家
-        { x: -200, y: -50 },    // 顶部玩家
-        { x: -80, y: -100 },    // 右侧玩家
-    ],
-
-    // 默认偏移
-    default: { x: -150, y: 50 },
-} as const;
-
-/**
- * 根据玩家数量和索引获取庄家指示器偏移
- */
-export function getDealerIndicatorOffset(playerCount: number, playerIndex: number): { x: number, y: number } {
-    let offsets: readonly { x: number, y: number }[];
-
-    switch (playerCount) {
-        case 2:
-            offsets = DealerIndicatorOffsets.twoPlayer;
-            break;
-        case 3:
-            offsets = DealerIndicatorOffsets.threePlayer;
-            break;
-        case 4:
-            offsets = DealerIndicatorOffsets.fourPlayer;
-            break;
-        default:
-            return DealerIndicatorOffsets.default;
-    }
-
-    return offsets[playerIndex] || DealerIndicatorOffsets.default;
-}
-
 // ==================== State Label 对齐偏移配置 ====================
 export const StateLabelOffsets = {
     left: -200,     // 左侧偏移

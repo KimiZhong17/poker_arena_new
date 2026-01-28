@@ -9,7 +9,7 @@ import { StageManager } from './Core/Stage/StageManager';
 import { ReadyStage } from './Core/Stage/ReadyStage';
 import { PlayingStage } from './Core/Stage/PlayingStage';
 import { EndStage } from './Core/Stage/EndStage';
-import { PlayerLayoutConfig } from './Config/PlayerLayoutConfig';
+import { SeatLayoutConfig } from './Config/SeatConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { NetworkManager } from './Network/NetworkManager';
 import { NetworkConfig } from './Config/NetworkConfig';
@@ -482,10 +482,10 @@ export class Game extends Component {
         // TheDecree: 2-4人，Guandan: 5-6人
         let layoutConfig;
         if (this._gameMode === 'the_decree') {
-            layoutConfig = PlayerLayoutConfig.getTheDecreeLayout(4);
+            layoutConfig = SeatLayoutConfig.getTheDecreeLayout(4);
             console.log(`[Game] Using TheDecree 4-player layout`);
         } else {
-            layoutConfig = PlayerLayoutConfig.getGuandanLayout(5);
+            layoutConfig = SeatLayoutConfig.getGuandanLayout(5);
             console.log(`[Game] Using Guandan 5-player layout`);
         }
 

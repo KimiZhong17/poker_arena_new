@@ -1,5 +1,5 @@
 import { Game } from "../../Game";
-import { PlayerLayoutConfig } from "../../Config/PlayerLayoutConfig";
+import { SeatLayoutConfig, SeatPosition } from "../../Config/SeatConfig";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
@@ -137,7 +137,7 @@ export abstract class GameModeClientBase {
         }
 
         // 获取布局配置
-        const layoutConfig = PlayerLayoutConfig.getStandardLayout(players.length);
+        const layoutConfig = SeatLayoutConfig.getLayout(players.length);
 
         console.log(`[${this.config.name}] Initializing PlayerUIManager with ${players.length} players`);
         for (let i = 0; i < players.length; i++) {
@@ -211,17 +211,17 @@ export abstract class GameModeClientBase {
 
     /**
      * 调整玩家位置布局
-     * 默认实现：使用 PlayerLayoutConfig 提供的标准布局
+     * 默认实现：使用 SeatLayoutConfig 提供的标准布局
      * 子类可以覆盖以实现自定义布局
      */
     public adjustPlayerLayout(): void {
         const playerCount = this.config.maxPlayers;
         console.log(`[${this.config.name}] Adjusting player layout for ${playerCount} players`);
 
-        const positions = PlayerLayoutConfig.getStandardLayout(playerCount);
+        const positions = SeatLayoutConfig.getLayout(playerCount);
         this.applyPlayerLayout(positions);
 
-        const layoutName = PlayerLayoutConfig.getLayoutName(playerCount);
+        const layoutName = SeatLayoutConfig.getLayoutName(playerCount);
         console.log(`[${this.config.name}] Player layout adjusted: ${playerCount} players in ${layoutName} formation`);
     }
 
@@ -232,7 +232,7 @@ export abstract class GameModeClientBase {
      * @param positions 位置配置数组
      * @protected 子类可以调用此方法来应用自定义配置
      */
-    protected applyPlayerLayout(positions: import('../../UI/PlayerLayoutConfig').PlayerPosition[]): void {
+    protected applyPlayerLayout(positions: SeatPosition[]): void {
         const handsManagerNode = this.game.playerUIManagerNode;
         if (!handsManagerNode) {
             console.warn(`[${this.config.name}] PlayerUIManagerNode not found`);

@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Color, Prefab, instantiate, assetManager, Widget } from 'cc';
 import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
-import { StateLabelAlignment } from '../Config/PlayerLayoutConfig';
+import { StateLabelAlignment } from '../Config/SeatConfig';
 import { UIColors, StateLabelOffsets, PlayerNameConfig } from '../Config/UIConfig';
 
 const { ccclass, property } = _decorator;

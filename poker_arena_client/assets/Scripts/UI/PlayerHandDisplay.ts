@@ -10,7 +10,7 @@ import {
     CardSpriteNames,
     getCardSpacing,
 } from '../Config/CardDisplayConfig';
-import { PlayerPosition } from '../Config/PlayerLayoutConfig';
+import { SeatPosition } from '../Config/SeatConfig';
 import { UIColors, UIFonts, UISizes } from '../Config/UIConfig';
 const { ccclass, property } = _decorator;
 
@@ -56,7 +56,7 @@ export class PlayerHandDisplay extends Component {
     private _playedCards: number[] = [];  // Cards that have been played this round
     private _playerIndex: number = 0;     // Player index (0-3) for positioning
     private _enableGrouping: boolean = true; // Whether to group cards by point value (true for Guandan, false for TheDecree)
-    private _positionConfig: PlayerPosition | null = null; // Position config for offsets
+    private _positionConfig: SeatPosition | null = null; // Position config for offsets
 
     // Card count display (for STACK mode)
     private _showCardCount: boolean = false; // Whether to show card count label
@@ -65,7 +65,7 @@ export class PlayerHandDisplay extends Component {
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false, positionConfig?: PlayerPosition): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false, positionConfig?: SeatPosition): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
