@@ -4,6 +4,7 @@ import { GameRoom } from './GameRoom';
 import { PlayerSession } from './PlayerSession';
 import { ServerConfig } from '../config/ServerConfig';
 import { IdValidator } from '../utils/IdValidator';
+import { RateLimiter, RateLimitPresets } from '../utils/RateLimiter';
 import {
     ClientMessageType,
     ServerMessageType,
@@ -41,6 +42,11 @@ export class GameServer {
     // 心跳定时器
     private heartbeatTimer: NodeJS.Timeout | null = null;
 
+    // 速率限制器
+    private gameActionLimiter = new RateLimiter(RateLimitPresets.GAME_ACTION);
+    private roomActionLimiter = new RateLimiter(RateLimitPresets.ROOM_ACTION);
+    private connectionLimiter = new RateLimiter(RateLimitPresets.CONNECTION);
+
     constructor(httpServer: HTTPServer) {
         this.io = new SocketIOServer(httpServer, {
             cors: {
@@ -65,56 +71,67 @@ export class GameServer {
 
             // 创建房间
             socket.on(ClientMessageType.CREATE_ROOM, (data: CreateRoomRequest) => {
+                if (!this.checkRateLimit(socket, 'room')) return;
                 this.handleCreateRoom(socket, data);
             });
 
             // 加入房间
             socket.on(ClientMessageType.JOIN_ROOM, (data: JoinRoomRequest) => {
+                if (!this.checkRateLimit(socket, 'room')) return;
                 this.handleJoinRoom(socket, data);
             });
 
             // 重连房间
             socket.on(ClientMessageType.RECONNECT, (data: ReconnectRequest) => {
+                if (!this.checkRateLimit(socket, 'connection')) return;
                 this.handleReconnect(socket, data);
             });
 
             // 离开房间
             socket.on(ClientMessageType.LEAVE_ROOM, () => {
+                if (!this.checkRateLimit(socket, 'room')) return;
                 this.handleLeaveRoom(socket);
             });
 
             // 准备
             socket.on(ClientMessageType.READY, () => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleReady(socket);
             });
 
             // 开始游戏
             socket.on(ClientMessageType.START_GAME, () => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleStartGame(socket);
             });
 
             // 重启游戏
             socket.on(ClientMessageType.RESTART_GAME, () => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleRestartGame(socket);
             });
 
             // 庄家叫牌
             socket.on(ClientMessageType.DEALER_CALL, (data: DealerCallRequest) => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleDealerCall(socket, data);
             });
 
             // 选择首个庄家的牌
             socket.on(ClientMessageType.SELECT_FIRST_DEALER_CARD, (data: SelectFirstDealerCardRequest) => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleSelectFirstDealerCard(socket, data);
             });
 
             // 玩家出牌
             socket.on(ClientMessageType.PLAY_CARDS, (data: PlayCardsRequest) => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handlePlayCards(socket, data);
             });
 
             // 设置托管
             socket.on(ClientMessageType.SET_AUTO, (data: SetAutoRequest) => {
+                if (!this.checkRateLimit(socket, 'game')) return;
                 this.handleSetAuto(socket, data);
             });
 
@@ -130,6 +147,76 @@ export class GameServer {
         });
     }
 
+    /**
+     * 检查速率限制
+     * @returns true 如果允许，false 如果被限制
+     */
+    private checkRateLimit(socket: Socket, type: 'game' | 'room' | 'connection'): boolean {
+        let limiter: RateLimiter;
+        switch (type) {
+            case 'game':
+                limiter = this.gameActionLimiter;
+                break;
+            case 'room':
+                limiter = this.roomActionLimiter;
+                break;
+            case 'connection':
+                limiter = this.connectionLimiter;
+                break;
+        }
+
+        if (!limiter.isAllowed(socket.id)) {
+            this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Too many requests, please slow down');
+            console.warn(`[GameServer] Rate limit exceeded for ${socket.id} (${type})`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 验证并净化玩家名称
+     * @returns 净化后的名称，如果验证失败返回 null
+     */
+    private validateAndSanitizePlayerName(socket: Socket, playerName: string): string | null {
+        if (!IdValidator.isValidPlayerName(playerName)) {
+            this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
+            console.warn(`[GameServer] Invalid player name: ${playerName}`);
+            return null;
+        }
+
+        // 如果是游客ID格式，验证其合法性
+        if (playerName.startsWith('guest_')) {
+            if (!IdValidator.isValidGuestId(playerName)) {
+                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
+                console.warn(`[GameServer] Invalid guest ID format: ${playerName}`);
+                return null;
+            }
+            console.log(`[GameServer] Guest ID validated: ${playerName}`);
+        }
+
+        return IdValidator.sanitizePlayerName(playerName);
+    }
+
+    /**
+     * 获取玩家和房间，用于游戏操作的通用验证
+     * @returns 玩家和房间，如果验证失败返回 null
+     */
+    private getPlayerAndRoom(socket: Socket): { player: PlayerSession; room: GameRoom } | null {
+        const player = this.players.get(socket.id);
+        if (!player || !player.roomId) {
+            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+            return null;
+        }
+
+        const room = this.rooms.get(player.roomId);
+        if (!room) {
+            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
+            return null;
+        }
+
+        return { player, room };
+    }
+
     // ==================== 房间管理 ====================
 
     /**
@@ -137,25 +224,9 @@ export class GameServer {
      */
     private handleCreateRoom(socket: Socket, data: CreateRoomRequest): void {
         try {
-            // 验证玩家名称
-            if (!IdValidator.isValidPlayerName(data.playerName)) {
-                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
-                console.warn(`[GameServer] Invalid player name: ${data.playerName}`);
-                return;
-            }
-
-            // 净化玩家名称
-            const sanitizedName = IdValidator.sanitizePlayerName(data.playerName);
-
-            // 如果是游客ID格式，验证其合法性
-            if (data.playerName.startsWith('guest_')) {
-                if (!IdValidator.isValidGuestId(data.playerName)) {
-                    this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
-                    console.warn(`[GameServer] Invalid guest ID format: ${data.playerName}`);
-                    return;
-                }
-                console.log(`[GameServer] Guest ID validated: ${data.playerName}`);
-            }
+            // 验证并净化玩家名称
+            const sanitizedName = this.validateAndSanitizePlayerName(socket, data.playerName);
+            if (!sanitizedName) return;
 
             // 检查房间数量限制
             if (this.rooms.size >= ServerConfig.MAX_ROOMS) {
@@ -199,25 +270,9 @@ export class GameServer {
      */
     private handleJoinRoom(socket: Socket, data: JoinRoomRequest): void {
         try {
-            // 验证玩家名称
-            if (!IdValidator.isValidPlayerName(data.playerName)) {
-                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
-                console.warn(`[GameServer] Invalid player name: ${data.playerName}`);
-                return;
-            }
-
-            // 净化玩家名称
-            const sanitizedName = IdValidator.sanitizePlayerName(data.playerName);
-
-            // 如果是游客ID格式，验证其合法性
-            if (data.playerName.startsWith('guest_')) {
-                if (!IdValidator.isValidGuestId(data.playerName)) {
-                    this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
-                    console.warn(`[GameServer] Invalid guest ID format: ${data.playerName}`);
-                    return;
-                }
-                console.log(`[GameServer] Guest ID validated: ${data.playerName}`);
-            }
+            // 验证并净化玩家名称
+            const sanitizedName = this.validateAndSanitizePlayerName(socket, data.playerName);
+            if (!sanitizedName) return;
 
             const room = this.rooms.get(data.roomId);
 
@@ -275,10 +330,7 @@ export class GameServer {
             console.log(`[GameServer] Reconnect request: playerId=${data.playerId}, roomId=${data.roomId}`);
 
             // 验证玩家名称
-            if (!IdValidator.isValidPlayerName(data.playerName)) {
-                this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
-                return;
-            }
+            if (!this.validateAndSanitizePlayerName(socket, data.playerName)) return;
 
             const room = this.rooms.get(data.roomId);
             if (!room) {
@@ -588,17 +640,9 @@ export class GameServer {
      * 处理玩家出牌
      */
     private handlePlayCards(socket: Socket, data: PlayCardsRequest): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
-            return;
-        }
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
         // Verify player ID matches
         if (data.playerId !== player.id) {
@@ -606,10 +650,79 @@ export class GameServer {
             return;
         }
 
+        // 验证卡牌数据
+        if (!this.validateCards(socket, data.cards)) return;
+
         // Handle play cards in room
         const success = room.handlePlayCards(player.id, data.cards);
 
         console.log(`[GameServer] Player ${player.name} played ${data.cards.length} cards (${success ? 'success' : 'failed'})`);
+    }
+
+    /**
+     * 验证卡牌数组
+     * @returns true 如果有效，false 如果无效
+     */
+    private validateCards(socket: Socket, cards: unknown): cards is number[] {
+        // 检查是否为数组
+        if (!Array.isArray(cards)) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Invalid cards format');
+            return false;
+        }
+
+        // 检查是否为空
+        if (cards.length === 0) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'No cards provided');
+            return false;
+        }
+
+        // 检查数量限制（最多3张）
+        if (cards.length > 3) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Too many cards');
+            return false;
+        }
+
+        // 检查每张卡牌的有效性
+        for (const card of cards) {
+            if (typeof card !== 'number' || !this.isValidCardValue(card)) {
+                this.sendError(socket, ErrorCode.INVALID_PLAY, 'Invalid card value');
+                return false;
+            }
+        }
+
+        // 检查是否有重复的卡牌
+        const uniqueCards = new Set(cards);
+        if (uniqueCards.size !== cards.length) {
+            this.sendError(socket, ErrorCode.INVALID_PLAY, 'Duplicate cards');
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 检查卡牌值是否有效
+     * 卡牌格式: 高4位为花色(0x00-0x40)，低4位为点数(3-15 或 1-2 for jokers)
+     */
+    private isValidCardValue(card: number): boolean {
+        if (!Number.isInteger(card) || card < 0 || card > 0xFF) {
+            return false;
+        }
+
+        const suit = card & 0xF0;
+        const point = card & 0x0F;
+
+        // 大小王
+        if (suit === 0x40) {
+            return point === 0x01 || point === 0x02; // BLACK_JOKER or RED_JOKER
+        }
+
+        // 普通牌：花色 0x00-0x30，点数 3-15
+        if (suit <= 0x30) {
+            return point >= 3 && point <= 15;
+        }
+
+        return false;
     }
 
     /**
@@ -691,52 +804,56 @@ export class GameServer {
      */
     private startHeartbeat(): void {
         this.heartbeatTimer = setInterval(() => {
-            const now = Date.now();
+            try {
+                const now = Date.now();
 
-            // 检查玩家超时
-            for (const [id, player] of this.players) {
-                if (player.isTimeout(ServerConfig.PLAYER_DISCONNECT_TIMEOUT)) {
-                    console.log(`[GameServer] Player ${player.name} timeout, removing...`);
-                    this.handleLeaveRoom(player.socket);
+                // 检查玩家超时
+                for (const [id, player] of this.players) {
+                    if (player.isTimeout(ServerConfig.PLAYER_DISCONNECT_TIMEOUT)) {
+                        console.log(`[GameServer] Player ${player.name} timeout, removing...`);
+                        this.handleLeaveRoom(player.socket);
+                    }
                 }
-            }
 
-            // 检查断线玩家超时（5分钟）
-            const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
-            for (const [playerId, player] of this.disconnectedPlayers) {
-                if (now - player.lastHeartbeat > RECONNECT_TIMEOUT) {
-                    console.log(`[GameServer] Disconnected player ${player.name} timeout, removing...`);
+                // 检查断线玩家超时（5分钟）
+                const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
+                for (const [playerId, player] of this.disconnectedPlayers) {
+                    if (now - player.lastHeartbeat > RECONNECT_TIMEOUT) {
+                        console.log(`[GameServer] Disconnected player ${player.name} timeout, removing...`);
 
-                    // 从房间移除
-                    if (player.roomId) {
-                        const room = this.rooms.get(player.roomId);
-                        if (room) {
-                            room.removePlayer(playerId);
+                        // 从房间移除
+                        if (player.roomId) {
+                            const room = this.rooms.get(player.roomId);
+                            if (room) {
+                                room.removePlayer(playerId);
 
-                            // 广播玩家离开
-                            room.broadcast(ServerMessageType.PLAYER_LEFT, {
-                                playerId: playerId
-                            });
+                                // 广播玩家离开
+                                room.broadcast(ServerMessageType.PLAYER_LEFT, {
+                                    playerId: playerId
+                                });
 
-                            // 如果房间为空，删除房间
-                            if (room.isEmpty()) {
-                                this.rooms.delete(room.id);
-                                console.log(`[GameServer] Room ${room.id} deleted (empty)`);
+                                // 如果房间为空，删除房间
+                                if (room.isEmpty()) {
+                                    this.rooms.delete(room.id);
+                                    console.log(`[GameServer] Room ${room.id} deleted (empty)`);
+                                }
                             }
                         }
+
+                        // 从断线列表移除
+                        this.disconnectedPlayers.delete(playerId);
                     }
-
-                    // 从断线列表移除
-                    this.disconnectedPlayers.delete(playerId);
                 }
-            }
 
-            // 检查空闲房间
-            for (const [id, room] of this.rooms) {
-                if (room.isEmpty() || room.isIdle(ServerConfig.ROOM_IDLE_TIMEOUT)) {
-                    console.log(`[GameServer] Room ${id} idle, removing...`);
-                    this.rooms.delete(id);
+                // 检查空闲房间
+                for (const [id, room] of this.rooms) {
+                    if (room.isEmpty() || room.isIdle(ServerConfig.ROOM_IDLE_TIMEOUT)) {
+                        console.log(`[GameServer] Room ${id} idle, removing...`);
+                        this.rooms.delete(id);
+                    }
                 }
+            } catch (error) {
+                console.error('[GameServer] Heartbeat error:', error);
             }
         }, ServerConfig.HEARTBEAT_INTERVAL);
     }
