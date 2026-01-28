@@ -45,6 +45,14 @@ export enum StateLabelAlignment {
 }
 
 /**
+ * 已出牌排列方式
+ */
+export enum PlayedCardLayout {
+    HORIZONTAL = 'horizontal',  // 横向排列
+    VERTICAL = 'vertical'       // 竖向堆叠
+}
+
+/**
  * 座位位置配置
  */
 export interface SeatPosition {
@@ -59,6 +67,7 @@ export interface SeatPosition {
     dealerIndicatorOffset: Vec2;        // 庄家指示器偏移
 
     stateLabelAlignment: StateLabelAlignment;  // State Label 对齐方式
+    playedCardLayout: PlayedCardLayout;        // 已出牌排列方式
 }
 
 // ==================== 座位定义 ====================
@@ -79,6 +88,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: 0, y: 0 },
         dealerIndicatorOffset: { x: -300, y: 50 },
         stateLabelAlignment: StateLabelAlignment.RIGHT,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 
     // 顶部座位
@@ -92,6 +102,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: -200, y: -50 },
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 
     // 左侧座位
@@ -105,6 +116,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -100 },
         stateLabelAlignment: StateLabelAlignment.RIGHT,
+        playedCardLayout: PlayedCardLayout.VERTICAL,   // 左侧玩家竖向堆叠
     } as SeatPosition,
 
     // 右侧座位
@@ -118,6 +130,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -100 },
         stateLabelAlignment: StateLabelAlignment.LEFT,
+        playedCardLayout: PlayedCardLayout.VERTICAL,   // 右侧玩家竖向堆叠
     } as SeatPosition,
 
     // 左上座位（5-6人布局）
@@ -131,6 +144,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -80 },
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 
     // 右上座位（5-6人布局）
@@ -144,6 +158,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -80 },
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 
     // 左下座位（6人布局）
@@ -157,6 +172,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -80 },
         stateLabelAlignment: StateLabelAlignment.RIGHT,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 
     // 右下座位（6人布局）
@@ -170,6 +186,7 @@ const SeatDefinitions = {
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -80 },
         stateLabelAlignment: StateLabelAlignment.LEFT,
+        playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
 } as const;
 

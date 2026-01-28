@@ -10,7 +10,7 @@ import {
     CardSpriteNames,
     getCardSpacing,
 } from '../Config/CardDisplayConfig';
-import { SeatPosition } from '../Config/SeatConfig';
+import { SeatPosition, PlayedCardLayout } from '../Config/SeatConfig';
 import { UIColors, UIFonts, UISizes } from '../Config/UIConfig';
 const { ccclass, property } = _decorator;
 
@@ -335,7 +335,7 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Display cards as a stack (for other players, showing backs)
-     * If there are played cards, also display them face-up in a spread
+     * If there are played cards, also display them face-up in a spread or vertical stack
      */
     private displayStack(cardCount: number): void {
         console.log(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
@@ -375,41 +375,90 @@ export class PlayerHandDisplay extends Component {
             console.log(`[displayStack] No remaining cards to display (all ${cardCount} cards have been played)`);
         }
 
-        // 3. If there are played cards, display them face-up in a spread with overlap
+        // 3. If there are played cards, display them based on layout configuration
         if (this._playedCards.length > 0) {
-            const playedCardSpacing = CardSpacing.playedCards.spacing;
-            const playedCardWidth = CardDimensions.width;
-            // 重叠显示：总宽度 = (卡片数-1) * 间距 + 卡片宽度
-            const playedCardsWidth = (this._playedCards.length - 1) * playedCardSpacing + playedCardWidth;
-            const playedStartX = -playedCardsWidth / 2 + playedCardWidth / 2;
+            const layout = this._positionConfig?.playedCardLayout || PlayedCardLayout.HORIZONTAL;
 
-            // Get the offset for played cards based on player position
-            const offset = this.getPlayedCardOffset();
-
-            console.log(`[displayStack] Player ${this._player.name} (index ${this._playerIndex})`);
-            console.log(`[displayStack] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
-            console.log(`[displayStack] Offset: (${offset.x}, ${offset.y}), spacing: ${playedCardSpacing}`);
-
-            for (let i = 0; i < this._playedCards.length; i++) {
-                const cardValue = this._playedCards[i];
-                console.log(`[displayStack] Creating card ${i}: 0x${cardValue.toString(16)}`);
-                const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
-
-                // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
-                const x = playedStartX + playedCardSpacing * i;
-                const finalX = x + offset.x;
-                const finalY = offset.y;
-
-                cardNode.setPosition(finalX, finalY, 0);
-
-                this.handContainer.addChild(cardNode);
-                this._pokerNodes.push(cardNode);
-
-                console.log(`[displayStack] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
+            if (layout === PlayedCardLayout.VERTICAL) {
+                this.displayPlayedCardsVertical();
+            } else {
+                this.displayPlayedCardsHorizontal();
             }
         }
 
         console.log(`[displayStack] Total nodes: ${this._pokerNodes.length}`);
+    }
+
+    /**
+     * Display played cards horizontally with overlap
+     */
+    private displayPlayedCardsHorizontal(): void {
+        const playedCardSpacing = CardSpacing.playedCards.spacing;
+        const playedCardWidth = CardDimensions.width;
+        // 重叠显示：总宽度 = (卡片数-1) * 间距 + 卡片宽度
+        const playedCardsWidth = (this._playedCards.length - 1) * playedCardSpacing + playedCardWidth;
+        const playedStartX = -playedCardsWidth / 2 + playedCardWidth / 2;
+
+        // Get the offset for played cards based on player position
+        const offset = this.getPlayedCardOffset();
+
+        console.log(`[displayPlayedCardsHorizontal] Player ${this._player.name} (index ${this._playerIndex})`);
+        console.log(`[displayPlayedCardsHorizontal] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
+        console.log(`[displayPlayedCardsHorizontal] Offset: (${offset.x}, ${offset.y}), spacing: ${playedCardSpacing}`);
+
+        for (let i = 0; i < this._playedCards.length; i++) {
+            const cardValue = this._playedCards[i];
+            console.log(`[displayPlayedCardsHorizontal] Creating card ${i}: 0x${cardValue.toString(16)}`);
+            const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
+
+            // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
+            const x = playedStartX + playedCardSpacing * i;
+            const finalX = x + offset.x;
+            const finalY = offset.y;
+
+            cardNode.setPosition(finalX, finalY, 0);
+
+            this.handContainer.addChild(cardNode);
+            this._pokerNodes.push(cardNode);
+
+            console.log(`[displayPlayedCardsHorizontal] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
+        }
+    }
+
+    /**
+     * Display played cards vertically stacked
+     */
+    private displayPlayedCardsVertical(): void {
+        const verticalSpacing = CardSpacing.playedCards.spacing;
+        const playedCardHeight = CardDimensions.height;
+        // 竖向堆叠：总高度 = (卡片数-1) * 间距 + 卡片高度
+        const playedCardsHeight = (this._playedCards.length - 1) * verticalSpacing + playedCardHeight;
+        const playedStartY = playedCardsHeight / 2 - playedCardHeight / 2;
+
+        // Get the offset for played cards based on player position
+        const offset = this.getPlayedCardOffset();
+
+        console.log(`[displayPlayedCardsVertical] Player ${this._player.name} (index ${this._playerIndex})`);
+        console.log(`[displayPlayedCardsVertical] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
+        console.log(`[displayPlayedCardsVertical] Offset: (${offset.x}, ${offset.y}), spacing: ${verticalSpacing}`);
+
+        for (let i = 0; i < this._playedCards.length; i++) {
+            const cardValue = this._playedCards[i];
+            console.log(`[displayPlayedCardsVertical] Creating card ${i}: 0x${cardValue.toString(16)}`);
+            const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
+
+            // 竖向堆叠：每张卡向下偏移 verticalSpacing 的距离
+            const y = playedStartY - verticalSpacing * i;
+            const finalX = offset.x;
+            const finalY = y + offset.y;
+
+            cardNode.setPosition(finalX, finalY, 0);
+
+            this.handContainer.addChild(cardNode);
+            this._pokerNodes.push(cardNode);
+
+            console.log(`[displayPlayedCardsVertical] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
+        }
     }
 
     /**
