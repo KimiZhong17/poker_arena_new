@@ -5,6 +5,7 @@ import { PlayerSession } from './PlayerSession';
 import { ServerConfig } from '../config/ServerConfig';
 import { IdValidator } from '../utils/IdValidator';
 import { RateLimiter, RateLimitPresets } from '../utils/RateLimiter';
+import { Logger } from '../utils/Logger';
 import {
     ClientMessageType,
     ServerMessageType,
@@ -59,7 +60,7 @@ export class GameServer {
         this.setupEventHandlers();
         this.startHeartbeat();
 
-        console.log('[GameServer] Initialized');
+        Logger.info('GameServer', 'Initialized');
     }
 
     /**
@@ -67,7 +68,7 @@ export class GameServer {
      */
     private setupEventHandlers(): void {
         this.io.on('connection', (socket: Socket) => {
-            console.log(`[GameServer] Client connected: ${socket.id}`);
+            Logger.info('GameServer', `Client connected: ${socket.id}`);
 
             // 创建房间
             socket.on(ClientMessageType.CREATE_ROOM, (data: CreateRoomRequest) => {
@@ -167,7 +168,7 @@ export class GameServer {
 
         if (!limiter.isAllowed(socket.id)) {
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Too many requests, please slow down');
-            console.warn(`[GameServer] Rate limit exceeded for ${socket.id} (${type})`);
+            Logger.warn('GameServer', `Rate limit exceeded for ${socket.id} (${type})`);
             return false;
         }
         return true;
@@ -180,7 +181,7 @@ export class GameServer {
     private validateAndSanitizePlayerName(socket: Socket, playerName: string): string | null {
         if (!IdValidator.isValidPlayerName(playerName)) {
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid player name');
-            console.warn(`[GameServer] Invalid player name: ${playerName}`);
+            Logger.warn('GameServer', `Invalid player name: ${playerName}`);
             return null;
         }
 
@@ -188,10 +189,10 @@ export class GameServer {
         if (playerName.startsWith('guest_')) {
             if (!IdValidator.isValidGuestId(playerName)) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Invalid guest ID format');
-                console.warn(`[GameServer] Invalid guest ID format: ${playerName}`);
+                Logger.warn('GameServer', `Invalid guest ID format: ${playerName}`);
                 return null;
             }
-            console.log(`[GameServer] Guest ID validated: ${playerName}`);
+            Logger.debug('GameServer', `Guest ID validated: ${playerName}`);
         }
 
         return IdValidator.sanitizePlayerName(playerName);
@@ -258,9 +259,9 @@ export class GameServer {
 
             socket.emit(ServerMessageType.ROOM_CREATED, response);
 
-            console.log(`[GameServer] Room created: ${room.id} by ${sanitizedName}`);
+            Logger.info('GameServer', `Room created: ${room.id} by ${sanitizedName}`);
         } catch (error) {
-            console.error('[GameServer] Error creating room:', error);
+            Logger.error('GameServer', 'Error creating room:', error);
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to create room');
         }
     }
@@ -315,9 +316,9 @@ export class GameServer {
 
             room.broadcast(ServerMessageType.PLAYER_JOINED, joinEvent, player.id);
 
-            console.log(`[GameServer] Player ${sanitizedName} joined room ${room.id}`);
+            Logger.info('GameServer', `Player ${sanitizedName} joined room ${room.id}`);
         } catch (error) {
-            console.error('[GameServer] Error joining room:', error);
+            Logger.error('GameServer', 'Error joining room:', error);
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to join room');
         }
     }
@@ -327,7 +328,7 @@ export class GameServer {
      */
     private handleReconnect(socket: Socket, data: ReconnectRequest): void {
         try {
-            console.log(`[GameServer] Reconnect request: playerId=${data.playerId}, roomId=${data.roomId}`);
+            Logger.info('GameServer', `Reconnect request: playerId=${data.playerId}, roomId=${data.roomId}`);
 
             // 验证玩家名称
             if (!this.validateAndSanitizePlayerName(socket, data.playerName)) return;
@@ -390,9 +391,9 @@ export class GameServer {
             // 关闭该玩家的托管模式（如果之前自动开启了）
             room.handleSetAuto(disconnectedPlayer.id, false);
 
-            console.log(`[GameServer] Player ${data.playerName} reconnected to room ${room.id}`);
+            Logger.info('GameServer', `Player ${data.playerName} reconnected to room ${room.id}`);
         } catch (error) {
-            console.error('[GameServer] Error reconnecting:', error);
+            Logger.error('GameServer', 'Error reconnecting:', error);
             this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to reconnect');
         }
     }
@@ -425,7 +426,7 @@ export class GameServer {
                 newHostId
             };
             room.broadcast(ServerMessageType.HOST_CHANGED, hostChangedEvent);
-            console.log(`[GameServer] Broadcasting HOST_CHANGED: ${newHostId}`);
+            Logger.info('GameServer', `Broadcasting HOST_CHANGED: ${newHostId}`);
 
             // 广播新房主的准备状态（新房主自动准备）
             const readyEvent: PlayerReadyEvent = {
@@ -433,30 +434,28 @@ export class GameServer {
                 isReady: true
             };
             room.broadcast(ServerMessageType.PLAYER_READY, readyEvent);
-            console.log(`[GameServer] Broadcasting new host ready state: ${newHostId}`);
+            Logger.debug('GameServer', `Broadcasting new host ready state: ${newHostId}`);
         }
 
         // 如果房间为空，删除房间
         if (room.isEmpty()) {
             this.rooms.delete(room.id);
-            console.log(`[GameServer] Room ${room.id} deleted (empty)`);
+            Logger.info('GameServer', `Room ${room.id} deleted (empty)`);
         }
 
         // 删除玩家会话
         this.players.delete(socket.id);
 
-        console.log(`[GameServer] Player ${player.name} left room ${room.id}`);
+        Logger.info('GameServer', `Player ${player.name} left room ${room.id}`);
     }
 
     /**
      * 处理玩家准备
      */
     private handleReady(socket: Socket): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) return;
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) return;
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
         // 切换准备状态
         const isReady = !player.isReady;
@@ -470,24 +469,16 @@ export class GameServer {
 
         room.broadcast(ServerMessageType.PLAYER_READY, event);
 
-        console.log(`[GameServer] Player ${player.name} ready: ${isReady}`);
+        Logger.info('GameServer', `Player ${player.name} ready: ${isReady}`);
     }
 
     /**
      * 处理开始游戏请求（房主触发）
      */
     private handleStartGame(socket: Socket): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a room');
-            return;
-        }
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
         // 检查是否是房主
         if (!player.isHost) {
@@ -509,19 +500,11 @@ export class GameServer {
      * 处理重启游戏
      */
     private handleRestartGame(socket: Socket): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a room');
-            return;
-        }
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
-
-        console.log(`[GameServer] Player ${player.name} clicked restart game`);
+        Logger.debug('GameServer', `Player ${player.name} clicked restart game`);
 
         // 立即设置该玩家为已准备
         room.setPlayerReady(player.id, true);
@@ -532,26 +515,26 @@ export class GameServer {
             isReady: true
         };
         room.broadcast(ServerMessageType.PLAYER_READY, readyEvent);
-        console.log(`[GameServer] Player ${player.name} is ready for restart`);
+        Logger.debug('GameServer', `Player ${player.name} is ready for restart`);
 
         // 记录该玩家想要重启
         const allPlayersReady = room.playerWantsRestart(player.id);
 
         if (allPlayersReady) {
             // 所有人都点击了，执行游戏状态清理
-            console.log(`[GameServer] All players ready, cleaning up game state...`);
+            Logger.info('GameServer', `All players ready, cleaning up game state...`);
             const success = room.restartGame();
             if (!success) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Failed to restart game');
                 return;
             }
-            console.log(`[GameServer] Room ${room.id} game state cleaned up`);
+            Logger.info('GameServer', `Room ${room.id} game state cleaned up`);
 
             // 不自动启动游戏，等待房主点击"开始游戏"按钮
-            console.log(`[GameServer] Waiting for host to start the game...`);
+            Logger.debug('GameServer', `Waiting for host to start the game...`);
         } else {
             // 还有人没点击，等待其他玩家
-            console.log(`[GameServer] Waiting for other players to click restart...`);
+            Logger.debug('GameServer', `Waiting for other players to click restart...`);
         }
     }
 
@@ -565,64 +548,49 @@ export class GameServer {
             return;
         }
 
-        console.log(`[GameServer] Game started in room ${room.id}`);
+        Logger.info('GameServer', `Game started in room ${room.id}`);
     }
 
     /**
      * 处理选择首个庄家的牌
      */
     private handleSelectFirstDealerCard(socket: Socket, data: SelectFirstDealerCardRequest): void {
-        console.log(`[GameServer] ========== handleSelectFirstDealerCard ==========`);
-        console.log(`[GameServer] Received data:`, data);
-        console.log(`[GameServer] Card: 0x${data.card.toString(16)}`);
+        Logger.debug('GameServer', `========== handleSelectFirstDealerCard ==========`);
+        Logger.debug('GameServer', `Received data:`, data);
+        Logger.debug('GameServer', `Card: 0x${data.card.toString(16)}`);
 
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            console.error(`[GameServer] ✗ Player not found or not in room`);
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) {
+            Logger.error('GameServer', `✗ Player not found or not in room`);
             return;
         }
+        const { player, room } = result;
 
-        console.log(`[GameServer] Player: ${player.name} (${player.id})`);
-        console.log(`[GameServer] Room ID: ${player.roomId}`);
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            console.error(`[GameServer] ✗ Room not found: ${player.roomId}`);
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
+        Logger.debug('GameServer', `Player: ${player.name} (${player.id})`);
+        Logger.debug('GameServer', `Room ID: ${player.roomId}`);
 
         // Verify player ID matches
         if (data.playerId !== player.id) {
-            console.error(`[GameServer] ✗ Player ID mismatch: ${data.playerId} !== ${player.id}`);
+            Logger.error('GameServer', `✗ Player ID mismatch: ${data.playerId} !== ${player.id}`);
             this.sendError(socket, ErrorCode.INVALID_PLAY, 'Player ID mismatch');
             return;
         }
 
-        console.log(`[GameServer] Calling room.handleSelectFirstDealerCard...`);
+        Logger.debug('GameServer', `Calling room.handleSelectFirstDealerCard...`);
 
         // Handle select card in room
         const success = room.handleSelectFirstDealerCard(player.id, data.card);
 
-        console.log(`[GameServer] Player ${player.name} selected card for first dealer (${success ? 'success' : 'failed'})`);
+        Logger.info('GameServer', `Player ${player.name} selected card for first dealer (${success ? 'success' : 'failed'})`);
     }
 
     /**
      * 处理庄家叫牌
      */
     private handleDealerCall(socket: Socket, data: DealerCallRequest): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
-            return;
-        }
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
         // Verify player ID matches
         if (data.playerId !== player.id) {
@@ -633,7 +601,7 @@ export class GameServer {
         // Handle dealer call in room
         const success = room.handleDealerCall(player.id, data.cardsToPlay);
 
-        console.log(`[GameServer] Player ${player.name} dealer call: ${data.cardsToPlay} cards (${success ? 'success' : 'failed'})`);
+        Logger.info('GameServer', `Player ${player.name} dealer call: ${data.cardsToPlay} cards (${success ? 'success' : 'failed'})`);
     }
 
     /**
@@ -656,7 +624,7 @@ export class GameServer {
         // Handle play cards in room
         const success = room.handlePlayCards(player.id, data.cards);
 
-        console.log(`[GameServer] Player ${player.name} played ${data.cards.length} cards (${success ? 'success' : 'failed'})`);
+        Logger.info('GameServer', `Player ${player.name} played ${data.cards.length} cards (${success ? 'success' : 'failed'})`);
     }
 
     /**
@@ -729,22 +697,14 @@ export class GameServer {
      * 处理设置托管
      */
     private handleSetAuto(socket: Socket, data: SetAutoRequest): void {
-        const player = this.players.get(socket.id);
-        if (!player || !player.roomId) {
-            this.sendError(socket, ErrorCode.GAME_NOT_STARTED, 'Not in a game');
-            return;
-        }
-
-        const room = this.rooms.get(player.roomId);
-        if (!room) {
-            this.sendError(socket, ErrorCode.ROOM_NOT_FOUND, 'Room not found');
-            return;
-        }
+        const result = this.getPlayerAndRoom(socket);
+        if (!result) return;
+        const { player, room } = result;
 
         // Handle set auto in room
         const success = room.handleSetAuto(player.id, data.isAuto);
 
-        console.log(`[GameServer] Player ${player.name} ${data.isAuto ? 'enabled' : 'disabled'} auto mode (${success ? 'success' : 'failed'})`);
+        Logger.info('GameServer', `Player ${player.name} ${data.isAuto ? 'enabled' : 'disabled'} auto mode (${success ? 'success' : 'failed'})`);
     }
 
     // ==================== 连接管理 ====================
@@ -764,7 +724,7 @@ export class GameServer {
      * 处理断开连接
      */
     private handleDisconnect(socket: Socket): void {
-        console.log(`[GameServer] Client disconnected: ${socket.id}`);
+        Logger.info('GameServer', `Client disconnected: ${socket.id}`);
 
         const player = this.players.get(socket.id);
         if (player && player.roomId) {
@@ -775,7 +735,7 @@ export class GameServer {
 
             // 如果房间在游戏中，保存玩家信息允许重连，并自动开启托管
             if (room && room.state === 'playing') {
-                console.log(`[GameServer] Player ${player.name} disconnected during game, enabling auto mode`);
+                Logger.info('GameServer', `Player ${player.name} disconnected during game, enabling auto mode`);
 
                 // 保存到断线列表（使用玩家ID作为key，而不是socket.id）
                 this.disconnectedPlayers.set(player.id, player);
@@ -791,7 +751,7 @@ export class GameServer {
                     playerId: player.id
                 });
 
-                console.log(`[GameServer] Player ${player.name} saved for reconnection (5 min timeout)`);
+                Logger.info('GameServer', `Player ${player.name} saved for reconnection (5 min timeout)`);
             } else {
                 // 不在游戏中，直接离开房间
                 this.handleLeaveRoom(socket);
@@ -810,7 +770,7 @@ export class GameServer {
                 // 检查玩家超时
                 for (const [id, player] of this.players) {
                     if (player.isTimeout(ServerConfig.PLAYER_DISCONNECT_TIMEOUT)) {
-                        console.log(`[GameServer] Player ${player.name} timeout, removing...`);
+                        Logger.info('GameServer', `Player ${player.name} timeout, removing...`);
                         this.handleLeaveRoom(player.socket);
                     }
                 }
@@ -819,7 +779,7 @@ export class GameServer {
                 const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
                 for (const [playerId, player] of this.disconnectedPlayers) {
                     if (now - player.lastHeartbeat > RECONNECT_TIMEOUT) {
-                        console.log(`[GameServer] Disconnected player ${player.name} timeout, removing...`);
+                        Logger.info('GameServer', `Disconnected player ${player.name} timeout, removing...`);
 
                         // 从房间移除
                         if (player.roomId) {
@@ -835,7 +795,7 @@ export class GameServer {
                                 // 如果房间为空，删除房间
                                 if (room.isEmpty()) {
                                     this.rooms.delete(room.id);
-                                    console.log(`[GameServer] Room ${room.id} deleted (empty)`);
+                                    Logger.info('GameServer', `Room ${room.id} deleted (empty)`);
                                 }
                             }
                         }
@@ -848,12 +808,12 @@ export class GameServer {
                 // 检查空闲房间
                 for (const [id, room] of this.rooms) {
                     if (room.isEmpty() || room.isIdle(ServerConfig.ROOM_IDLE_TIMEOUT)) {
-                        console.log(`[GameServer] Room ${id} idle, removing...`);
+                        Logger.info('GameServer', `Room ${id} idle, removing...`);
                         this.rooms.delete(id);
                     }
                 }
             } catch (error) {
-                console.error('[GameServer] Heartbeat error:', error);
+                Logger.error('GameServer', 'Heartbeat error:', error);
             }
         }, ServerConfig.HEARTBEAT_INTERVAL);
     }
@@ -875,7 +835,7 @@ export class GameServer {
         }
 
         this.io.close();
-        console.log('[GameServer] Shutdown complete');
+        Logger.info('GameServer', 'Shutdown complete');
     }
 
     /**

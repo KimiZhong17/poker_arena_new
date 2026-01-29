@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import cors from 'cors';
 import { GameServer } from './core/GameServer';
 import { ServerConfig } from './config/ServerConfig';
+import { Logger } from './utils/Logger';
 
 /**
  * Poker Arena 游戏服务器入口
@@ -53,39 +54,39 @@ function getLocalIPAddress(): string {
 }
 
 // 启动服务器
-const PORT = ServerConfig.PORT;
+const PORT = Number(ServerConfig.PORT);
 httpServer.listen(PORT, '0.0.0.0', () => {
     const localIP = getLocalIPAddress();
 
-    console.log('='.repeat(50));
-    console.log('🎮 Poker Arena Server');
-    console.log('='.repeat(50));
-    console.log(`✅ Local: http://localhost:${PORT}`);
-    console.log(`✅ Network: http://${localIP}:${PORT}`);
-    console.log(`✅ WebSocket: ws://${localIP}:${PORT}`);
-    console.log(`✅ CORS Origin: ${ServerConfig.CORS_ORIGIN}`);
-    console.log('='.repeat(50));
-    console.log('📱 局域网玩家请使用: http://${localIP}:${PORT}');
-    console.log('='.repeat(50));
-    console.log('Server is ready to accept connections!');
-    console.log('');
+    Logger.info('Server', '='.repeat(50));
+    Logger.info('Server', '🎮 Poker Arena Server');
+    Logger.info('Server', '='.repeat(50));
+    Logger.info('Server', `✅ Local: http://localhost:${PORT}`);
+    Logger.info('Server', `✅ Network: http://${localIP}:${PORT}`);
+    Logger.info('Server', `✅ WebSocket: ws://${localIP}:${PORT}`);
+    Logger.info('Server', `✅ CORS Origin: ${ServerConfig.CORS_ORIGIN}`);
+    Logger.info('Server', '='.repeat(50));
+    Logger.info('Server', `📱 局域网玩家请使用: http://${localIP}:${PORT}`);
+    Logger.info('Server', '='.repeat(50));
+    Logger.info('Server', 'Server is ready to accept connections!');
+    Logger.info('Server', '');
 });
 
 // 优雅关闭
 process.on('SIGINT', () => {
-    console.log('\n[Server] Shutting down gracefully...');
+    Logger.info('Server', '\nShutting down gracefully...');
     gameServer.shutdown();
     httpServer.close(() => {
-        console.log('[Server] HTTP server closed');
+        Logger.info('Server', 'HTTP server closed');
         process.exit(0);
     });
 });
 
 process.on('SIGTERM', () => {
-    console.log('\n[Server] SIGTERM received, shutting down...');
+    Logger.info('Server', '\nSIGTERM received, shutting down...');
     gameServer.shutdown();
     httpServer.close(() => {
-        console.log('[Server] HTTP server closed');
+        Logger.info('Server', 'HTTP server closed');
         process.exit(0);
     });
 });

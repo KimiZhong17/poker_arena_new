@@ -6,6 +6,7 @@ import { HandTypeHelper } from './HandTypeHelper';
 import { CardSuit, CardPoint } from './CardConst';
 import { sortCardsInPlace, CardRankingMode } from '../../utils/CardUtils';
 import { AutoPlayStrategy, ConservativeStrategy } from './AutoPlayStrategy';
+import { Logger } from '../../utils/Logger';
 
 /**
  * Round state
@@ -107,21 +108,25 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         this.playerManager.createPlayers(playerInfos, TheDecreePlayer);
-        console.log(`[TheDecree] Created ${this.playerManager.getPlayerCount()} players`);
+        Logger.info('TheDecree', `Created ${this.playerManager.getPlayerCount()} players`);
 
         this.state = TheDecreeGameState.SETUP;
         this.initializeDeck();
     }
 
     public startGame(): void {
-        console.log('[TheDecree] Starting game');
+        Logger.info('TheDecree', 'Starting game');
         this.isActive = true;
 
         // 延迟发牌，给客户端时间注册事件监听器
         // 避免客户端还在 ReadyStage -> PlayingStage 切换过程中错过事件
         setTimeout(() => {
-            console.log('[TheDecree] Delayed dealing cards...');
-            this.dealCards();
+            try {
+                Logger.debug('TheDecree', 'Delayed dealing cards...');
+                this.dealCards();
+            } catch (error) {
+                Logger.error('TheDecree', 'Error dealing cards:', error);
+            }
         }, 500); // 500ms 延迟
     }
 
@@ -158,7 +163,7 @@ export class TheDecreeMode extends GameModeBase {
             }
         }
 
-        console.log('[TheDecree] Cards dealt to players and community');
+        Logger.info('TheDecree', 'Cards dealt to players and community');
 
         this.state = TheDecreeGameState.FIRST_DEALER_SELECTION;
 
@@ -172,7 +177,7 @@ export class TheDecreeMode extends GameModeBase {
     }
 
     public cleanup(): void {
-        console.log('[TheDecree] Cleaning up');
+        Logger.info('TheDecree', 'Cleaning up');
         super.cleanup();
 
         // 清理所有托管定时器
@@ -193,7 +198,7 @@ export class TheDecreeMode extends GameModeBase {
      * Request players to select a card for first dealer selection
      */
     private requestFirstDealerSelection(): void {
-        console.log('[TheDecree] Requesting first dealer selection from all players');
+        Logger.info('TheDecree', 'Requesting first dealer selection from all players');
         this.firstDealerSelections.clear();
 
         // Notify callback to request selection
@@ -206,36 +211,36 @@ export class TheDecreeMode extends GameModeBase {
      * Player selects a card for first dealer selection
      */
     public selectFirstDealerCard(playerId: string, card: number): boolean {
-        console.log(`[TheDecree] ========== selectFirstDealerCard ==========`);
-        console.log(`[TheDecree] Player ID: ${playerId}`);
-        console.log(`[TheDecree] Card: 0x${card.toString(16)}`);
-        console.log(`[TheDecree] Current state: ${this.state}`);
-        console.log(`[TheDecree] Expected state: ${TheDecreeGameState.FIRST_DEALER_SELECTION}`);
+        Logger.debug('TheDecree', `========== selectFirstDealerCard ==========`);
+        Logger.debug('TheDecree', `Player ID: ${playerId}`);
+        Logger.debug('TheDecree', `Card: 0x${card.toString(16)}`);
+        Logger.debug('TheDecree', `Current state: ${this.state}`);
+        Logger.debug('TheDecree', `Expected state: ${TheDecreeGameState.FIRST_DEALER_SELECTION}`);
 
         if (this.state !== TheDecreeGameState.FIRST_DEALER_SELECTION) {
-            console.warn(`[TheDecree] ✗ Cannot select card in state: ${this.state}`);
+            Logger.warn('TheDecree', `✗ Cannot select card in state: ${this.state}`);
             return false;
         }
 
         const player = this.playerManager.getPlayer(playerId);
         if (!player) {
-            console.warn(`[TheDecree] ✗ Player ${playerId} not found`);
+            Logger.warn('TheDecree', `✗ Player ${playerId} not found`);
             return false;
         }
 
-        console.log(`[TheDecree] Player found: ${player.id}`);
-        console.log(`[TheDecree] Player hand cards:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
+        Logger.debug('TheDecree', `Player found: ${player.id}`);
+        Logger.debug('TheDecree', `Player hand cards:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
 
         if (!player.hasCards([card])) {
-            console.warn(`[TheDecree] ✗ Player ${playerId} does not have card 0x${card.toString(16)}`);
-            console.warn(`[TheDecree]   Player's hand:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
+            Logger.warn('TheDecree', `✗ Player ${playerId} does not have card 0x${card.toString(16)}`);
+            Logger.warn('TheDecree', `  Player's hand:`, player.handCards.map((c: number) => '0x' + c.toString(16)));
             return false;
         }
 
         if (this.firstDealerSelections.has(playerId)) {
-            console.warn(`[TheDecree] ✗ Player ${playerId} already selected a card`);
-            console.warn(`[TheDecree]   Already selected players:`, Array.from(this.firstDealerSelections.keys()));
-            console.warn(`[TheDecree]   Their cards:`, Array.from(this.firstDealerSelections.entries()).map(([id, card]) => `${id}: 0x${card.toString(16)}`));
+            Logger.warn('TheDecree', `✗ Player ${playerId} already selected a card`);
+            Logger.warn('TheDecree', `  Already selected players:`, Array.from(this.firstDealerSelections.keys()));
+            Logger.warn('TheDecree', `  Their cards:`, Array.from(this.firstDealerSelections.entries()).map(([id, card]) => `${id}: 0x${card.toString(16)}`));
             return false;
         }
 
@@ -243,8 +248,8 @@ export class TheDecreeMode extends GameModeBase {
         this.updatePlayerActionTime(playerId);
 
         this.firstDealerSelections.set(playerId, card);
-        console.log(`[TheDecree] ✓ Player ${playerId} selected card for dealer selection`);
-        console.log(`[TheDecree]   Total selections: ${this.firstDealerSelections.size}/${this.playerManager.getPlayerCount()}`);
+        Logger.info('TheDecree', `✓ Player ${playerId} selected card for dealer selection`);
+        Logger.info('TheDecree', `  Total selections: ${this.firstDealerSelections.size}/${this.playerManager.getPlayerCount()}`);
 
         // Notify callback
         if (this.callbacks.onPlayerSelectedCard) {
@@ -253,7 +258,7 @@ export class TheDecreeMode extends GameModeBase {
 
         // Check if all players have selected
         if (this.firstDealerSelections.size === this.playerManager.getPlayerCount()) {
-            console.log(`[TheDecree] All ${this.playerManager.getPlayerCount()} players have selected, revealing first dealer...`);
+            Logger.info('TheDecree', `All ${this.playerManager.getPlayerCount()} players have selected, revealing first dealer...`);
             this.revealFirstDealer();
         }
 
@@ -264,10 +269,10 @@ export class TheDecreeMode extends GameModeBase {
      * Reveal first dealer after all players have selected
      */
     private revealFirstDealer(): void {
-        console.log('[TheDecree] All players selected, revealing first dealer');
+        Logger.info('TheDecree', 'All players selected, revealing first dealer');
 
         const dealerId = this.selectFirstDealer(this.firstDealerSelections);
-        console.log(`[TheDecree] First dealer selected: ${dealerId}`);
+        Logger.info('TheDecree', `First dealer selected: ${dealerId}`);
 
         // Move to DEALER_CALL state before callback (will be updated in startNewRound)
         this.state = TheDecreeGameState.DEALER_CALL;
@@ -286,7 +291,7 @@ export class TheDecreeMode extends GameModeBase {
      * Used for AI/托管 functionality
      */
     public selectFirstDealerAuto(): void {
-        console.log('[TheDecree] Auto-selecting first dealer');
+        Logger.info('TheDecree', 'Auto-selecting first dealer');
         const revealedCards = new Map<string, number>();
         const playerOrder = this.playerManager.getPlayerOrder();
 
@@ -298,7 +303,7 @@ export class TheDecreeMode extends GameModeBase {
         }
 
         const dealerId = this.selectFirstDealer(revealedCards);
-        console.log(`[TheDecree] First dealer auto-selected: ${dealerId}`);
+        Logger.info('TheDecree', `First dealer auto-selected: ${dealerId}`);
 
         // Notify callback (using the reveal callback)
         if (this.callbacks.onFirstDealerReveal) {
@@ -373,7 +378,7 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onNewRound(this.currentRound.roundNumber, dealerId, this.state);
         }
 
-        console.log(`[TheDecree] Round ${this.currentRound.roundNumber} started, dealer: ${dealerId}`);
+        Logger.info('TheDecree', `Round ${this.currentRound.roundNumber} started, dealer: ${dealerId}`);
 
         // 检查庄家是否托管，如果是则自动叫牌
         this.checkAndTriggerAutoPlay();
@@ -398,7 +403,7 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onDealerCall(dealerId, cardsToPlay, this.state);
         }
 
-        console.log(`[TheDecree] Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
+        Logger.info('TheDecree', `Dealer ${dealerId} calls ${cardsToPlay} card(s)`);
 
         // 检查所有托管玩家，触发自动出牌
         this.checkAndTriggerAutoPlay();
@@ -436,7 +441,7 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onPlayerPlayed(playerId, cards.length);
         }
 
-        console.log(`[TheDecree] Player ${playerId} played ${cards.length} card(s)`);
+        Logger.info('TheDecree', `Player ${playerId} played ${cards.length} card(s)`);
 
         // Check if all players have played
         if (this.allPlayersPlayed()) {
@@ -491,7 +496,7 @@ export class TheDecreeMode extends GameModeBase {
         this.state = TheDecreeGameState.SCORING;
 
         // Log results
-        console.log(`[TheDecree] Round ${this.currentRound.roundNumber} - Winner: ${winnerId}, Loser: ${loserId}`);
+        Logger.info('TheDecree', `Round ${this.currentRound.roundNumber} - Winner: ${winnerId}, Loser: ${loserId}`);
 
         // Automatically proceed to refill after a delay (handled by caller)
         setTimeout(() => this.proceedToRefill(), 2000);
@@ -582,7 +587,7 @@ export class TheDecreeMode extends GameModeBase {
             this.callbacks.onHandsRefilled(this.deck.length);
         }
 
-        console.log(`[TheDecree] Hands refilled. Deck: ${this.deck.length} cards remaining`);
+        Logger.info('TheDecree', `Hands refilled. Deck: ${this.deck.length} cards remaining`);
 
         // Check if game is over
         if (this.isGameOver()) {
@@ -605,7 +610,7 @@ export class TheDecreeMode extends GameModeBase {
     }
 
     private handleGameOver(): void {
-        console.log('[TheDecree] Game Over');
+        Logger.info('TheDecree', 'Game Over');
         this.state = TheDecreeGameState.GAME_OVER;
 
         // Find final winner
@@ -619,7 +624,7 @@ export class TheDecreeMode extends GameModeBase {
             }
         }
 
-        console.log(`[TheDecree] Winner: ${winnerId} with ${maxScore} points`);
+        Logger.info('TheDecree', `Winner: ${winnerId} with ${maxScore} points`);
 
         // Notify callback
         if (this.callbacks.onGameOver) {
@@ -765,7 +770,7 @@ export class TheDecreeMode extends GameModeBase {
     public setPlayerAuto(playerId: string, isAuto: boolean, reason?: string): void {
         const player = this.playerManager.getPlayer(playerId) as TheDecreePlayer;
         if (!player) {
-            console.warn(`[TheDecree] Player ${playerId} not found for auto mode`);
+            Logger.warn('TheDecree', `Player ${playerId} not found for auto mode`);
             return;
         }
 
@@ -773,7 +778,7 @@ export class TheDecreeMode extends GameModeBase {
 
         if (isAuto) {
             player.autoStartTime = Date.now();
-            console.log(`[TheDecree] Player ${player.name} is now in auto mode (${reason || 'manual'})`);
+            Logger.info('TheDecree', `Player ${player.name} is now in auto mode (${reason || 'manual'})`);
 
             // 如果轮到该玩家，立即执行托管操作
             if (this.isPlayerTurn(playerId)) {
@@ -782,7 +787,7 @@ export class TheDecreeMode extends GameModeBase {
         } else {
             // 取消托管，清除定时器
             this.clearAutoPlayTimer(playerId);
-            console.log(`[TheDecree] Player ${player.name} cancelled auto mode`);
+            Logger.info('TheDecree', `Player ${player.name} cancelled auto mode`);
         }
 
         // 通知所有客户端
@@ -821,7 +826,11 @@ export class TheDecreeMode extends GameModeBase {
 
         const AUTO_PLAY_ACTION_DELAY = 2000; // 2秒延迟
         const timer = setTimeout(() => {
-            this.executeAutoAction(playerId);
+            try {
+                this.executeAutoAction(playerId);
+            } catch (error) {
+                Logger.error('TheDecree', `Error in auto action for player ${playerId}:`, error);
+            }
         }, AUTO_PLAY_ACTION_DELAY);
 
         this.autoPlayTimers.set(playerId, timer);
@@ -836,14 +845,14 @@ export class TheDecreeMode extends GameModeBase {
             return;
         }
 
-        console.log(`[TheDecree] Executing auto action for player ${player.name} in state ${this.state}`);
+        Logger.debug('TheDecree', `Executing auto action for player ${player.name} in state ${this.state}`);
 
         try {
             switch (this.state) {
                 case TheDecreeGameState.FIRST_DEALER_SELECTION:
                     if (!player.hasPlayed) {
                         const card = this.autoPlayStrategy.selectFirstDealerCard(player.handCards);
-                        console.log(`[TheDecree] Auto selecting card: 0x${card.toString(16)}`);
+                        Logger.debug('TheDecree', `Auto selecting card: 0x${card.toString(16)}`);
                         this.selectFirstDealerCard(playerId, card);
                     }
                     break;
@@ -854,7 +863,7 @@ export class TheDecreeMode extends GameModeBase {
                             player.handCards,
                             this.communityCards
                         );
-                        console.log(`[TheDecree] Auto dealer call: ${cardsToPlay} cards`);
+                        Logger.debug('TheDecree', `Auto dealer call: ${cardsToPlay} cards`);
                         this.dealerCall(playerId, cardsToPlay);
                     }
                     break;
@@ -865,13 +874,13 @@ export class TheDecreeMode extends GameModeBase {
                             player.handCards,
                             this.currentRound.cardsToPlay
                         );
-                        console.log(`[TheDecree] Auto playing cards:`, cards.map(c => '0x' + c.toString(16)));
+                        Logger.debug('TheDecree', `Auto playing cards:`, cards.map(c => '0x' + c.toString(16)));
                         this.playCards(cards, playerId);
                     }
                     break;
             }
         } catch (error) {
-            console.error(`[TheDecree] Error executing auto action for player ${playerId}:`, error);
+            Logger.error('TheDecree', `Error executing auto action for player ${playerId}:`, error);
         }
     }
 
@@ -907,7 +916,7 @@ export class TheDecreeMode extends GameModeBase {
 
             const timeSinceLastAction = Date.now() - theDecreePlayer.lastActionTime;
             if (timeSinceLastAction > timeoutMs && this.isPlayerTurn(theDecreePlayer.id)) {
-                console.log(`[TheDecree] Player ${theDecreePlayer.name} timeout, enabling auto mode`);
+                Logger.info('TheDecree', `Player ${theDecreePlayer.name} timeout, enabling auto mode`);
                 this.setPlayerAuto(theDecreePlayer.id, true, 'timeout');
             }
         }
@@ -918,11 +927,11 @@ export class TheDecreeMode extends GameModeBase {
      * 在游戏状态改变后调用（如新回合开始、庄家叫牌后）
      */
     private checkAndTriggerAutoPlay(): void {
-        console.log('[TheDecree] Checking auto-play players...');
+        Logger.debug('TheDecree', 'Checking auto-play players...');
         for (const player of this.playerManager.getAllPlayers()) {
             const theDecreePlayer = player as TheDecreePlayer;
             if (theDecreePlayer.isAuto && this.isPlayerTurn(theDecreePlayer.id)) {
-                console.log(`[TheDecree] Triggering auto-play for ${theDecreePlayer.name}`);
+                Logger.debug('TheDecree', `Triggering auto-play for ${theDecreePlayer.name}`);
                 this.scheduleAutoAction(theDecreePlayer.id);
             }
         }

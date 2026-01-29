@@ -1,9 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { PlayerSession } from './PlayerSession';
 import { ServerMessageType } from '../types/Messages';
-import { TheDecreeMode, GameState as TheDecreeGameState, TheDecreeEventCallbacks } from '../game/the_decree/TheDecreeMode';
+import { TheDecreeMode, TheDecreeGameState, TheDecreeEventCallbacks } from '../game/the_decree/TheDecreeMode';
 import { TexasHandResult } from '../game/the_decree/TexasHoldEmEvaluator';
 import { HandTypeHelper } from '../game/the_decree/HandTypeHelper';
+import { Logger } from '../utils/Logger';
 
 /**
  * 房间状态
@@ -81,7 +82,7 @@ export class GameRoom {
         this.players.set(player.id, player);
         this.updateActivity();
 
-        console.log(`[Room ${this.id}] Player ${player.name} joined (${this.players.size}/${this.maxPlayers}), seatIndex: ${player.seatIndex}`);
+        Logger.info('GameRoom', `[Room ${this.id}] Player ${player.name} joined (${this.players.size}/${this.maxPlayers}), seatIndex: ${player.seatIndex}`);
 
         return true;
     }
@@ -115,7 +116,7 @@ export class GameRoom {
         this.players.delete(playerId);
         player.roomId = null;
 
-        console.log(`[Room ${this.id}] Player ${player.name} left (${this.players.size}/${this.maxPlayers})`);
+        Logger.info('GameRoom', `[Room ${this.id}] Player ${player.name} left (${this.players.size}/${this.maxPlayers})`);
 
         let newHostId: string | null = null;
 
@@ -127,7 +128,7 @@ export class GameRoom {
             newHost.isReady = true; // 新房主自动准备
             this.hostId = newHost.id;
             newHostId = newHost.id;
-            console.log(`[Room ${this.id}] Host transferred from ${oldHostId} to ${newHost.name}`);
+            Logger.info('GameRoom', `[Room ${this.id}] Host transferred from ${oldHostId} to ${newHost.name}`);
         }
 
         this.updateActivity();
@@ -192,7 +193,7 @@ export class GameRoom {
 
         for (const player of this.players.values()) {
             // 跳过房主
-            console.log(`>>>>>>>>>>>>>>>>>>>>>> Checking if player ${player.name} is ready: ${player.isReady} (isHost: ${player.isHost})`);
+            Logger.debug('GameRoom', `Checking if player ${player.name} is ready: ${player.isReady} (isHost: ${player.isHost})`);
             if (player.isHost) continue;
 
             if (!player.isReady) return false;
@@ -264,7 +265,7 @@ export class GameRoom {
         }
 
         this.state = RoomState.PLAYING;
-        console.log(`[Room ${this.id}] Game started with ${this.players.size} players`);
+        Logger.info('GameRoom', `[Room ${this.id}] Game started with ${this.players.size} players`);
 
         // Initialize TheDecree game
         if (this.gameMode === 'the_decree') {
@@ -279,7 +280,7 @@ export class GameRoom {
      */
     public endGame(): void {
         this.state = RoomState.FINISHED;
-        console.log(`[Room ${this.id}] Game ended`);
+        Logger.info('GameRoom', `[Room ${this.id}] Game ended`);
 
         // 清除定时器引用
         this.endGameTimer = null;
@@ -301,13 +302,13 @@ export class GameRoom {
      * 只清理游戏状态，不改变玩家准备状态（已经通过PLAYER_READY事件设置）
      */
     public restartGame(): boolean {
-        console.log(`[Room ${this.id}] Cleaning up game state for restart...`);
+        Logger.info('GameRoom', `[Room ${this.id}] Cleaning up game state for restart...`);
 
         // 清除 endGame 定时器（如果存在）
         if (this.endGameTimer) {
             clearTimeout(this.endGameTimer);
             this.endGameTimer = null;
-            console.log(`[Room ${this.id}] Cleared endGame timer`);
+            Logger.debug('GameRoom', `[Room ${this.id}] Cleared endGame timer`);
         }
 
         // 清理当前游戏
@@ -322,7 +323,7 @@ export class GameRoom {
         // 清空重启投票
         this.playersWantRestart.clear();
 
-        console.log(`[Room ${this.id}] Game state cleaned up, ready for new game`);
+        Logger.info('GameRoom', `[Room ${this.id}] Game state cleaned up, ready for new game`);
 
         // 不再广播GAME_RESTART事件，因为玩家已经通过PLAYER_READY事件知道状态了
         // 玩家在点击"再来一局"时已经立即切换到ReadyStage
@@ -336,7 +337,7 @@ export class GameRoom {
      */
     public playerWantsRestart(playerId: string): boolean {
         this.playersWantRestart.add(playerId);
-        console.log(`[Room ${this.id}] Player ${playerId} wants restart (${this.playersWantRestart.size}/${this.players.size})`);
+        Logger.debug('GameRoom', `[Room ${this.id}] Player ${playerId} wants restart (${this.playersWantRestart.size}/${this.players.size})`);
 
         // 检查是否所有玩家都点击了
         return this.playersWantRestart.size >= this.players.size;
@@ -350,9 +351,9 @@ export class GameRoom {
     private initTheDecreeGame(): void {
         const callbacks: TheDecreeEventCallbacks = {
             onGameStarted: (communityCards, gameState) => {
-                console.log(`[Room ${this.id}] Game started, community cards dealt`);
-                console.log(`[Room ${this.id}] 📤 Broadcasting COMMUNITY_CARDS event to all players`);
-                console.log(`[Room ${this.id}] Community cards:`, communityCards);
+                Logger.info("GameRoom", `[Room ${this.id}] Game started, community cards dealt`);
+                Logger.info("GameRoom", `[Room ${this.id}] 📤 Broadcasting COMMUNITY_CARDS event to all players`);
+                Logger.info("GameRoom", `[Room ${this.id}] Community cards:`, communityCards);
 
                 // Broadcast community cards to all players
                 this.broadcast(ServerMessageType.COMMUNITY_CARDS, {
@@ -360,13 +361,13 @@ export class GameRoom {
                     gameState: gameState
                 });
 
-                console.log(`[Room ${this.id}] ✓ COMMUNITY_CARDS event sent`);
+                Logger.info("GameRoom", `[Room ${this.id}] ✓ COMMUNITY_CARDS event sent`);
             },
 
             onPlayerDealt: (playerId, cards) => {
-                console.log(`[Room ${this.id}] 📤 Sending DEAL_CARDS event to player: ${playerId}`);
-                console.log(`[Room ${this.id}] Cards count:`, cards.length);
-                console.log(`[Room ${this.id}] Cards:`, cards);
+                Logger.info("GameRoom", `[Room ${this.id}] 📤 Sending DEAL_CARDS event to player: ${playerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] Cards count:`, cards.length);
+                Logger.info("GameRoom", `[Room ${this.id}] Cards:`, cards);
 
                 // Send private hand cards to each player
                 this.sendToPlayer(playerId, ServerMessageType.DEAL_CARDS, {
@@ -374,11 +375,11 @@ export class GameRoom {
                     handCards: cards
                 });
 
-                console.log(`[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
             },
 
             onRequestFirstDealerSelection: (gameState) => {
-                console.log(`[Room ${this.id}] Requesting first dealer selection from all players`);
+                Logger.info("GameRoom", `[Room ${this.id}] Requesting first dealer selection from all players`);
 
                 this.broadcast(ServerMessageType.REQUEST_FIRST_DEALER_SELECTION, {
                     gameState: gameState
@@ -386,7 +387,7 @@ export class GameRoom {
             },
 
             onPlayerSelectedCard: (playerId) => {
-                console.log(`[Room ${this.id}] Player ${playerId} selected a card`);
+                Logger.info("GameRoom", `[Room ${this.id}] Player ${playerId} selected a card`);
 
                 this.broadcast(ServerMessageType.PLAYER_SELECTED_CARD, {
                     playerId
@@ -394,7 +395,7 @@ export class GameRoom {
             },
 
             onFirstDealerReveal: (dealerId, selections, gameState) => {
-                console.log(`[Room ${this.id}] First dealer revealed: ${dealerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] First dealer revealed: ${dealerId}`);
 
                 // Convert Map to array for JSON serialization
                 const selectionsArray = Array.from(selections.entries()).map(([playerId, card]) => ({
@@ -410,7 +411,7 @@ export class GameRoom {
             },
 
             onFirstDealerSelected: (dealerId, revealedCards) => {
-                console.log(`[Room ${this.id}] First dealer: ${dealerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] First dealer: ${dealerId}`);
 
                 this.broadcast(ServerMessageType.DEALER_SELECTED, {
                     dealerId,
@@ -419,7 +420,7 @@ export class GameRoom {
             },
 
             onNewRound: (roundNumber, dealerId, gameState) => {
-                console.log(`[Room ${this.id}] Round ${roundNumber} started, dealer: ${dealerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] Round ${roundNumber} started, dealer: ${dealerId}`);
 
                 this.broadcast(ServerMessageType.DEALER_SELECTED, {
                     dealerId,
@@ -429,7 +430,7 @@ export class GameRoom {
             },
 
             onDealerCall: (dealerId, cardsToPlay, gameState) => {
-                console.log(`[Room ${this.id}] Dealer ${dealerId} calls ${cardsToPlay} cards`);
+                Logger.info("GameRoom", `[Room ${this.id}] Dealer ${dealerId} calls ${cardsToPlay} cards`);
 
                 this.broadcast(ServerMessageType.DEALER_CALLED, {
                     dealerId,
@@ -439,7 +440,7 @@ export class GameRoom {
             },
 
             onPlayerPlayed: (playerId, cardCount) => {
-                console.log(`[Room ${this.id}] Player ${playerId} played ${cardCount} cards`);
+                Logger.info("GameRoom", `[Room ${this.id}] Player ${playerId} played ${cardCount} cards`);
 
                 // Broadcast to other players (don't reveal cards)
                 this.broadcast(ServerMessageType.PLAYER_PLAYED, {
@@ -449,7 +450,7 @@ export class GameRoom {
             },
 
             onShowdown: (results, gameState) => {
-                console.log(`[Room ${this.id}] Showdown`);
+                Logger.info("GameRoom", `[Room ${this.id}] Showdown`);
 
                 // Build showdown results
                 const showdownResults = Array.from(results.entries()).map(([playerId, result]) => {
@@ -471,7 +472,7 @@ export class GameRoom {
             },
 
             onRoundEnd: (winnerId, loserId, scores, gameState) => {
-                console.log(`[Room ${this.id}] Round end - Winner: ${winnerId}, Loser: ${loserId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] Round end - Winner: ${winnerId}, Loser: ${loserId}`);
 
                 // Convert Map to object for JSON serialization
                 const scoresObj: { [key: string]: number } = {};
@@ -488,7 +489,7 @@ export class GameRoom {
             },
 
             onHandsRefilled: (deckSize) => {
-                console.log(`[Room ${this.id}] Hands refilled, deck: ${deckSize} cards`);
+                Logger.info("GameRoom", `[Room ${this.id}] Hands refilled, deck: ${deckSize} cards`);
 
                 // Send updated hand cards to each player
                 if (this.theDecreeGame) {
@@ -510,7 +511,7 @@ export class GameRoom {
             },
 
             onGameOver: (winnerId, scores, totalRounds, gameState) => {
-                console.log(`[Room ${this.id}] Game over - Winner: ${winnerId}`);
+                Logger.info("GameRoom", `[Room ${this.id}] Game over - Winner: ${winnerId}`);
 
                 const scoresObj: { [key: string]: number } = {};
                 scores.forEach((score, playerId) => {
@@ -529,7 +530,7 @@ export class GameRoom {
             },
 
             onPlayerAutoChanged: (playerId, isAuto, reason) => {
-                console.log(`[Room ${this.id}] Player ${playerId} auto mode changed: ${isAuto} (${reason || 'manual'})`);
+                Logger.info("GameRoom", `[Room ${this.id}] Player ${playerId} auto mode changed: ${isAuto} (${reason || 'manual'})`);
 
                 this.broadcast(ServerMessageType.PLAYER_AUTO_CHANGED, {
                     playerId,
@@ -548,7 +549,7 @@ export class GameRoom {
 
         // Apply saved auto states before starting the game
         for (const [playerId, isAuto] of this.playerAutoStates) {
-            console.log(`[Room ${this.id}] Applying saved auto state for player ${playerId}: ${isAuto}`);
+            Logger.info("GameRoom", `[Room ${this.id}] Applying saved auto state for player ${playerId}: ${isAuto}`);
             this.theDecreeGame.setPlayerAuto(playerId, isAuto, 'manual');
         }
 
@@ -565,18 +566,18 @@ export class GameRoom {
      * Handle player select card for first dealer
      */
     public handleSelectFirstDealerCard(playerId: string, card: number): boolean {
-        console.log(`[GameRoom] ========== handleSelectFirstDealerCard ==========`);
-        console.log(`[GameRoom] Player ID: ${playerId}`);
-        console.log(`[GameRoom] Card: 0x${card.toString(16)}`);
-        console.log(`[GameRoom] theDecreeGame exists: ${!!this.theDecreeGame}`);
+        Logger.debug('GameRoom', `========== handleSelectFirstDealerCard ==========`);
+        Logger.debug('GameRoom', `Player ID: ${playerId}`);
+        Logger.debug('GameRoom', `Card: 0x${card.toString(16)}`);
+        Logger.debug('GameRoom', `theDecreeGame exists: ${!!this.theDecreeGame}`);
 
         if (!this.theDecreeGame) {
-            console.error(`[GameRoom] ✗ theDecreeGame not initialized`);
+            Logger.error('GameRoom', `✗ theDecreeGame not initialized`);
             return false;
         }
 
         const success = this.theDecreeGame.selectFirstDealerCard(playerId, card);
-        console.log(`[GameRoom] selectFirstDealerCard result: ${success}`);
+        Logger.debug('GameRoom', `selectFirstDealerCard result: ${success}`);
 
         if (!success) {
             this.sendToPlayer(playerId, ServerMessageType.ERROR, {
@@ -631,7 +632,7 @@ export class GameRoom {
             return false;
         }
 
-        console.log(`[Room ${this.id}] Player ${player.name} ${isAuto ? 'enabled' : 'disabled'} auto mode`);
+        Logger.info("GameRoom", `[Room ${this.id}] Player ${player.name} ${isAuto ? 'enabled' : 'disabled'} auto mode`);
 
         // 如果游戏已经开始，直接设置托管状态
         if (this.theDecreeGame) {
@@ -639,7 +640,7 @@ export class GameRoom {
         } else {
             // 如果游戏还没开始，保存托管状态，等游戏开始后应用
             this.playerAutoStates.set(playerId, isAuto);
-            console.log(`[Room ${this.id}] Saved auto state for player ${player.name} (will apply when game starts)`);
+            Logger.info("GameRoom", `[Room ${this.id}] Saved auto state for player ${player.name} (will apply when game starts)`);
         }
 
         return true;

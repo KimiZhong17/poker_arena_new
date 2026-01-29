@@ -31,6 +31,8 @@ export interface PlayerInfo {
  * - 管理游戏状态和逻辑
  * - 不包含任何 UI 相关代码
  */
+import { Logger } from '../utils/Logger';
+
 export abstract class GameModeBase {
     protected config: GameModeConfig;
     protected isActive: boolean = false;
@@ -79,7 +81,7 @@ export abstract class GameModeBase {
      * 清理资源
      */
     public cleanup(): void {
-        console.log(`[${this.config.name}] Cleaning up`);
+        Logger.info(this.config.name, 'Cleaning up');
         this.isActive = false;
     }
 

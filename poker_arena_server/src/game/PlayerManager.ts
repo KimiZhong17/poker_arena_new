@@ -1,4 +1,5 @@
 import { Player, PlayerInfo } from './Player';
+import { Logger } from '../utils/Logger';
 
 /**
  * Player Manager (Server-side)
@@ -23,7 +24,7 @@ export class PlayerManager {
             this.playerOrder.push(player.id);
         }
 
-        console.log(`[PlayerManager] Created ${this.players.size} players`);
+        Logger.info('PlayerManager', `Created ${this.players.size} players`);
     }
 
     /**
