@@ -1,5 +1,5 @@
 // Card Glow Effect for Cocos Creator 3.x
-// Adds a rim light / edge glow effect to sprites
+// Golden edge glow effect for poker cards
 
 CCEffect %{
   techniques:
@@ -19,10 +19,11 @@ CCEffect %{
       rasterizerState:
         cullMode: none
       properties:
-        alphaThreshold: { value: 0.5 }
-        glowColor: { value: [1.0, 0.95, 0.7, 1.0], editor: { type: color } }
-        glowWidth: { value: 0.015, range: [0.0, 0.1, 0.001] }
-        glowIntensity: { value: 1.2, range: [0.0, 3.0, 0.1] }
+        mainTexture: { value: white }
+        glowColor: { value: [1.0, 0.84, 0.0, 1.0], editor: { type: color } }
+        glowWidth: { value: 0.05 }
+        glowIntensity: { value: 1.0 }
+        uvBounds: { value: [0.0, 0.0, 1.0, 1.0] }
 }%
 
 CCProgram sprite-vs %{
@@ -31,16 +32,13 @@ CCProgram sprite-vs %{
   #if USE_LOCAL
     #include <builtin/uniforms/cc-local>
   #endif
-  #if SAMPLE_FROM_RT
-    #include <common/common-define>
-  #endif
 
   in vec3 a_position;
   in vec2 a_texCoord;
   in vec4 a_color;
 
-  out vec4 color;
-  out vec2 uv0;
+  out vec4 v_color;
+  out vec2 v_uv0;
 
   vec4 vert () {
     vec4 pos = vec4(a_position, 1);
@@ -49,19 +47,10 @@ CCProgram sprite-vs %{
       pos = cc_matWorld * pos;
     #endif
 
-    #if USE_PIXEL_ALIGNMENT
-      pos = cc_matView * pos;
-      pos.xyz = floor(pos.xyz);
-      pos = cc_matProj * pos;
-    #else
-      pos = cc_matViewProj * pos;
-    #endif
+    pos = cc_matViewProj * pos;
 
-    uv0 = a_texCoord;
-    #if SAMPLE_FROM_RT
-      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
-    #endif
-    color = a_color;
+    v_uv0 = a_texCoord;
+    v_color = a_color;
 
     return pos;
   }
@@ -69,56 +58,34 @@ CCProgram sprite-vs %{
 
 CCProgram sprite-fs %{
   precision highp float;
-  #include <builtin/internal/embedded-alpha>
-  #include <builtin/internal/alpha-test>
 
-  in vec4 color;
-  in vec2 uv0;
+  in vec4 v_color;
+  in vec2 v_uv0;
 
-  uniform sampler2D cc_spriteTexture;
+  uniform sampler2D mainTexture;
 
-  uniform Constant {
+  uniform Glow {
     vec4 glowColor;
+    vec4 uvBounds; // x=minU, y=minV, z=maxU, w=maxV
     float glowWidth;
     float glowIntensity;
   };
 
   vec4 frag () {
-    vec4 texColor = CCSampleWithAlphaSeparated(cc_spriteTexture, uv0);
+    vec4 texColor = texture(mainTexture, v_uv0);
 
-    // Sample neighboring pixels to detect edges
-    float offset = glowWidth;
+    // Calculate edge distance using raw UV (since packable=false, UV is already 0-1)
+    float edgeX = min(v_uv0.x, 1.0 - v_uv0.x);
+    float edgeY = min(v_uv0.y, 1.0 - v_uv0.y);
+    float edgeDist = min(edgeX, edgeY);
 
-    // Sample in 8 directions for edge detection
-    float alphaSum = 0.0;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(offset, 0.0)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(-offset, 0.0)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(0.0, offset)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(0.0, -offset)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(offset, offset)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(-offset, offset)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(offset, -offset)).a;
-    alphaSum += CCSampleWithAlphaSeparated(cc_spriteTexture, uv0 + vec2(-offset, -offset)).a;
+    // Create glow factor based on edge distance
+    float glowFactor = 1.0 - smoothstep(0.0, glowWidth, edgeDist);
+    glowFactor *= glowIntensity;
 
-    // Calculate edge factor (higher at edges where alpha changes)
-    float edgeFactor = abs(texColor.a * 8.0 - alphaSum) / 8.0;
+    // Mix glow color with texture
+    vec3 finalColor = mix(texColor.rgb, glowColor.rgb, glowFactor * glowColor.a);
 
-    // Apply glow at edges
-    vec4 finalColor = texColor * color;
-
-    // Add glow effect - blend glow color at edges
-    float glowAmount = edgeFactor * glowIntensity;
-    finalColor.rgb = mix(finalColor.rgb, glowColor.rgb * glowIntensity, glowAmount * 0.5);
-
-    // Also add a subtle overall rim light effect
-    // Brighten edges based on distance from center
-    vec2 centerDist = abs(uv0 - vec2(0.5, 0.5)) * 2.0;
-    float rimFactor = max(centerDist.x, centerDist.y);
-    rimFactor = smoothstep(0.7, 1.0, rimFactor);
-
-    finalColor.rgb += glowColor.rgb * rimFactor * glowIntensity * 0.3 * texColor.a;
-
-    ALPHA_TEST(finalColor);
-    return finalColor;
+    return vec4(finalColor, texColor.a) * v_color;
   }
 }%

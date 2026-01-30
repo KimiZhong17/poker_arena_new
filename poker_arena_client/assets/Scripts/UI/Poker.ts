@@ -36,6 +36,11 @@ export class Poker extends Component {
         this._back = back;
         this._front = front;
         this._sprite = this.node.getComponent(Sprite);
+
+        // Disable dynamic atlas packing to prevent UV issues with custom materials
+        if (back) back.packable = false;
+        if (front) front.packable = false;
+
         // Store default material for later restoration
         if (this._sprite) {
             this._defaultMaterial = this._sprite.customMaterial;
@@ -177,6 +182,14 @@ export class Poker extends Component {
 
         if (enabled && this._glowMaterial) {
             this._sprite.customMaterial = this._glowMaterial;
+            // Bind the sprite's texture to the material
+            const spriteFrame = this._sprite.spriteFrame;
+            if (spriteFrame && spriteFrame.texture) {
+                const matInst = this._sprite.getMaterialInstance(0);
+                if (matInst) {
+                    matInst.setProperty('mainTexture', spriteFrame.texture);
+                }
+            }
         } else {
             this._sprite.customMaterial = this._defaultMaterial;
         }

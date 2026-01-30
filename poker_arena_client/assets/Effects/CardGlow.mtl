@@ -28,9 +28,19 @@
   ],
   "_props": [
     {
-      "alphaThreshold": 0.01,
-      "glowWidth": 0.08,
-      "glowIntensity": 3.7
+      "mainTexture": {
+        "__uuid__": "03dbdb6e-8cdf-4512-b7f9-36791feb514a@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "glowColor": {
+        "__type__": "cc.Color",
+        "r": 205,
+        "g": 217,
+        "b": 0,
+        "a": 53
+      },
+      "glowWidth": 0.1,
+      "glowIntensity": 5
     }
   ]
 }
