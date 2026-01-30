@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
+import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform, Material } from 'cc';
 import { PlayerUIController } from './PlayerUIController';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { SelectionChangedCallback } from './PlayerHandDisplay';
@@ -39,6 +39,7 @@ export class PlayerUIManager extends Component {
     private _levelRank: number = 0;
     private _initialized: boolean = false;
     private _enableGrouping: boolean = true; // 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
+    private _glowMaterial: Material | null = null; // 边缘光材质（用于手牌）
 
     // ===== Ready Stage 相关（两阶段初始化支持）=====
     private _maxSeats: number = 0;  // 房间最大玩家数
@@ -55,6 +56,7 @@ export class PlayerUIManager extends Component {
      * @param levelRank 当前关卡等级
      * @param layoutConfig 玩家布局配置
      * @param enableGrouping 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false）
+     * @param glowMaterial 边缘光材质（可选，用于主玩家手牌）
      */
     public init(
         players: Player[],
@@ -62,7 +64,8 @@ export class PlayerUIManager extends Component {
         pokerPrefab: Prefab,
         levelRank: number = 0,
         layoutConfig: SeatPosition[],
-        enableGrouping: boolean = true
+        enableGrouping: boolean = true,
+        glowMaterial?: Material
     ): void {
         if (this._initialized) {
             console.warn('[PlayerUIManager] Already initialized! Skipping re-initialization.');
@@ -76,6 +79,7 @@ export class PlayerUIManager extends Component {
         this._pokerPrefab = pokerPrefab;
         this._levelRank = levelRank;
         this._enableGrouping = enableGrouping;
+        this._glowMaterial = glowMaterial || null;
 
         // 创建 PlayerUINode 节点
         this.createPlayerUINodes(players, layoutConfig);
@@ -237,13 +241,15 @@ export class PlayerUIManager extends Component {
      * @param pokerPrefab 扑克牌预制体
      * @param levelRank 当前关卡等级
      * @param enableGrouping 是否启用同数字纵向堆叠
+     * @param glowMaterial 边缘光材质（可选，用于主玩家手牌）
      */
     public upgradeToPlayingMode(
         players: Player[],
         pokerSprites: Map<string, SpriteFrame>,
         pokerPrefab: Prefab,
         levelRank: number = 0,
-        enableGrouping: boolean = true
+        enableGrouping: boolean = true,
+        glowMaterial?: Material
     ): void {
         console.log('[PlayerUIManager] Upgrading to Playing mode...');
 
@@ -251,6 +257,7 @@ export class PlayerUIManager extends Component {
         this._pokerPrefab = pokerPrefab;
         this._levelRank = levelRank;
         this._enableGrouping = enableGrouping;
+        this._glowMaterial = glowMaterial || null;
 
         // 创建玩家索引到座位的映射
         const seatToPlayer = new Map<number, Player>();
@@ -300,7 +307,9 @@ export class PlayerUIManager extends Component {
 
             // 获取对应的位置配置
             const positionConfig = this._layoutConfig[relativeSeat];
-            playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping, positionConfig);
+
+            const glowMat = this._glowMaterial;
+            playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping, positionConfig, glowMat);
 
             this._playerUINodes[relativeSeat] = playerUIController;
 
@@ -385,7 +394,10 @@ export class PlayerUIManager extends Component {
 
             // 初始化 PlayerUIController
             const positionConfig = layoutConfig[i];
-            playerUIController.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping, positionConfig);
+
+            // Only pass glow material for main player (index 0)
+            const glowMat = this._glowMaterial;
+            playerUIController.init(player, i, this._pokerSprites, this._pokerPrefab, this._levelRank, this._enableGrouping, positionConfig, glowMat);
 
             this._playerUINodes.push(playerUIController);
         }

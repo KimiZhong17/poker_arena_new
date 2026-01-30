@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3, UIOpacity } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3, UIOpacity, Material } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -23,6 +23,11 @@ export class Poker extends Component {
     private _isInteractive: boolean = false;
     private _originalY: number = 0;
 
+    // Glow effect
+    private _defaultMaterial: Material | null = null;
+    private _glowMaterial: Material | null = null;
+    private _isGlowEnabled: boolean = false;
+
     // Visual feedback settings
     private readonly SELECTED_OFFSET_Y = 20; // How much to lift the card when selected
 
@@ -31,6 +36,10 @@ export class Poker extends Component {
         this._back = back;
         this._front = front;
         this._sprite = this.node.getComponent(Sprite);
+        // Store default material for later restoration
+        if (this._sprite) {
+            this._defaultMaterial = this._sprite.customMaterial;
+        }
     }
 
     public showFront(): void {
@@ -147,6 +156,37 @@ export class Poker extends Component {
     public getOpacity(): number {
         const uiOpacity = this.node.getComponent(UIOpacity);
         return uiOpacity ? uiOpacity.opacity : 255;
+    }
+
+    /**
+     * Set glow material for rim light effect
+     * @param material The glow material to use
+     */
+    public setGlowMaterial(material: Material): void {
+        this._glowMaterial = material;
+    }
+
+    /**
+     * Enable or disable glow effect
+     * @param enabled Whether to enable glow
+     */
+    public setGlowEnabled(enabled: boolean): void {
+        if (!this._sprite) return;
+
+        this._isGlowEnabled = enabled;
+
+        if (enabled && this._glowMaterial) {
+            this._sprite.customMaterial = this._glowMaterial;
+        } else {
+            this._sprite.customMaterial = this._defaultMaterial;
+        }
+    }
+
+    /**
+     * Check if glow is enabled
+     */
+    public isGlowEnabled(): boolean {
+        return this._isGlowEnabled;
     }
 }
 

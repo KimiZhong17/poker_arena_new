@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3, Label, Sprite, SpriteFrame } from 'cc';
+import { _decorator, Component, Node, instantiate, Prefab, UITransform, Vec3, Label, Sprite, SpriteFrame, Material } from 'cc';
 import { Poker, CardClickCallback } from './Poker';
 import { PokerFactory } from './PokerFactory';
 import { Player } from '../LocalStore/LocalPlayerStore';
@@ -62,10 +62,13 @@ export class PlayerHandDisplay extends Component {
     private _showCardCount: boolean = false; // Whether to show card count label
     private _cardCountLabel: Node | null = null; // Label node for displaying card count
 
+    // Glow effect (for main player)
+    private _glowMaterial: Material | null = null; // Material for rim light effect
+
     /**
      * Initialize the hand display
      */
-    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false, positionConfig?: SeatPosition): void {
+    public init(player: Player, displayMode: HandDisplayMode, pokerSprites: Map<string, any>, pokerPrefab: Prefab, levelRank: number = 0, playerIndex: number = 0, enableGrouping: boolean = true, showCardCount: boolean = false, positionConfig?: SeatPosition, glowMaterial?: Material): void {
         this._player = player;
         this._displayMode = displayMode;
         this._pokerSprites = pokerSprites;
@@ -74,6 +77,7 @@ export class PlayerHandDisplay extends Component {
         this._playerIndex = playerIndex;
         this._enableGrouping = enableGrouping;
         this._positionConfig = positionConfig || null;
+        this._glowMaterial = glowMaterial || null;
 
         // Auto-enable card count display for STACK mode if not explicitly set
         this._showCardCount = displayMode === HandDisplayMode.STACK ? true : showCardCount;
@@ -551,6 +555,12 @@ export class PlayerHandDisplay extends Component {
             if (pokerFront) {
                 pokerCtrl.init(cardValue, pokerBack, pokerFront);
                 pokerCtrl.showFront();
+
+                // Apply glow effect for main player (SPREAD mode)
+                if (this._displayMode === HandDisplayMode.SPREAD && this._glowMaterial) {
+                    pokerCtrl.setGlowMaterial(this._glowMaterial);
+                    pokerCtrl.setGlowEnabled(true);
+                }
             } else {
                 console.warn(`Sprite not found: ${spriteName}`);
             }

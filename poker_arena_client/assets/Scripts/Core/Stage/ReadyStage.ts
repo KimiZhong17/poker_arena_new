@@ -52,6 +52,10 @@ export class ReadyStage extends GameStageBase {
     // EventCenter 事件处理器引用（用于清理）
     private onRoomRefreshHandler: (() => void) | null = null;
 
+    // 防抖：上次按钮点击时间
+    private lastButtonClickTime: number = 0;
+    private readonly BUTTON_DEBOUNCE_MS: number = 500; // 500ms 防抖
+
     constructor(game: Game, rootNode: Node | null = null) {
         super(game, rootNode);
         this.localRoomStore = LocalRoomStore.getInstance();
@@ -387,6 +391,9 @@ export class ReadyStage extends GameStageBase {
             return;
         }
 
+        // 先清理旧的事件监听器，防止重复注册
+        this.cleanupButtons();
+
         // 查找开始按钮
         this.btnStart = this.findStartButton();
 
@@ -499,6 +506,14 @@ export class ReadyStage extends GameStageBase {
      * 开始按钮点击回调
      */
     private onStartButtonClicked(): void {
+        // 防抖：防止短时间内重复点击
+        const now = Date.now();
+        if (now - this.lastButtonClickTime < this.BUTTON_DEBOUNCE_MS) {
+            console.log('[ReadyStage] Button click ignored (debounce)');
+            return;
+        }
+        this.lastButtonClickTime = now;
+
         console.log('[ReadyStage] Start button clicked');
 
         if (this.isLocalPlayerHost) {
@@ -532,15 +547,23 @@ export class ReadyStage extends GameStageBase {
             return;
         }
 
+        // 防止重复点击：如果已经准备好了，不再发送请求
+        if (this.playerReadyStates.get(playerId) === true) {
+            console.log(`[ReadyStage] Player ${playerId} already ready, ignoring duplicate click`);
+            return;
+        }
+
         // 发送准备请求到服务器
         const networkClient = this.game.networkClient;
         if (networkClient && networkClient.getIsConnected()) {
             console.log(`[ReadyStage] Sending ready request to server for player ${playerId}`);
-            this.roomService.toggleReady();
 
-            // 本地临时更新状态（服务器会广播确认）
+            // 先更新本地状态，防止快速双击
             this.playerReadyStates.set(playerId, true);
             this.updateButtonDisplay();
+
+            // 再发送请求到服务器
+            this.roomService.toggleReady();
         } else {
             console.warn('[ReadyStage] Not connected to server, cannot send ready request');
         }

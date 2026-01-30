@@ -1081,6 +1081,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const pokerSprites = this.game['_pokerSprites'];
         // @ts-ignore - accessing private property
         const pokerPrefab = this.game['_pokerPrefab'];
+        // @ts-ignore - accessing private property
+        const glowMaterial = this.game['_glowMaterial'];
 
         if (!pokerSprites || !pokerPrefab) {
             console.error('[TheDecreeModeClient] Poker resources not loaded!');
@@ -1093,7 +1095,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
             pokerSprites,
             pokerPrefab,
             0, // levelRank
-            false // TheDecree 不启用分组堆叠
+            false, // TheDecree 不启用分组堆叠
+            glowMaterial // 边缘光材质
         );
 
         console.log('[TheDecreeModeClient] PlayerUIManager upgraded to Playing mode');

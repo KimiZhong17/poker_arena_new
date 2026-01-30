@@ -130,6 +130,9 @@ export abstract class GameModeClientBase {
         const pokerSprites = this.game['_pokerSprites'];
         // @ts-ignore - accessing private property
         const pokerPrefab = this.game['_pokerPrefab'];
+        // @ts-ignore - accessing private property
+        const glowMaterial = this.game['_glowMaterial'];
+        console.log(`[${this.config.name}] glowMaterial loaded:`, !!glowMaterial);
 
         if (!pokerSprites || !pokerPrefab) {
             console.error(`[${this.config.name}] Poker resources not loaded!`);
@@ -152,7 +155,8 @@ export abstract class GameModeClientBase {
             pokerPrefab,                  // 扑克牌预制体
             this.getCurrentLevelRank(),   // 关卡等级
             layoutConfig,                 // 布局配置
-            enableGrouping                // 是否启用分组堆叠
+            enableGrouping,               // 是否启用分组堆叠
+            glowMaterial                  // 边缘光材质（可选）
         );
 
         console.log(`[${this.config.name}] PlayerUIManager initialized`);

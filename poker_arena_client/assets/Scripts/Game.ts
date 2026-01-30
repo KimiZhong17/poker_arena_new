@@ -1,4 +1,4 @@
-import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, UITransform, Widget } from 'cc';
+import { _decorator, AssetManager, assetManager, Component, Node, Prefab, SpriteFrame, UITransform, Widget, Material } from 'cc';
 import { PokerFactory } from './UI/PokerFactory';
 import { GameController } from './Core/GameController';
 import { PlayerUIManager } from './UI/PlayerUIManager';
@@ -59,6 +59,8 @@ export class Game extends Component {
     private _pokerBundle: AssetManager.Bundle = null;
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
     private _pokerPrefab: Prefab = null!;
+    private _glowMaterial: Material | null = null; // 边缘光材质
+    private _hasEnteredGame: boolean = false;
 
     // Game configuration from scene transition
     private _gameMode: string = '';
@@ -103,6 +105,7 @@ export class Game extends Component {
 
             this._onLoadPokerAtlas();
             this._onLoadPokerPrefab();
+            this._onLoadGlowMaterial();
         });
     }
 
@@ -142,9 +145,36 @@ export class Game extends Component {
         });
     }
 
+    private _onLoadGlowMaterial(): void {
+        assetManager.loadBundle("Effects", (err, bundle) => {
+            if (err) {
+                // Effects bundle not found, continue without glow material
+                console.warn("Effects bundle not found, glow effect will be disabled.");
+                this._checkAllLoaded();
+                return;
+            }
+
+            bundle.load("CardGlow", Material, (err, material) => {
+                if (err) {
+                    console.warn("CardGlow material not found, glow effect will be disabled.");
+                    this._checkAllLoaded();
+                    return;
+                }
+
+                this._glowMaterial = material;
+                console.log("CardGlow material loaded.");
+                this._checkAllLoaded();
+            });
+        });
+    }
+
     private _checkAllLoaded(): void {
         console.log(this._pokerBundle, this._pokerSprites.size, this._pokerPrefab);
+        if (this._hasEnteredGame) {
+            return;
+        }
         if (this._pokerBundle && this._pokerSprites.size > 0 && this._pokerPrefab) {
+            this._hasEnteredGame = true;
             this._enterGame();
         }
     }

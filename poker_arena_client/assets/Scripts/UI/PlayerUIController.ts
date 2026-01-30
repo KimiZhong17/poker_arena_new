@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform } from 'cc';
+import { _decorator, Component, Node, Prefab, SpriteFrame, UITransform, Material } from 'cc';
 import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './PlayerHandDisplay';
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
@@ -31,6 +31,7 @@ export class PlayerUIController extends Component {
     private _infoPanelComponent: PlayerInfoPanel | null = null;  // 信息面板组件
     private _playerIndex: number = 0;  // 玩家索引（0-4）
     private _positionConfig: SeatPosition | null = null;  // 座位位置配置
+    private _glowMaterial: Material | null = null;  // 边缘光材质
 
     // ===== 初始化方法 =====
     /**
@@ -50,11 +51,13 @@ export class PlayerUIController extends Component {
         pokerPrefab: Prefab,
         levelRank: number,
         enableGrouping: boolean = true,
-        positionConfig?: SeatPosition
+        positionConfig?: SeatPosition,
+        glowMaterial?: Material
     ): void {
         this._player = player;
         this._playerIndex = playerIndex;
         this._positionConfig = positionConfig || null;
+        this._glowMaterial = glowMaterial || null;
 
         console.log(`[PlayerUIController] Initializing for ${player.name} (index: ${playerIndex})`);
 
@@ -132,9 +135,12 @@ export class PlayerUIController extends Component {
         // 主玩家（index 0）显示正面牌 SPREAD，其他玩家显示牌背 STACK（出牌时会在STACK模式中单独显示）
         const displayMode = (this._playerIndex === 0) ? HandDisplayMode.SPREAD : HandDisplayMode.STACK;
 
+        // Only pass glow material for main player (index 0)
+        const glowMat = (this._playerIndex === 0) ? this._glowMaterial : null;
+
         this._handDisplay = this.handContainer.addComponent(PlayerHandDisplay);
         this._handDisplay.handContainer = this.handContainer;
-        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping, false, this._positionConfig);
+        this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping, false, this._positionConfig, glowMat);
 
         console.log(`[PlayerUIController] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
     }
