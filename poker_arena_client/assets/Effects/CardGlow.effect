@@ -20,9 +20,9 @@ CCEffect %{
         cullMode: none
       properties:
         mainTexture: { value: white }
-        glowColor: { value: [1.0, 0.84, 0.0, 1.0], editor: { type: color } }
-        glowWidth: { value: 0.05 }
-        glowIntensity: { value: 1.0 }
+        glowColor: { value: [0.8, 1.0, 1.0, 1.0], editor: { type: color } }
+        glowWidth: { value: 0.15 }
+        glowIntensity: { value: 1.5 }
         uvBounds: { value: [0.0, 0.0, 1.0, 1.0] }
 }%
 
@@ -66,7 +66,7 @@ CCProgram sprite-fs %{
 
   uniform Glow {
     vec4 glowColor;
-    vec4 uvBounds; // x=minU, y=minV, z=maxU, w=maxV
+    vec4 uvBounds; // x=texelWidth, y=texelHeight (for sampling)
     float glowWidth;
     float glowIntensity;
   };
@@ -74,18 +74,37 @@ CCProgram sprite-fs %{
   vec4 frag () {
     vec4 texColor = texture(mainTexture, v_uv0);
 
-    // Calculate edge distance using raw UV (since packable=false, UV is already 0-1)
-    float edgeX = min(v_uv0.x, 1.0 - v_uv0.x);
-    float edgeY = min(v_uv0.y, 1.0 - v_uv0.y);
-    float edgeDist = min(edgeX, edgeY);
+    // Sample surrounding pixels to detect alpha edge with distance-based falloff
+    float numSamples = 24.0;  // More directions for smoother result
+    float totalSteps = 24.0;  // More steps to reduce banding
 
-    // Create glow factor based on edge distance
-    float glowFactor = 1.0 - smoothstep(0.0, glowWidth, edgeDist);
-    glowFactor *= glowIntensity;
+    // For outer glow only: find the closest opaque pixel and calculate distance falloff
+    float closestDist = 1.0; // Normalized distance to closest opaque pixel (1.0 = no opaque found)
 
-    // Mix glow color with texture
-    vec3 finalColor = mix(texColor.rgb, glowColor.rgb, glowFactor * glowColor.a);
+    for (float i = 0.0; i < 24.0; i++) {
+      float angle = i * 3.14159265 * 2.0 / numSamples;
+      vec2 dir = vec2(cos(angle), sin(angle));
+      for (float s = 1.0; s <= 24.0; s++) {
+        vec2 offset = dir * glowWidth * s / totalSteps;
+        float sampledAlpha = texture(mainTexture, v_uv0 + offset).a;
+        // Use alpha value to interpolate distance for smoother result
+        if (sampledAlpha > 0.1) {
+          float normalizedDist = s / totalSteps;
+          // Interpolate based on alpha for sub-step precision
+          float adjustedDist = normalizedDist - (sampledAlpha - 0.1) * (1.0 / totalSteps);
+          closestDist = min(closestDist, max(0.0, adjustedDist));
+        }
+      }
+    }
 
-    return vec4(finalColor, texColor.a) * v_color;
+    // Outer glow only - exponential falloff for longer tail
+    float decayRate = 4.0;
+    float outerGlow = (1.0 - texColor.a) * exp(-closestDist * decayRate) * glowIntensity;
+
+    // Final color: glow in transparent areas, original texture in opaque areas
+    vec3 finalColor = mix(glowColor.rgb * outerGlow, texColor.rgb, texColor.a);
+    float finalAlpha = max(texColor.a, outerGlow * glowColor.a);
+
+    return vec4(finalColor, finalAlpha) * v_color;
   }
 }%

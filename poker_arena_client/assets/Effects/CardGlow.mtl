@@ -34,13 +34,13 @@
       },
       "glowColor": {
         "__type__": "cc.Color",
-        "r": 205,
-        "g": 217,
-        "b": 0,
-        "a": 53
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 30
       },
-      "glowWidth": 0.1,
-      "glowIntensity": 5
+      "glowWidth": 0.12,
+      "glowIntensity": 15
     }
   ]
 }
