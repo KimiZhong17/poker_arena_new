@@ -65,6 +65,7 @@ export interface SeatPosition {
     handPileOffset: Vec2;               // 手牌堆偏移
     playedCardOffset: Vec2;             // 已出牌偏移
     dealerIndicatorOffset: Vec2;        // 庄家指示器偏移
+    handTypeOffset: Vec2;               // 牌型展示偏移（相对于座位节点）
 
     stateLabelAlignment: StateLabelAlignment;  // State Label 对齐方式
     playedCardLayout: PlayedCardLayout;        // 已出牌排列方式
@@ -87,6 +88,7 @@ const SeatDefinitions = {
         handPileOffset: { x: 0, y: 0 },
         playedCardOffset: { x: 0, y: 0 },
         dealerIndicatorOffset: { x: -300, y: 50 },
+        handTypeOffset: { x: 0, y: 120 },       // 牌型显示在手牌上方
         stateLabelAlignment: StateLabelAlignment.RIGHT,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
@@ -101,6 +103,7 @@ const SeatDefinitions = {
         handPileOffset: { x: 100, y: 20 },      // 手牌在 InfoPanel 右侧
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: -200, y: -50 },
+        handTypeOffset: { x: 50, y: -80 },      // 牌型显示在下方
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
@@ -115,6 +118,7 @@ const SeatDefinitions = {
         handPileOffset: { x: 100, y: 0 },       // 手牌在 InfoPanel 右侧
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -100 },
+        handTypeOffset: { x: 100, y: -80 },     // 牌型显示在右下方
         stateLabelAlignment: StateLabelAlignment.RIGHT,
         playedCardLayout: PlayedCardLayout.VERTICAL,   // 左侧玩家竖向堆叠
     } as SeatPosition,
@@ -129,6 +133,7 @@ const SeatDefinitions = {
         handPileOffset: { x: -100, y: 0 },      // 手牌在 InfoPanel 左侧
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -100 },
+        handTypeOffset: { x: -100, y: -80 },    // 牌型显示在左下方
         stateLabelAlignment: StateLabelAlignment.LEFT,
         playedCardLayout: PlayedCardLayout.VERTICAL,   // 右侧玩家竖向堆叠
     } as SeatPosition,
@@ -143,6 +148,7 @@ const SeatDefinitions = {
         handPileOffset: { x: 100, y: 0 },
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -80 },
+        handTypeOffset: { x: 100, y: -80 },
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
@@ -157,6 +163,7 @@ const SeatDefinitions = {
         handPileOffset: { x: -100, y: 0 },
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -80 },
+        handTypeOffset: { x: -100, y: -80 },
         stateLabelAlignment: StateLabelAlignment.BOTTOM,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
@@ -171,6 +178,7 @@ const SeatDefinitions = {
         handPileOffset: { x: 100, y: 0 },
         playedCardOffset: { x: 200, y: 4 },
         dealerIndicatorOffset: { x: 80, y: -80 },
+        handTypeOffset: { x: 100, y: 80 },
         stateLabelAlignment: StateLabelAlignment.RIGHT,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,
@@ -185,6 +193,7 @@ const SeatDefinitions = {
         handPileOffset: { x: -100, y: 0 },
         playedCardOffset: { x: -200, y: 4 },
         dealerIndicatorOffset: { x: -80, y: -80 },
+        handTypeOffset: { x: -100, y: 80 },
         stateLabelAlignment: StateLabelAlignment.LEFT,
         playedCardLayout: PlayedCardLayout.HORIZONTAL,
     } as SeatPosition,

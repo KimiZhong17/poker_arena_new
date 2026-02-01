@@ -51,6 +51,14 @@ export const CardScale = {
         maxCards: 5,            // 最多显示几张牌背
         offset: 1,              // 每张牌的偏移（像素）
     },
+
+    // 发牌动画缩放（相对于预制体原始缩放的倍数）
+    dealing: {
+        deckPile: 1.0,          // 牌堆卡牌缩放（飞行起始）
+        communityCard: 1.0,     // 公牌缩放（飞行结束）
+        playerCard: 1.0,        // 主玩家手牌缩放（飞行结束）
+        otherPlayerCard: 0.5,   // 其他玩家手牌缩放（飞行结束）
+    },
 } as const;
 
 // ==================== 卡牌精灵名称 ====================

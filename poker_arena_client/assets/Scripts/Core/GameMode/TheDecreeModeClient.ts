@@ -2,7 +2,7 @@ import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
-import { Node, instantiate } from "cc";
+import { Node, instantiate, Vec3, UITransform } from "cc";
 import {
     DealCardsEvent,
     CommunityCardsEvent,
@@ -13,6 +13,7 @@ import {
     DealerCalledEvent,
     PlayerPlayedEvent,
     ShowdownEvent,
+    ShowdownResult,
     RoundEndEvent,
     GameOverEvent,
     PlayerAutoChangedEvent,
@@ -25,6 +26,9 @@ import { PokerFactory } from '../../UI/PokerFactory';
 import { Poker } from '../../UI/Poker';
 import { TheDecreeUIController } from '../../UI/TheDecreeUIController';
 import { TheDecreeGameState } from './TheDecreeGameState';
+import { DeckPile } from '../../UI/DeckPile';
+import { DealingAnimator, DealingResult } from '../../UI/DealingAnimator';
+import { PlayerHandDisplay } from '../../UI/PlayerHandDisplay';
 
 /**
  * The Decree game mode - Network/Client version
@@ -50,10 +54,23 @@ export class TheDecreeModeClient extends GameModeClientBase {
     // 摊牌显示清除定时器
     private showdownClearTimer: number | null = null;
 
+    // 摊牌展示配置
+    private readonly SHOWDOWN_INTERVAL_MS = 1000;  // 每个玩家牌型展示间隔（毫秒）
+    private readonly WINNER_MESSAGE_DURATION = 3.0;  // 赢家消息显示时长（秒）
+    private readonly WINNER_COLOR = '#FFD700';  // 赢家牌型颜色（金色）
+
     // UI 节点（游戏模式特定）
     private theDecreeContainerNode: Node | null = null;
     private communityCardsNode: Node | null = null;
     private theDecreeUIController: TheDecreeUIController | null = null;
+
+    // 发牌动画相关
+    private deckPile: DeckPile | null = null;
+    private dealingAnimator: DealingAnimator | null = null;
+
+    // 动画队列控制
+    private _communityCardsDealt: boolean = false;
+    private _pendingPlayerDeals: Array<{ data: DealCardsEvent }> = [];
 
     constructor(game: Game, config?: GameModeConfig) {
         const defaultConfig: GameModeConfig = {
@@ -145,6 +162,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         } else {
             console.warn('[TheDecreeModeClient] CommunityCardsNode not found');
         }
+
+        // 初始化发牌动画系统
+        this.initDealingAnimation();
     }
 
     /**
@@ -163,6 +183,96 @@ export class TheDecreeModeClient extends GameModeClientBase {
         }
 
         return null;
+    }
+
+    /**
+     * 初始化发牌动画系统
+     */
+    private initDealingAnimation(): void {
+        console.log('[TheDecreeModeClient] Initializing dealing animation system...');
+
+        const pokerFactory = PokerFactory.instance;
+        if (!pokerFactory) {
+            console.warn('[TheDecreeModeClient] PokerFactory not found, skipping dealing animation init');
+            return;
+        }
+
+        const pokerSprites = pokerFactory['_pokerSprites'] as Map<string, any>;
+        const pokerPrefab = pokerFactory['_pokerPrefab'];
+
+        if (!pokerSprites || !pokerPrefab) {
+            console.warn('[TheDecreeModeClient] Poker resources not found');
+            return;
+        }
+
+        // 查找牌堆节点（优先使用编辑器中创建的 DeckPileNode）
+        if (this.theDecreeContainerNode) {
+            let deckPileNode = this.theDecreeContainerNode.getChildByName('DeckPileNode')
+                            || this.theDecreeContainerNode.getChildByName('DeckPile');
+            if (!deckPileNode) {
+                console.log('[TheDecreeModeClient] Creating DeckPile node dynamically');
+                deckPileNode = new Node('DeckPileNode');
+                deckPileNode.addComponent(UITransform);
+                deckPileNode.layer = this.theDecreeContainerNode.layer;
+                this.theDecreeContainerNode.addChild(deckPileNode);
+            } else {
+                console.log('[TheDecreeModeClient] Found existing DeckPile node:', deckPileNode.name);
+            }
+
+            this.deckPile = deckPileNode.getComponent(DeckPile) || deckPileNode.addComponent(DeckPile);
+            this.deckPile.init(pokerSprites, pokerPrefab);
+            console.log('[TheDecreeModeClient] DeckPile initialized');
+        }
+
+        // 创建发牌动画控制器
+        if (this.theDecreeContainerNode) {
+            let animatorNode = this.theDecreeContainerNode.getChildByName('DealingAnimator');
+            if (!animatorNode) {
+                animatorNode = new Node('DealingAnimator');
+                animatorNode.addComponent(UITransform);
+                animatorNode.layer = this.theDecreeContainerNode.layer;
+                this.theDecreeContainerNode.addChild(animatorNode);
+            }
+
+            this.dealingAnimator = animatorNode.getComponent(DealingAnimator) || animatorNode.addComponent(DealingAnimator);
+
+            // 设置牌堆和公牌区引用
+            if (this.deckPile) {
+                this.dealingAnimator.setDeckPile(this.deckPile);
+            }
+            if (this.communityCardsNode) {
+                this.dealingAnimator.setCommunityCardsNode(this.communityCardsNode);
+            }
+
+            // 初始化动画器
+            const playerUIManager = this.game.playerUIManager;
+            this.dealingAnimator.init(
+                pokerSprites,
+                pokerPrefab,
+                (playerIndex: number) => this.getPlayerHandWorldPosition(playerIndex),
+                () => playerUIManager?.getPlayerCount() || 0
+            );
+
+            console.log('[TheDecreeModeClient] DealingAnimator initialized');
+        }
+
+        console.log('[TheDecreeModeClient] Dealing animation system ready');
+    }
+
+    /**
+     * 获取玩家手牌区域的世界坐标
+     */
+    private getPlayerHandWorldPosition(playerIndex: number): Vec3 {
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            return new Vec3(0, 0, 0);
+        }
+
+        const pos = playerUIManager.getPlayerWorldPosition(playerIndex);
+        if (pos) {
+            return new Vec3(pos.x, pos.y, 0);
+        }
+        return new Vec3(0, 0, 0);
     }
 
     // ==================== UI 控制 ====================
@@ -244,6 +354,23 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] All hand counts:', data.allHandCounts);
         console.log('[TheDecreeModeClient] Raw event data:', JSON.stringify(data));
 
+        // 如果公共牌还没发完，先缓存玩家发牌事件
+        if (!this._communityCardsDealt) {
+            console.log('[TheDecreeModeClient] Community cards not dealt yet, queuing player deal...');
+            this._pendingPlayerDeals.push({ data });
+            return;
+        }
+
+        // 执行实际的发牌处理
+        this.processPlayerDeal(data);
+
+        console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    /**
+     * 处理玩家发牌（实际执行）
+     */
+    private processPlayerDeal(data: DealCardsEvent): void {
         // 检查 playerId 是否在映射中，如果不在，重新初始化映射
         if (!this.playerIdToIndexMap.has(data.playerId)) {
             console.warn(`[TheDecreeModeClient] Player ${data.playerId} not in mapping, reinitializing...`);
@@ -287,23 +414,45 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 player.setHandCards(data.handCards);
 
                 console.log(`[TheDecreeModeClient] After update - handCards:`, player.handCards.length);
-                console.log(`[TheDecreeModeClient] Calling updatePlayerHand...`);
 
-                // 更新手牌显示
-                playerUIManager.updatePlayerHand(playerIndex);
+                // 使用发牌动画（如果可用）
+                const isMainPlayer = playerIndex === 0;
+                if (this.dealingAnimator && this.deckPile) {
+                    console.log('[TheDecreeModeClient] Playing deal animation...');
+                    this.deckPile.show();
 
-                console.log(`[TheDecreeModeClient] ✓ Hand display updated successfully`);
-
-                // 如果是主玩家（index 0），启用卡牌选择功能（允许预选）
-                if (playerIndex === 0) {
-                    console.log('[TheDecreeModeClient] Enabling card selection for player 0 (pre-selection allowed)...');
-
-                    // 通过 TheDecreeUIController 启用选牌（这样会正确更新 _selectedCardIndices）
-                    if (this.theDecreeUIController) {
-                        this.theDecreeUIController.enableCardSelection();
-                        console.log('[TheDecreeModeClient] ✓ Card selection enabled via UI controller (pre-selection mode)');
+                    if (isMainPlayer) {
+                        // 主玩家使用方案C：堆叠 → 展开 → 翻牌 → 排序
+                        this.playMainPlayerDealAnimation(data.handCards, playerUIManager, playerUIController);
                     } else {
-                        console.warn('[TheDecreeModeClient] TheDecreeUIController not found, cannot enable card selection');
+                        // 其他玩家使用简单动画
+                        this.dealingAnimator.dealToOtherPlayer(
+                            playerIndex,
+                            data.handCards.length,
+                            () => {
+                                console.log('[TheDecreeModeClient] Other player deal animation complete');
+                                playerUIManager.updatePlayerHand(playerIndex);
+                            }
+                        );
+                    }
+                } else {
+                    // 无动画，直接更新显示
+                    console.log(`[TheDecreeModeClient] Calling updatePlayerHand (no animation)...`);
+                    playerUIManager.updatePlayerHand(playerIndex);
+
+                    console.log(`[TheDecreeModeClient] ✓ Hand display updated successfully`);
+
+                    // 如果是主玩家（index 0），启用卡牌选择功能（允许预选）
+                    if (isMainPlayer) {
+                        console.log('[TheDecreeModeClient] Enabling card selection for player 0 (pre-selection allowed)...');
+
+                        // 通过 TheDecreeUIController 启用选牌（这样会正确更新 _selectedCardIndices）
+                        if (this.theDecreeUIController) {
+                            this.theDecreeUIController.enableCardSelection();
+                            console.log('[TheDecreeModeClient] ✓ Card selection enabled via UI controller (pre-selection mode)');
+                        } else {
+                            console.warn('[TheDecreeModeClient] TheDecreeUIController not found, cannot enable card selection');
+                        }
                     }
                 }
             } else {
@@ -313,9 +462,60 @@ export class TheDecreeModeClient extends GameModeClientBase {
             console.error(`[TheDecreeModeClient] ✗ PlayerUIController not found for index ${playerIndex}`);
         }
 
-        // 如果包含所有玩家的手牌数量信息（补牌后），更新其他玩家的手牌显示
-        if (data.allHandCounts) {
-            console.log('[TheDecreeModeClient] Updating all players hand counts...');
+        // 更新其他玩家的手牌显示
+        // 如果有 allHandCounts，使用它；否则假设所有玩家牌数与主玩家相同
+        if (playerIndex === 0) {
+            const playerCount = playerUIManager.getPlayerCount();
+            const mainPlayerCardCount = data.handCards.length;
+
+            console.log(`[TheDecreeModeClient] Updating other players hand displays (${playerCount - 1} players)...`);
+
+            for (let i = 1; i < playerCount; i++) {
+                const otherPlayerUIController = playerUIManager.getPlayerUINode(i);
+                if (otherPlayerUIController) {
+                    const otherPlayer = otherPlayerUIController.getPlayer();
+                    if (otherPlayer) {
+                        // 获取手牌数量：优先使用 allHandCounts，否则使用主玩家的牌数
+                        let handCount = mainPlayerCardCount;
+                        if (data.allHandCounts) {
+                            // 需要找到对应的 playerId
+                            for (const [playerId, count] of Object.entries(data.allHandCounts)) {
+                                if (this.getPlayerIndex(playerId) === i) {
+                                    handCount = count;
+                                    break;
+                                }
+                            }
+                        }
+
+                        console.log(`[TheDecreeModeClient] Updating hand count for player ${otherPlayer.name} at index ${i}: ${handCount} cards`);
+
+                        // 更新其他玩家的手牌数量（使用 -1 表示未知的牌）
+                        const emptyCards = Array(handCount).fill(-1);
+                        otherPlayer.setHandCards(emptyCards);
+
+                        // 播放发牌动画（如果可用）
+                        if (this.dealingAnimator && this.deckPile) {
+                            this.dealingAnimator.dealToOtherPlayer(
+                                i,
+                                handCount,
+                                () => {
+                                    console.log(`[TheDecreeModeClient] Other player ${i} deal animation complete`);
+                                    playerUIManager.updatePlayerHand(i);
+                                }
+                            );
+                        } else {
+                            // 无动画，直接更新显示
+                            playerUIManager.updatePlayerHand(i);
+                        }
+
+                        console.log(`[TheDecreeModeClient] ✓ Updated hand count for player at index ${i}`);
+                    }
+                }
+            }
+            console.log('[TheDecreeModeClient] ✓ All other players hand counts updated');
+        } else if (data.allHandCounts) {
+            // 非主玩家的 deal_cards 事件（补牌场景），更新其他玩家
+            console.log('[TheDecreeModeClient] Updating all players hand counts from allHandCounts...');
             for (const [playerId, handCount] of Object.entries(data.allHandCounts)) {
                 // 跳过当前玩家（已经更新过了）
                 if (playerId === data.playerId) {
@@ -351,6 +551,90 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] =====================================');
     }
 
+    /**
+     * 播放主玩家发牌动画（方案C：堆叠 → 展开 → 翻牌 → 排序）
+     */
+    private async playMainPlayerDealAnimation(
+        cards: number[],
+        playerUIManager: any,
+        playerUIController: any
+    ): Promise<void> {
+        if (!this.dealingAnimator) return;
+
+        console.log('[TheDecreeModeClient] Playing main player deal animation (Plan C)...');
+
+        // 阶段1-3：堆叠 → 展开 → 翻牌
+        const result = await this.dealingAnimator.dealToMainPlayer(
+            cards,
+            () => console.log('[TheDecreeModeClient] Stack complete'),
+            () => console.log('[TheDecreeModeClient] Spread complete'),
+            () => console.log('[TheDecreeModeClient] Flip complete')
+        );
+
+        // 阶段4：排序动画
+        if (result.cardNodes.length > 0) {
+            console.log('[TheDecreeModeClient] Starting sort animation...');
+
+            // 获取排序后的牌
+            const sortedCards = PlayerHandDisplay.sortCards(cards);
+            console.log('[TheDecreeModeClient] Sorted cards:', sortedCards.map(c => '0x' + c.toString(16)));
+
+            // 获取手牌显示组件来计算目标位置
+            const handDisplay = playerUIController.getHandDisplay();
+            if (handDisplay) {
+                const targetPositions = handDisplay.getSortedCardPositions(sortedCards);
+
+                // 播放排序动画
+                await this.dealingAnimator.animateSorting(
+                    result.cardNodes,
+                    sortedCards,
+                    targetPositions,
+                    () => console.log('[TheDecreeModeClient] Sort animation complete')
+                );
+            }
+
+            // 清理动画层的卡牌
+            this.dealingAnimator.clearAnimationCards();
+        }
+
+        // 更新实际的手牌显示（使用排序后的牌）
+        const player = playerUIController.getPlayer();
+        if (player) {
+            const sortedCards = PlayerHandDisplay.sortCards(cards);
+            player.setHandCards(sortedCards);
+        }
+        playerUIManager.updatePlayerHand(0);
+
+        // 启用卡牌选择功能
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.enableCardSelection();
+            console.log('[TheDecreeModeClient] ✓ Card selection enabled via UI controller');
+        }
+
+        console.log('[TheDecreeModeClient] Main player deal animation complete');
+    }
+
+    /**
+     * 处理待发的玩家牌（公共牌发完后调用）
+     */
+    private processPendingPlayerDeals(): void {
+        if (this._pendingPlayerDeals.length === 0) {
+            console.log('[TheDecreeModeClient] No pending player deals to process');
+            return;
+        }
+
+        console.log(`[TheDecreeModeClient] Processing ${this._pendingPlayerDeals.length} pending player deals...`);
+
+        // 依次处理所有待发的玩家牌
+        for (const pending of this._pendingPlayerDeals) {
+            this.processPlayerDeal(pending.data);
+        }
+
+        // 清空队列
+        this._pendingPlayerDeals = [];
+        console.log('[TheDecreeModeClient] All pending player deals processed');
+    }
+
     private onCommunityCards(data: CommunityCardsEvent): void {
         console.log('[TheDecreeModeClient] ========== Community Cards Event ==========');
         console.log('[TheDecreeModeClient] 📩 Received community_cards event from server');
@@ -362,13 +646,48 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.communityCards = data.cards;
         this.gameState = data.gameState as TheDecreeGameState;
 
-        // 显示公共牌
-        console.log('[TheDecreeModeClient] Calling displayCommunityCards()...');
-        this.displayCommunityCards();
-        console.log('[TheDecreeModeClient] ✓ Community cards displayed');
+        // 清空之前的公共牌显示
+        if (this.communityCardsNode) {
+            this.communityCardsNode.removeAllChildren();
+        }
 
-        // 初始化所有玩家的手牌（如果还没有初始化的话）
-        this.initializeAllPlayersHands();
+        // 使用发牌动画显示公共牌（如果可用）
+        if (this.dealingAnimator && this.deckPile) {
+            console.log('[TheDecreeModeClient] Playing community cards deal animation (all face-down, then flip)...');
+            this.deckPile.show();
+
+            // 使用新的点对点发牌动画
+            this.dealingAnimator.dealCommunityCards(
+                data.cards,
+                // 每张牌发完后的回调 - 显示背面卡牌
+                (index: number, cardValue: number) => {
+                    console.log(`[TheDecreeModeClient] Community card ${index + 1} dealt (face-down): 0x${cardValue.toString(16)}`);
+                    this.displaySingleCommunityCard(index, cardValue, false); // 显示背面
+                },
+                // 全部发完后的回调 - 一起翻牌，然后处理待发的玩家牌
+                () => {
+                    console.log('[TheDecreeModeClient] All community cards dealt, flipping together...');
+                    this.flipAllCommunityCards();
+
+                    // 标记公共牌已发完
+                    this._communityCardsDealt = true;
+
+                    // 处理待发的玩家牌
+                    this.processPendingPlayerDeals();
+                }
+            );
+        } else {
+            // 无动画，直接显示
+            console.log('[TheDecreeModeClient] Calling displayCommunityCards() (no animation)...');
+            this.displayCommunityCards();
+            console.log('[TheDecreeModeClient] ✓ Community cards displayed');
+
+            // 标记公共牌已发完
+            this._communityCardsDealt = true;
+
+            // 处理待发的玩家牌
+            this.processPendingPlayerDeals();
+        }
 
         console.log('[TheDecreeModeClient] =====================================');
     }
@@ -767,7 +1086,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 设置游戏状态
         this.gameState = data.gameState as TheDecreeGameState;
 
-        // 显示所有玩家的牌型和结果
+        // 显示所有玩家的牌型和结果（日志）
         for (const result of data.results) {
             console.log(`[TheDecreeModeClient] Player ${result.playerId}: ${result.handTypeName} (${result.score} points)${result.isWinner ? ' WINNER!' : ''}`);
             console.log(`[TheDecreeModeClient]   Cards:`, result.cards);
@@ -783,7 +1102,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         console.log('[TheDecreeModeClient] Updating showdown display for all players');
 
-        // 遍历所有摊牌结果，更新每个玩家的显示
+        // 先更新所有玩家的手牌显示（立即显示出的牌）
         for (const result of data.results) {
             console.log(`[TheDecreeModeClient] Processing result for player ${result.playerId}`);
             console.log(`[TheDecreeModeClient]   Cards (hex):`, result.cards.map(c => '0x' + c.toString(16)));
@@ -855,14 +1174,102 @@ export class TheDecreeModeClient extends GameModeClientBase {
             }
         }
 
-        // 设置定时器，3秒后自动清除摊牌显示
-        this.clearShowdownTimer(); // 先清除之前的定时器
-        this.showdownClearTimer = window.setTimeout(() => {
-            console.log('[TheDecreeModeClient] Auto-clearing showdown display after 3 seconds');
-            this.clearShowdownDisplay();
-        }, 3000);
+        // 清除之前的定时器
+        this.clearShowdownTimer();
+
+        // 按牌型强度排序（从弱到强）
+        const sortedResults = [...data.results].sort((a, b) => a.handType - b.handType);
+        console.log('[TheDecreeModeClient] Sorted results (weak to strong):', sortedResults.map(r => `${r.playerId}: ${r.handTypeName}`));
+
+        // 依次展示每个玩家的牌型
+        this.showHandTypesSequentially(sortedResults, 0);
 
         console.log('[TheDecreeModeClient] =====================================');
+    }
+
+    /**
+     * 依次展示玩家牌型（从弱到强）
+     * @param sortedResults 按牌型强度排序的结果数组
+     * @param index 当前展示的索引
+     */
+    private showHandTypesSequentially(sortedResults: ShowdownResult[], index: number): void {
+        if (index >= sortedResults.length) {
+            // 所有牌型展示完毕，显示赢家消息
+            console.log('[TheDecreeModeClient] All hand types displayed, showing winner message');
+            this.showWinnerMessageAndCleanup(sortedResults);
+            return;
+        }
+
+        const result = sortedResults[index];
+        const playerIndex = this.getPlayerIndex(result.playerId);
+
+        if (playerIndex === -1) {
+            // 跳过找不到的玩家，继续下一个
+            this.showHandTypesSequentially(sortedResults, index + 1);
+            return;
+        }
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            return;
+        }
+
+        // 构建牌型显示文本
+        const scoreText = result.isWinner
+            ? `${result.handTypeName} +${result.score}+1`
+            : `${result.handTypeName} +${result.score}`;
+
+        // 赢家使用金色，其他玩家使用默认颜色
+        const color = result.isWinner ? this.WINNER_COLOR : this.getHandTypeColor(result.handType);
+
+        // 显示牌型
+        playerUIManager.updatePlayerHandType(playerIndex, scoreText, color);
+        console.log(`[TheDecreeModeClient] Displayed hand type for player ${result.playerId} at index ${playerIndex}: ${scoreText}`);
+
+        // 延迟展示下一个玩家
+        this.showdownClearTimer = window.setTimeout(() => {
+            this.showHandTypesSequentially(sortedResults, index + 1);
+        }, this.SHOWDOWN_INTERVAL_MS);
+    }
+
+    /**
+     * 显示赢家消息并在消息结束后清理
+     */
+    private showWinnerMessageAndCleanup(sortedResults: ShowdownResult[]): void {
+        // 找到赢家
+        const winner = sortedResults.find(r => r.isWinner);
+        if (!winner) {
+            console.warn('[TheDecreeModeClient] No winner found in results');
+            this.clearShowdownDisplay();
+            return;
+        }
+
+        // 获取赢家名称
+        const winnerName = this.getPlayerName(winner.playerId);
+
+        // 显示赢家消息
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.showMessage(`${winnerName} 获胜！`, this.WINNER_MESSAGE_DURATION);
+        }
+
+        // 在消息显示完毕后清除所有牌型显示
+        this.showdownClearTimer = window.setTimeout(() => {
+            console.log('[TheDecreeModeClient] Winner message finished, clearing showdown display');
+            this.clearShowdownDisplay();
+        }, this.WINNER_MESSAGE_DURATION * 1000);
+    }
+
+    /**
+     * 根据牌型强度获取显示颜色
+     * @param handType 牌型枚举值
+     * @returns 颜色字符串
+     */
+    private getHandTypeColor(handType: number): string {
+        // 0-2: 普通（白色）, 3-5: 较好（绿色）, 6-7: 很好（蓝色）, 8-9: 极好（金色）
+        if (handType >= 8) return '#FFD700';  // 金色 - 同花顺/皇家同花顺
+        if (handType >= 6) return '#4169E1';  // 蓝色 - 葫芦/四条
+        if (handType >= 3) return '#32CD32';  // 绿色 - 三条/顺子/同花
+        return '#FFFFFF';  // 白色 - 高牌/一对/两对
     }
 
     private onRoundEnd(data: RoundEndEvent): void {
@@ -879,12 +1286,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.cardsToPlay = 0;
         console.log('[TheDecreeModeClient] Reset cardsToPlay to 0 at round end');
 
-        // 显示回合结果消息
-        const winnerName = this.getPlayerName(data.winnerId);
-        const loserName = this.getPlayerName(data.loserId);
-        if (this.theDecreeUIController) {
-            this.theDecreeUIController.showMessage(`${winnerName} 获胜！${loserName} 输了`, 3.0);
-        }
+        // 注意：赢家消息已经在 showWinnerMessageAndCleanup 中显示了
+        // 这里只更新分数，不再重复显示消息
 
         // 更新所有玩家的分数显示
         const playerUIManager = this.game.playerUIManager;
@@ -1121,6 +1524,26 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 清空之前的公共牌
         this.communityCardsNode.removeAllChildren();
 
+        // 显示所有公共牌
+        for (let i = 0; i < this.communityCards.length; i++) {
+            this.displaySingleCommunityCard(i, this.communityCards[i]);
+        }
+
+        console.log(`[TheDecreeModeClient] Displayed ${this.communityCards.length} community cards`);
+    }
+
+    /**
+     * 显示单张公共牌（用于动画回调）
+     * @param index 公共牌索引（0-3）
+     * @param cardValue 牌值
+     * @param showFront 是否显示正面（默认true）
+     */
+    private displaySingleCommunityCard(index: number, cardValue: number, showFront: boolean = true): void {
+        if (!this.communityCardsNode) {
+            console.warn('[TheDecreeModeClient] CommunityCardsNode not found');
+            return;
+        }
+
         // 获取 PokerFactory 实例
         const pokerFactory = PokerFactory.instance;
         if (!pokerFactory) {
@@ -1138,36 +1561,61 @@ export class TheDecreeModeClient extends GameModeClientBase {
             return;
         }
 
-        // 创建4张公共牌
+        // 计算位置
         const cardSpacing = 120; // 牌之间的间距
-        const startX = -(cardSpacing * (this.communityCards.length - 1)) / 2; // 居中显示
+        const totalCards = this.communityCards.length || 4;
+        const startX = -(cardSpacing * (totalCards - 1)) / 2; // 居中显示
 
-        this.communityCards.forEach((card, index) => {
-            // 创建扑克牌节点
-            const pokerNode = instantiate(pokerPrefab);
-            const pokerCtrl = pokerNode.addComponent(Poker);
+        // 创建扑克牌节点
+        const pokerNode = instantiate(pokerPrefab);
+        const pokerCtrl = pokerNode.addComponent(Poker);
 
-            // 获取牌面图片
-            const spriteName = PokerFactory.getCardSpriteName(card);
-            const pokerFront = pokerSprites.get(spriteName);
+        // 获取牌面图片
+        const spriteName = PokerFactory.getCardSpriteName(cardValue);
+        const pokerFront = pokerSprites.get(spriteName);
 
-            if (pokerFront && pokerBack) {
-                pokerCtrl.init(card, pokerBack, pokerFront);
-                pokerCtrl.showFront(); // 公共牌始终显示正面
+        if (pokerFront && pokerBack) {
+            pokerCtrl.init(cardValue, pokerBack, pokerFront);
+            if (showFront) {
+                pokerCtrl.showFront();
             } else {
-                console.warn(`[TheDecreeModeClient] Sprite not found: ${spriteName}`);
+                pokerCtrl.showBack();
             }
+        } else {
+            console.warn(`[TheDecreeModeClient] Sprite not found: ${spriteName}`);
+        }
 
-            // 设置位置
-            pokerNode.setPosition(startX + index * cardSpacing, 0, 0);
+        // 设置位置
+        pokerNode.setPosition(startX + index * cardSpacing, 0, 0);
 
-            // 添加到公共牌节点
-            this.communityCardsNode.addChild(pokerNode);
+        // 添加到公共牌节点
+        this.communityCardsNode.addChild(pokerNode);
 
-            console.log(`[TheDecreeModeClient] Created community card ${index + 1}/${this.communityCards.length}: ${spriteName}`);
-        });
+        console.log(`[TheDecreeModeClient] Created community card ${index + 1}: ${spriteName} (${showFront ? 'front' : 'back'})`);
+    }
 
-        console.log(`[TheDecreeModeClient] Displayed ${this.communityCards.length} community cards`);
+    /**
+     * 翻转所有公共牌（播放翻牌动画）
+     */
+    private flipAllCommunityCards(): void {
+        if (!this.communityCardsNode) {
+            console.warn('[TheDecreeModeClient] CommunityCardsNode not found');
+            return;
+        }
+
+        const children = this.communityCardsNode.children;
+        console.log(`[TheDecreeModeClient] Flipping ${children.length} community cards`);
+
+        for (let i = 0; i < children.length; i++) {
+            const pokerCtrl = children[i].getComponent(Poker);
+            if (pokerCtrl) {
+                // 使用延迟让翻牌有层次感
+                const delay = i * 0.08;
+                setTimeout(() => {
+                    pokerCtrl.flip();
+                }, delay * 1000);
+            }
+        }
     }
 
     /**
@@ -1183,7 +1631,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     /**
      * 清除摊牌显示
-     * 将所有玩家的出牌显示恢复为手牌背面
+     * 将所有玩家的出牌显示恢复为手牌背面，并清除牌型显示
      */
     private clearShowdownDisplay(): void {
         console.log('[TheDecreeModeClient] Clearing showdown display...');
@@ -1199,6 +1647,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 获取玩家数量
         const playerCount = playerUIManager.getPlayerCount();
+
+        // 清除所有玩家的牌型显示
+        playerUIManager.clearAllHandTypes();
+        console.log('[TheDecreeModeClient] ✓ All hand types cleared');
 
         // 遍历所有玩家（除了主玩家 index 0）
         for (let i = 1; i < playerCount; i++) {

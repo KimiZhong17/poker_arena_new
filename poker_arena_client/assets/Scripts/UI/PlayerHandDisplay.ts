@@ -746,4 +746,71 @@ export class PlayerHandDisplay extends Component {
 
         console.log(`[PlayerHandDisplay] Locked ${this._pokerComponents.length} cards`);
     }
+
+    // ==================== Sorting Animation Support ====================
+
+    /**
+     * Get the world positions for sorted cards
+     * @param sortedCards Array of sorted card values
+     * @returns Array of world positions for each card
+     */
+    public getSortedCardPositions(sortedCards: number[]): Vec3[] {
+        const positions: Vec3[] = [];
+        const cardCount = sortedCards.length;
+        const cardSpacing = this._cardSpacing;
+        const cardWidth = CardDimensions.width;
+
+        // Calculate positions same as displaySpreadSimple
+        const totalWidth = (cardCount - 1) * cardSpacing + cardWidth;
+        const startX = -totalWidth / 2 + cardWidth / 2;
+
+        // Get container world position
+        const containerWorldPos = new Vec3();
+        this.handContainer.getWorldPosition(containerWorldPos);
+
+        for (let i = 0; i < cardCount; i++) {
+            const localX = startX + cardSpacing * i;
+            const worldPos = new Vec3(
+                containerWorldPos.x + localX,
+                containerWorldPos.y,
+                containerWorldPos.z
+            );
+            positions.push(worldPos);
+        }
+
+        return positions;
+    }
+
+    /**
+     * Sort cards by value (for TheDecree mode)
+     * @param cards Array of card values
+     * @returns Sorted array of card values (ascending by point, then by suit)
+     */
+    public static sortCards(cards: number[]): number[] {
+        return [...cards].sort((a, b) => {
+            const pointA = a & 0x0F;
+            const pointB = b & 0x0F;
+            if (pointA !== pointB) {
+                return pointA - pointB;
+            }
+            // Same point, sort by suit
+            const suitA = (a & 0xF0) >> 4;
+            const suitB = (b & 0xF0) >> 4;
+            return suitA - suitB;
+        });
+    }
+
+    /**
+     * Get the hand container node (for animation positioning)
+     */
+    public getHandContainer(): Node {
+        return this.handContainer;
+    }
+
+    /**
+     * Get the current card spacing
+     */
+    public getCardSpacing(): number {
+        return this._cardSpacing;
+    }
 }

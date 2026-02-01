@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3, UIOpacity, Material } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, EventTouch, Vec3, UIOpacity, Material, tween } from 'cc';
 const { ccclass, property } = _decorator;
 
 /**
@@ -53,6 +53,33 @@ export class Poker extends Component {
 
     public showBack(): void {
         this._sprite.spriteFrame = this._back;
+    }
+
+    /**
+     * Flip the card with animation (from back to front)
+     * @param duration Total flip duration in seconds (default 0.3)
+     * @param onComplete Callback when flip is complete
+     */
+    public flip(duration: number = 0.3, onComplete?: () => void): void {
+        if (!this._sprite) {
+            onComplete?.();
+            return;
+        }
+
+        const originalScale = this.node.scale.clone();
+        const halfDuration = duration / 2;
+
+        // Flip animation: scale X to 0, switch sprite, scale X back
+        tween(this.node)
+            .to(halfDuration, { scale: new Vec3(0, originalScale.y, originalScale.z) }, { easing: 'sineIn' })
+            .call(() => {
+                this.showFront();
+            })
+            .to(halfDuration, { scale: originalScale }, { easing: 'sineOut' })
+            .call(() => {
+                onComplete?.();
+            })
+            .start();
     }
 
     public getValue(): number {
