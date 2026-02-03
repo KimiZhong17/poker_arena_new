@@ -51,7 +51,7 @@ function getCardRank(point: number, mode: CardRankingMode): number {
 }
 
 /**
- * Sort cards by point value
+ * Sort cards by point value, then by suit
  * @param cards Array of card values (encoded as numbers)
  * @param mode Ranking mode (default: ACE_HIGH)
  * @param ascending Sort in ascending order (default: true)
@@ -80,14 +80,23 @@ export function sortCards(
         const rankB = getCardRank(pointB, mode);
 
         const diff = rankA - rankB;
-        return ascending ? diff : -diff;
+        const pointDiff = ascending ? diff : -diff;
+
+        // If same point, sort by suit
+        if (pointDiff !== 0) {
+            return pointDiff;
+        }
+
+        const suitA = (a & 0xF0) >> 4;
+        const suitB = (b & 0xF0) >> 4;
+        return suitA - suitB;
     });
 
     return sorted;
 }
 
 /**
- * Sort cards in place by point value
+ * Sort cards in place by point value, then by suit
  * @param cards Array of card values (encoded as numbers) - will be modified
  * @param mode Ranking mode (default: ACE_HIGH)
  * @param ascending Sort in ascending order (default: true)
@@ -106,7 +115,16 @@ export function sortCardsInPlace(
         const rankB = getCardRank(pointB, mode);
 
         const diff = rankA - rankB;
-        return ascending ? diff : -diff;
+        const pointDiff = ascending ? diff : -diff;
+
+        // If same point, sort by suit
+        if (pointDiff !== 0) {
+            return pointDiff;
+        }
+
+        const suitA = (a & 0xF0) >> 4;
+        const suitB = (b & 0xF0) >> 4;
+        return suitA - suitB;
     });
 
     return cards;
