@@ -18,6 +18,7 @@ import {
     SetAutoRequest,
     RoomCreatedEvent,
     RoomJoinedEvent,
+    ReconnectSuccessEvent,
     PlayerJoinedEvent,
     PlayerLeftEvent,
     PlayerReadyEvent,
@@ -371,17 +372,30 @@ export class GameServer {
             // Socket加入房间
             socket.join(room.id);
 
-            // 发送重连成功响应
-            const response: RoomJoinedEvent = {
+            // 获取完整游戏状态
+            const reconnectState = room.getReconnectState(disconnectedPlayer.id);
+
+            // 发送重连成功响应（包含完整游戏状态）
+            const response: ReconnectSuccessEvent = {
                 roomId: room.id,
                 playerId: disconnectedPlayer.id,
                 myPlayerIdInRoom: disconnectedPlayer.id,
                 hostId: room.getHostId(),
                 players: room.getPlayersInfo(),
-                maxPlayers: room.maxPlayers
+                maxPlayers: room.maxPlayers,
+                // 游戏状态
+                gameState: reconnectState.gameState,
+                roundNumber: reconnectState.roundNumber,
+                dealerId: reconnectState.dealerId,
+                cardsToPlay: reconnectState.cardsToPlay,
+                deckSize: reconnectState.deckSize,
+                handCards: reconnectState.handCards,
+                communityCards: reconnectState.communityCards,
+                scores: reconnectState.scores,
+                playerGameStates: reconnectState.playerGameStates
             };
 
-            socket.emit(ServerMessageType.ROOM_JOINED, response);
+            socket.emit(ServerMessageType.RECONNECT_SUCCESS, response);
 
             // 广播给其他玩家：玩家重连
             room.broadcast(ServerMessageType.PLAYER_JOINED, {

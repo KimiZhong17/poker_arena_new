@@ -369,10 +369,14 @@ export class GameRoom {
                 Logger.info("GameRoom", `[Room ${this.id}] Cards count:`, cards.length);
                 Logger.info("GameRoom", `[Room ${this.id}] Cards:`, cards);
 
+                // Get deck size for display
+                const deckSize = this.theDecreeGame?.getDeckSize() || 0;
+
                 // Send private hand cards to each player
                 this.sendToPlayer(playerId, ServerMessageType.DEAL_CARDS, {
                     playerId,
-                    handCards: cards
+                    handCards: cards,
+                    deckSize: deckSize
                 });
 
                 Logger.info("GameRoom", `[Room ${this.id}] ✓ DEAL_CARDS event sent to ${playerId}`);
@@ -499,12 +503,13 @@ export class GameRoom {
                         handCounts[player.id] = player.handCards.length;
                     }
 
-                    // Send each player their own cards + all players' hand counts
+                    // Send each player their own cards + all players' hand counts + deck size
                     for (const player of this.theDecreeGame.getAllPlayers()) {
                         this.sendToPlayer(player.id, ServerMessageType.DEAL_CARDS, {
                             playerId: player.id,
                             handCards: player.handCards,
-                            allHandCounts: handCounts
+                            allHandCounts: handCounts,
+                            deckSize: deckSize
                         });
                     }
                 }
@@ -659,6 +664,44 @@ export class GameRoom {
             dealerId: currentRound?.dealerId,
             cardsToPlay: currentRound?.cardsToPlay,
             deckSize: this.theDecreeGame.getDeckSize()
+        };
+    }
+
+    /**
+     * 获取重连所需的完整游戏状态
+     */
+    public getReconnectState(playerId: string): any {
+        if (!this.theDecreeGame) return null;
+
+        const currentRound = this.theDecreeGame.getCurrentRound();
+        const allPlayers = this.theDecreeGame.getAllPlayers();
+        const scores = this.theDecreeGame.getScores();
+
+        // 构建各玩家游戏状态
+        const playerGameStates = allPlayers.map(p => ({
+            playerId: p.id,
+            handCardCount: p.handCards.length,
+            hasPlayed: p.hasPlayed,
+            playedCardCount: p.playedCards.length,
+            isAuto: p.isAuto
+        }));
+
+        // 转换分数 Map 为对象
+        const scoresObj: { [key: string]: number } = {};
+        scores.forEach((score, id) => {
+            scoresObj[id] = score;
+        });
+
+        return {
+            gameState: this.theDecreeGame.getState(),
+            roundNumber: currentRound?.roundNumber || 0,
+            dealerId: currentRound?.dealerId,
+            cardsToPlay: currentRound?.cardsToPlay,
+            deckSize: this.theDecreeGame.getDeckSize(),
+            handCards: this.theDecreeGame.getPlayerHandCards(playerId) || [],
+            communityCards: this.theDecreeGame.getCommunityCards(),
+            scores: scoresObj,
+            playerGameStates
         };
     }
 }
