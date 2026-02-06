@@ -195,6 +195,22 @@ export class DeckPile extends Component {
     }
 
     /**
+     * 更新牌堆显示的牌数量
+     * @param deckSize 实际牌堆数量
+     */
+    public updateCardCount(deckSize: number): void {
+        const maxDisplay = CardScale.stackDisplay.maxCards;
+        const displayCount = Math.min(deckSize, maxDisplay);
+
+        console.log(`[DeckPile] Updating card count: deckSize=${deckSize}, displayCount=${displayCount}`);
+
+        // 更新每张牌的可见性
+        for (let i = 0; i < this._cardNodes.length; i++) {
+            this._cardNodes[i].active = i < displayCount;
+        }
+    }
+
+    /**
      * 检查是否已初始化
      */
     public isInitialized(): boolean {

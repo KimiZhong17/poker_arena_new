@@ -285,6 +285,18 @@ export class ReadyStage extends GameStageBase {
         } else {
             console.warn('[ReadyStage] TheDecreeUIController component not found or resetForRestart method missing');
         }
+
+        // 清理公牌节点的子元素（防止再来一局时看到上一局的公牌）
+        // 注意：CommunityCardsNode 可能在 TheDecree 下或者在 game.node 下
+        let communityCardsNode = theDecreeUINode.getChildByName('CommunityCardsNode');
+        if (!communityCardsNode) {
+            // 尝试从 game.node 查找
+            communityCardsNode = this.game.node.getChildByName('CommunityCardsNode');
+        }
+        if (communityCardsNode) {
+            console.log('[ReadyStage] Clearing community cards node children');
+            communityCardsNode.removeAllChildren();
+        }
     }
 
     /**

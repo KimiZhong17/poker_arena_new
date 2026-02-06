@@ -747,17 +747,33 @@ export class TheDecreeUIController extends Component {
     private showCallButtons(): void {
         console.log('[TheDecreeUI] showCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
 
-        // Get player's hand card count
+        // Get player's hand card count - prefer displayed cards over player.handCards
+        // because player.handCards may not be updated yet during refill animation
         let handCardCount = 0;
         if (this._game && this._game.playerUIManager) {
             const playerUINode = this._game.playerUIManager.getPlayerUINode(0);
             if (playerUINode) {
-                const player = playerUINode.getPlayer();
-                if (player && player.handCards) {
-                    handCardCount = player.handCards.length;
-                    console.log('[TheDecreeUI] Player hand card count:', handCardCount);
+                // Try to get count from hand display first (more accurate during animations)
+                const handDisplay = playerUINode.getHandDisplay();
+                if (handDisplay && typeof handDisplay.getDisplayedCardValues === 'function') {
+                    const displayedCards = handDisplay.getDisplayedCardValues();
+                    handCardCount = displayedCards.length;
+                    console.log('[TheDecreeUI] Using displayed card count:', handCardCount);
+                } else {
+                    // Fallback to player.handCards
+                    const player = playerUINode.getPlayer();
+                    if (player && player.handCards) {
+                        handCardCount = player.handCards.length;
+                        console.log('[TheDecreeUI] Using player.handCards count:', handCardCount);
+                    }
                 }
             }
+        }
+
+        // TheDecree mode always has 5 cards after refill, so default to 5 if we can't determine
+        if (handCardCount === 0) {
+            handCardCount = 5;
+            console.log('[TheDecreeUI] Defaulting to 5 cards');
         }
 
         if (this.btnCall123Node) {
@@ -877,6 +893,12 @@ export class TheDecreeUIController extends Component {
 
         // Hide call buttons
         this.hideCallButtons();
+
+        // 隐藏消息提示（防止再来一局时看到上一局的胜者弹窗）
+        if (this.messageTip) {
+            this.messageTip.hide();
+            console.log('[TheDecreeUI] MessageTip hidden');
+        }
 
         // 重置托管开关状态（但保持可见，因为游戏开始时需要显示）
         if (this.autoPlaySwitch) {

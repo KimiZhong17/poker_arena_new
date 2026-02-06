@@ -5,6 +5,7 @@ import { LocalGameStore } from '../LocalStore/LocalGameStore';
 import {
     ClientMessageType,
     RoomJoinedEvent,
+    ReconnectSuccessEvent,
     ServerMessageType,
     PlayerReadyEvent,
     PlayerLeftEvent,
@@ -42,6 +43,7 @@ export class RoomService {
 
         // --- 先解绑，防止重复 ---
         net.off(ServerMessageType.ROOM_JOINED, this.onRoomJoined);
+        net.off(ServerMessageType.RECONNECT_SUCCESS, this.onReconnectSuccess);
         net.off(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.off(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.off(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
@@ -52,11 +54,17 @@ export class RoomService {
         // 注意：这里使用 .bind(this) 确保函数内部的 this 指向 RoomService 实例
         // 或者将成员函数定义为箭头函数（推荐，如下面定义所示）
         net.on(ServerMessageType.ROOM_JOINED, this.onRoomJoined);
+        net.on(ServerMessageType.RECONNECT_SUCCESS, this.onReconnectSuccess);
         net.on(ServerMessageType.PLAYER_JOINED, this.onPlayerJoined);
         net.on(ServerMessageType.PLAYER_READY, this.onPlayerReady);
         net.on(ServerMessageType.PLAYER_LEFT, this.onPlayerLeft);
         net.on(ServerMessageType.HOST_CHANGED, this.onHostChanged);
         net.on(ServerMessageType.ERROR, this.onError);
+
+        // 设置 socket 重连回调
+        net.setOnReconnect(() => {
+            this.handleSocketReconnect();
+        });
     }
 
     // ==================== 具名处理器 (解决 off 参数匹配问题) ====================
@@ -114,6 +122,68 @@ export class RoomService {
         console.error('[RoomService] Error from server:', data);
         alert(`服务器错误: ${data.message || data.code || '未知错误'}`);
     };
+
+    /**
+     * 重连成功处理
+     */
+    private onReconnectSuccess = (data: ReconnectSuccessEvent) => {
+        console.log('[RoomService] Reconnect success:', data.roomId);
+
+        // 1. 存入 LocalRoomStore
+        this.localRoomStore.setCurrentRoom({
+            id: data.roomId,
+            name: `Room ${data.roomId}`,
+            gameModeId: 'the_decree',
+            state: RoomState.PLAYING,  // 重连时房间一定是游戏中
+            players: data.players,
+            hostId: data.hostId,
+            maxPlayers: data.maxPlayers,
+            isPrivate: false,
+            createdAt: Date.now()
+        });
+
+        // 2. 存储当前用户在房间内的玩家ID
+        this.localRoomStore.setMyPlayerId(data.myPlayerIdInRoom);
+
+        // 3. 恢复游戏状态到 LocalGameStore
+        const gameStore = LocalGameStore.getInstance();
+        gameStore.setHandCards(data.handCards);
+        gameStore.setCommunityCards(data.communityCards);
+        gameStore.setGameState(data.gameState);
+        gameStore.setRoundNumber(data.roundNumber);
+        if (data.dealerId) {
+            gameStore.setDealerId(data.dealerId);
+        }
+        if (data.cardsToPlay) {
+            gameStore.setCardsToPlay(data.cardsToPlay);
+        }
+        gameStore.setScores(data.scores);
+
+        // 4. 恢复各玩家游戏状态
+        for (const playerState of data.playerGameStates) {
+            gameStore.setPlayerGameState(playerState.playerId, {
+                handCardCount: playerState.handCardCount,
+                hasPlayed: playerState.hasPlayed,
+                playedCardCount: playerState.playedCardCount,
+                isAuto: playerState.isAuto
+            });
+        }
+
+        // 5. 发出事件通知 UI 刷新
+        EventCenter.emit(GameEvents.UI_NAVIGATE_TO_GAME);
+        EventCenter.emit(GameEvents.GAME_RECONNECTED, data);
+    };
+
+    /**
+     * Socket 重连后自动尝试重连房间
+     */
+    private handleSocketReconnect(): void {
+        const reconnectInfo = this.localRoomStore.getReconnectInfo();
+        if (reconnectInfo) {
+            console.log('[RoomService] Socket reconnected, attempting to rejoin room:', reconnectInfo);
+            this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
+        }
+    }
 
     // ==================== 基础逻辑与业务接口 ====================
 

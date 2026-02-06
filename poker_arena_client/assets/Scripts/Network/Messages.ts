@@ -131,6 +131,9 @@ export enum ServerMessageType {
     // 游戏结束
     GAME_OVER = 'game_over',
 
+    // 重连
+    RECONNECT_SUCCESS = 'reconnect_success',
+
     // 错误
     ERROR = 'error',
 
@@ -214,6 +217,7 @@ export interface DealCardsEvent {
     playerId: string;
     handCards: number[];
     allHandCounts?: { [playerId: string]: number };  // 所有玩家的手牌数量（补牌后发送）
+    deckSize?: number;  // 牌堆剩余数量
 }
 
 /**
@@ -355,6 +359,44 @@ export interface PlayerAutoChangedEvent {
     playerId: string;
     isAuto: boolean;
     reason?: 'manual' | 'timeout' | 'disconnect';
+}
+
+/**
+ * 重连成功事件 - 包含完整游戏状态
+ */
+export interface ReconnectSuccessEvent {
+    // 房间基本信息
+    roomId: string;
+    playerId: string;
+    myPlayerIdInRoom: string;
+    hostId: string;
+    players: PlayerInfo[];
+    maxPlayers: number;
+
+    // 游戏状态
+    gameState: string;  // TheDecreeGameState
+    roundNumber: number;
+    dealerId?: string;
+    cardsToPlay?: number;
+    deckSize: number;
+
+    // 玩家自己的手牌
+    handCards: number[];
+
+    // 公共牌
+    communityCards: number[];
+
+    // 各玩家分数
+    scores: { [playerId: string]: number };
+
+    // 各玩家游戏状态
+    playerGameStates: {
+        playerId: string;
+        handCardCount: number;
+        hasPlayed: boolean;
+        playedCardCount: number;
+        isAuto: boolean;
+    }[];
 }
 
 // ==================== 错误码 ====================

@@ -44,6 +44,9 @@ export const GameEvents = {
     GAME_OVER: 'GAME_OVER',
     GAME_STATE_UPDATE: 'GAME_STATE_UPDATE',
 
+    // 重连事件
+    GAME_RECONNECTED: 'GAME_RECONNECTED',
+
     // 托管事件
     PLAYER_AUTO_CHANGED: 'PLAYER_AUTO_CHANGED'
 };

@@ -190,11 +190,13 @@ export class DealingAnimator extends Component {
      * @param playerIndex 玩家索引
      * @param cardCount 发牌数量
      * @param onComplete 完成回调
+     * @param onEachCardDealt 每张牌发完后的回调（用于更新手牌数量显示）
      */
     public async dealToOtherPlayer(
         playerIndex: number,
         cardCount: number,
-        onComplete?: () => void
+        onComplete?: () => void,
+        onEachCardDealt?: (cardIndex: number) => void
     ): Promise<void> {
         if (!this.deckPile || !this._getPlayerHandPosition) {
             console.warn('[DealingAnimator] Not properly initialized');
@@ -237,6 +239,9 @@ export class DealingAnimator extends Component {
 
             // 移除飞行卡牌
             flyingCard.destroy();
+
+            // 每张牌发完后回调（用于更新手牌数量）
+            onEachCardDealt?.(i);
 
             // 等待间隔
             if (i < cardCount - 1) {
@@ -423,6 +428,137 @@ export class DealingAnimator extends Component {
 
         console.log('[DealingAnimator] Sorting animation complete');
         onComplete?.();
+    }
+
+    /**
+     * 播放补牌动画（牌直接飞到目标位置，然后翻牌）
+     * @param newCards 新补的牌
+     * @param targetPositions 目标位置数组（世界坐标）
+     * @param onComplete 完成回调
+     * @returns 返回创建的卡牌节点
+     */
+    public async refillToMainPlayer(
+        newCards: number[],
+        targetPositions: Vec3[],
+        onComplete?: () => void
+    ): Promise<DealingResult> {
+        if (!this.deckPile || newCards.length === 0) {
+            console.warn('[DealingAnimator] DeckPile not set or no cards to refill');
+            onComplete?.();
+            return { cardNodes: [], cardValues: [] };
+        }
+
+        console.log(`[DealingAnimator] Refilling ${newCards.length} cards to main player`);
+
+        this._isAnimating = true;
+
+        const startPos = this.deckPile.getTopCardWorldPosition();
+        const cardNodes: Node[] = [];
+
+        // 阶段1：依次发牌到目标位置（背面）
+        for (let i = 0; i < newCards.length; i++) {
+            const cardValue = newCards[i];
+            const targetPos = targetPositions[i] || targetPositions[targetPositions.length - 1];
+
+            // 创建飞行卡牌（背面）
+            const flyingCard = this.createFlyingCard(cardValue, false);
+            cardNodes.push(flyingCard);
+
+            // 播放牌堆反馈
+            this.deckPile.playDealFeedback();
+
+            // 播放飞行动画到目标位置
+            await this.animateCardFlight(
+                flyingCard,
+                startPos,
+                targetPos,
+                DealingDuration.dealToPlayer,
+                DealingEasing.dealToPlayer,
+                CardScale.dealing.playerCard
+            );
+
+            // 等待间隔
+            if (i < newCards.length - 1) {
+                await this.delay(DealingDuration.cardInterval);
+            }
+        }
+
+        console.log('[DealingAnimator] Refill cards dealt, now flipping...');
+
+        // 短暂停顿
+        await this.delay(0.1);
+
+        // 阶段2：翻牌动画
+        const flipPromises: Promise<void>[] = [];
+        for (let i = 0; i < cardNodes.length; i++) {
+            const poker = cardNodes[i].getComponent(Poker);
+            if (poker) {
+                // 设置正确的牌面
+                const cardBack = this._pokerSprites.get(CardSpriteNames.backWithLogo) ||
+                                 this._pokerSprites.get(CardSpriteNames.back);
+                const spriteName = PokerFactory.getCardSpriteName(newCards[i]);
+                const cardFront = this._pokerSprites.get(spriteName);
+                if (cardFront && cardBack) {
+                    poker.init(newCards[i], cardBack, cardFront);
+                }
+
+                flipPromises.push(this.animateCardFlipWithDelay(
+                    cardNodes[i],
+                    poker,
+                    i * DealingDuration.spreadInterval
+                ));
+            }
+        }
+        await Promise.all(flipPromises);
+
+        console.log('[DealingAnimator] Refill animation complete');
+
+        this._isAnimating = false;
+        onComplete?.();
+
+        return { cardNodes, cardValues: newCards };
+    }
+
+    /**
+     * 播放手牌排序动画（从 handDisplay 获取卡牌节点）
+     * @param handDisplay 手牌显示组件
+     * @param unsortedCards 未排序的牌值数组
+     * @param sortedCards 排序后的牌值数组
+     * @param onComplete 完成回调
+     */
+    public async animateSortCards(
+        handDisplay: any,
+        unsortedCards: number[],
+        sortedCards: number[],
+        onComplete?: () => void
+    ): Promise<void> {
+        if (!handDisplay || unsortedCards.length === 0) {
+            onComplete?.();
+            return;
+        }
+
+        console.log('[DealingAnimator] Animating sort cards from handDisplay');
+
+        // 获取手牌容器中的卡牌节点
+        const handContainer = handDisplay.getHandContainer();
+        if (!handContainer) {
+            console.warn('[DealingAnimator] Hand container not found');
+            onComplete?.();
+            return;
+        }
+
+        const cardNodes: Node[] = handContainer.children.slice();
+        if (cardNodes.length === 0) {
+            console.warn('[DealingAnimator] No card nodes in hand container');
+            onComplete?.();
+            return;
+        }
+
+        // 计算排序后的目标位置
+        const targetPositions = handDisplay.getSortedCardPositions(sortedCards);
+
+        // 调用现有的排序动画方法
+        await this.animateSorting(cardNodes, sortedCards, targetPositions, onComplete);
     }
 
     /**

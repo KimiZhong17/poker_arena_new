@@ -27,9 +27,19 @@ export class NetworkClient extends Component {
     private heartbeatTimer: number | null = null;
     private readonly HEARTBEAT_INTERVAL = 30000; // 30秒发送一次心跳
 
+    // 重连回调
+    private onReconnectCallback: (() => void) | null = null;
+
     constructor(serverUrl: string = 'http://localhost:3000') {
         super();
         this.serverUrl = serverUrl;
+    }
+
+    /**
+     * 设置重连回调（socket重连成功后调用）
+     */
+    public setOnReconnect(callback: () => void): void {
+        this.onReconnectCallback = callback;
     }
 
     /**
@@ -63,12 +73,36 @@ export class NetworkClient extends Component {
 
             this.socket.on('connect_error', (err: any) => reject(err));
 
-            this.socket.on('disconnect', () => {
+            this.socket.on('disconnect', (reason: string) => {
                 this.isConnected = false;
-                console.log('[Net] Disconnected');
+                console.log('[Net] Disconnected, reason:', reason);
 
                 // 停止心跳
                 this.stopHeartbeat();
+
+                // 派发断线事件
+                this.dispatch('_disconnected', { reason });
+            });
+
+            // 监听 socket.io 自动重连成功事件
+            this.socket.io.on('reconnect', (attemptNumber: number) => {
+                console.log('[Net] Socket reconnected after', attemptNumber, 'attempts');
+                this.isConnected = true;
+                this.startHeartbeat();
+
+                // 触发重连回调
+                if (this.onReconnectCallback) {
+                    this.onReconnectCallback();
+                }
+            });
+
+            this.socket.io.on('reconnect_attempt', (attemptNumber: number) => {
+                console.log('[Net] Reconnect attempt', attemptNumber);
+            });
+
+            this.socket.io.on('reconnect_failed', () => {
+                console.log('[Net] Reconnect failed after all attempts');
+                this.dispatch('_reconnect_failed', {});
             });
 
             // --- 核心重构：自动注册所有服务端消息监听 ---

@@ -134,6 +134,8 @@ export class PlayerHandDisplay extends Component {
         const verticalOffset = CardSpacing.stack.verticalOffset;
         const wildCardGap = CardSpacing.stack.wildCardGap;
 
+        console.log(`[PlayerHandDisplay] displaySpread: enableGrouping=${this._enableGrouping}, cards=${cards.map(c => '0x' + c.toString(16)).join(',')}`);
+
         // If grouping is disabled (TheDecree mode), display cards in order received from server
         // Server has already sorted the cards, so we don't need to sort again
         if (!this._enableGrouping) {
@@ -517,6 +519,21 @@ export class PlayerHandDisplay extends Component {
     }
 
     /**
+     * Update the card count label without re-rendering the entire display
+     * Used during dealing animation to increment the count
+     * @param newCount New card count to display
+     */
+    public updateCardCountLabel(newCount: number): void {
+        if (this._cardCountLabel) {
+            const label = this._cardCountLabel.getComponent(Label);
+            if (label) {
+                label.string = newCount.toString();
+                console.log(`[PlayerHandDisplay] Updated card count label to ${newCount}`);
+            }
+        }
+    }
+
+    /**
      * Create a poker card node
      * @param cardValue Card value
      * @param showFront Whether to show front or back
@@ -783,21 +800,45 @@ export class PlayerHandDisplay extends Component {
 
     /**
      * Sort cards by value (for TheDecree mode)
+     * Uses Ace-high ordering: 2, 3, 4, ..., K, A
+     * Handles Guandan encoding where A=14, 2=15
      * @param cards Array of card values
-     * @returns Sorted array of card values (ascending by point, then by suit)
+     * @returns Sorted array of card values (ascending by point with Ace high, then by suit)
      */
     public static sortCards(cards: number[]): number[] {
         return [...cards].sort((a, b) => {
-            const pointA = a & 0x0F;
-            const pointB = b & 0x0F;
-            if (pointA !== pointB) {
-                return pointA - pointB;
+            let pointA = a & 0x0F;
+            let pointB = b & 0x0F;
+
+            // Convert Guandan encoding to Ace-high ranking
+            // Guandan: A=14, 2=15 -> Ace-high: 2=2, A=14
+            const rankA = PlayerHandDisplay.getAceHighRank(pointA);
+            const rankB = PlayerHandDisplay.getAceHighRank(pointB);
+
+            if (rankA !== rankB) {
+                return rankA - rankB;
             }
             // Same point, sort by suit
             const suitA = (a & 0xF0) >> 4;
             const suitB = (b & 0xF0) >> 4;
             return suitA - suitB;
         });
+    }
+
+    /**
+     * Convert card point to Ace-high rank for sorting
+     * Handles both standard encoding (A=1) and Guandan encoding (A=14, 2=15)
+     * @param point Card point value
+     * @returns Rank value for Ace-high sorting (2=2, 3=3, ..., K=13, A=14)
+     */
+    private static getAceHighRank(point: number): number {
+        // Guandan encoding: A=14, 2=15
+        if (point === 14) return 14;  // A -> 14 (highest)
+        if (point === 15) return 2;   // 2 -> 2 (lowest)
+        // Standard encoding: A=1
+        if (point === 1) return 14;   // A -> 14 (highest)
+        // 3-13 stay the same
+        return point;
     }
 
     /**
@@ -812,5 +853,90 @@ export class PlayerHandDisplay extends Component {
      */
     public getCardSpacing(): number {
         return this._cardSpacing;
+    }
+
+    /**
+     * Hide specific cards without re-layout (for refill animation)
+     * Cards are hidden but their positions are preserved
+     * @param cardsToHide Array of card values to hide
+     * @returns Array of positions where cards were hidden (world coordinates)
+     */
+    public hideCardsWithoutRelayout(cardsToHide: number[]): Vec3[] {
+        const hiddenPositions: Vec3[] = [];
+        const cardsToHideCopy = [...cardsToHide];
+
+        console.log(`[PlayerHandDisplay] hideCardsWithoutRelayout: looking for ${cardsToHide.map(c => '0x' + c.toString(16)).join(',')}`);
+        console.log(`[PlayerHandDisplay] Current display has ${this._pokerNodes.length} nodes`);
+
+        // Log all card values in the display
+        const displayedCards: string[] = [];
+        for (let i = 0; i < this._pokerNodes.length; i++) {
+            const poker = this._pokerComponents[i];
+            if (poker) {
+                displayedCards.push('0x' + poker.getValue().toString(16));
+            }
+        }
+        console.log(`[PlayerHandDisplay] Displayed cards: ${displayedCards.join(',')}`);
+
+        for (let i = 0; i < this._pokerNodes.length && cardsToHideCopy.length > 0; i++) {
+            const poker = this._pokerComponents[i];
+            if (poker) {
+                const cardValue = poker.getValue();
+                const idx = cardsToHideCopy.indexOf(cardValue);
+                if (idx !== -1) {
+                    // Record the world position before hiding
+                    const worldPos = new Vec3();
+                    this._pokerNodes[i].getWorldPosition(worldPos);
+                    hiddenPositions.push(worldPos);
+
+                    // Hide the card node
+                    this._pokerNodes[i].active = false;
+
+                    // Remove from the list to avoid duplicate matching
+                    cardsToHideCopy.splice(idx, 1);
+                }
+            }
+        }
+
+        console.log(`[PlayerHandDisplay] Hidden ${hiddenPositions.length} cards without relayout`);
+        return hiddenPositions;
+    }
+
+    /**
+     * Get the card values currently displayed
+     * @returns Array of card values from the displayed poker nodes
+     */
+    public getDisplayedCardValues(): number[] {
+        const values: number[] = [];
+        for (let i = 0; i < this._pokerNodes.length; i++) {
+            const poker = this._pokerComponents[i];
+            if (poker) {
+                values.push(poker.getValue());
+            }
+        }
+        return values;
+    }
+
+    /**
+     * Get positions of remaining visible cards (world coordinates)
+     * @returns Array of world positions for visible cards
+     */
+    public getVisibleCardPositions(): Vec3[] {
+        const positions: Vec3[] = [];
+        for (const node of this._pokerNodes) {
+            if (node.active) {
+                const worldPos = new Vec3();
+                node.getWorldPosition(worldPos);
+                positions.push(worldPos);
+            }
+        }
+        return positions;
+    }
+
+    /**
+     * Get the poker nodes array (for animation)
+     */
+    public getPokerNodes(): Node[] {
+        return this._pokerNodes;
     }
 }

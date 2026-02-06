@@ -412,14 +412,69 @@ export class LocalGameStore {
         return this.getPlayerCardCount(this.myPlayerId);
     }
 
+    /**
+     * 设置我的手牌（用于重连恢复）
+     */
+    public setHandCards(cards: number[]): void {
+        if (this.myPlayerId) {
+            this.setPlayerHandCards(this.myPlayerId, cards);
+        } else {
+            // 如果 myPlayerId 还没设置，先临时保存
+            console.log(`[LocalGameStore] Hand cards set (myPlayerId not yet set): ${cards.length} cards`);
+            // 创建一个临时存储
+            this._pendingHandCards = [...cards];
+        }
+    }
+
+    private _pendingHandCards: number[] = [];
+
+    /**
+     * 设置玩家游戏状态（用于重连恢复）
+     */
+    public setPlayerGameState(playerId: string, state: {
+        handCardCount: number;
+        hasPlayed: boolean;
+        playedCardCount: number;
+        isAuto: boolean;
+    }): void {
+        let player = this.players.get(playerId);
+        if (!player) {
+            // 如果玩家不存在，创建一个
+            player = {
+                playerId,
+                handCards: Array(state.handCardCount).fill(-1),
+                cardCount: state.handCardCount,
+                score: 0,
+                state: state.hasPlayed ? PlayerState.PLAYED : PlayerState.WAITING,
+                isDealer: false,
+                isTurn: false,
+                isAuto: state.isAuto,
+                autoReason: state.isAuto ? 'disconnect' : undefined
+            };
+            this.players.set(playerId, player);
+        } else {
+            player.cardCount = state.handCardCount;
+            player.state = state.hasPlayed ? PlayerState.PLAYED : PlayerState.WAITING;
+            player.isAuto = state.isAuto;
+            if (state.isAuto) {
+                player.autoReason = 'disconnect';
+            }
+        }
+        console.log(`[LocalGameStore] Player ${playerId} game state restored: cardCount=${state.handCardCount}, hasPlayed=${state.hasPlayed}, isAuto=${state.isAuto}`);
+    }
+
     // ==================== 游戏状态管理 ====================
 
     /**
      * 设置游戏状态
      */
-    public setGameState(state: TheDecreeGameState): void {
-        this.gameState = state;
-        console.log(`[LocalGameStore] Game state updated: ${state}`);
+    public setGameState(state: TheDecreeGameState | string): void {
+        if (typeof state === 'string') {
+            this.gameState = state as TheDecreeGameState;
+        } else {
+            this.gameState = state;
+        }
+        console.log(`[LocalGameStore] Game state updated: ${this.gameState}`);
     }
 
     /**
@@ -435,6 +490,13 @@ export class LocalGameStore {
     public setCurrentRound(round: number): void {
         this.currentRound = round;
         console.log(`[LocalGameStore] Current round: ${round}`);
+    }
+
+    /**
+     * 设置回合数（别名，用于重连）
+     */
+    public setRoundNumber(round: number): void {
+        this.setCurrentRound(round);
     }
 
     /**

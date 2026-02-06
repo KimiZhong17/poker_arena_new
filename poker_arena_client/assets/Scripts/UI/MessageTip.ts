@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Label, UITransform, Color, tween, Vec3, Tween } from 'cc';
+import { _decorator, Component, Node, Label, UITransform, Color, tween, Vec3, Tween, Sprite } from 'cc';
 
 const { ccclass, property } = _decorator;
 
@@ -20,6 +20,9 @@ export class MessageTip extends Component {
 
     @property(Label)
     public messageLabel: Label | null = null;
+
+    @property(Sprite)
+    public backgroundSprite: Sprite | null = null;
 
     @property
     public defaultDuration: number = 2.0; // 默认显示时长（秒）
@@ -143,6 +146,11 @@ export class MessageTip extends Component {
             const color = this.messageLabel.color.clone();
             color.a = opacity;
             this.messageLabel.color = color;
+        }
+        if (this.backgroundSprite) {
+            const bgColor = this.backgroundSprite.color.clone();
+            bgColor.a = opacity;
+            this.backgroundSprite.color = bgColor;
         }
     }
 
