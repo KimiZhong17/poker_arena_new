@@ -519,12 +519,55 @@ export class PlayerHandDisplay extends Component {
     }
 
     /**
+     * 初始化手牌堆显示用于发牌动画（STACK模式）
+     * 在发牌动画开始前调用，创建数字标签以便动画过程中逐张递增
+     * startCount > 0 时立即显示牌背和数字；startCount === 0 时只创建标签（不显示牌背）
+     * @param startCount 初始显示的手牌数量
+     */
+    public initStackForDealing(startCount: number): void {
+        if (this._displayMode !== HandDisplayMode.STACK) return;
+
+        this.clearCards();
+
+        const baseOffset = this.getHandPileBaseOffset();
+
+        // 创建一张牌背作为堆叠底（startCount=0 时隐藏，等第一张牌到达时再显示）
+        const cardNode = this.createCardNode(0, false);
+        cardNode.setPosition(baseOffset.x, baseOffset.y, 0);
+        if (startCount === 0) {
+            cardNode.active = false;
+        }
+        this.handContainer.addChild(cardNode);
+        this._pokerNodes.push(cardNode);
+
+        // 创建数字标签（startCount > 0 时显示数字，0 时创建但不可见）
+        if (this._showCardCount) {
+            this.createCardCountLabel(startCount > 0 ? startCount : 1, baseOffset);
+            if (startCount === 0 && this._cardCountLabel) {
+                this._cardCountLabel.active = false;
+            }
+        }
+
+        console.log(`[PlayerHandDisplay] initStackForDealing: startCount=${startCount}`);
+    }
+
+    /**
      * Update the card count label without re-rendering the entire display
      * Used during dealing animation to increment the count
      * @param newCount New card count to display
      */
     public updateCardCountLabel(newCount: number): void {
         if (this._cardCountLabel) {
+            // 首次更新时激活隐藏的标签和牌背（初始发牌 startCount=0 的场景）
+            if (!this._cardCountLabel.active) {
+                this._cardCountLabel.active = true;
+                // 同时激活隐藏的牌背节点
+                for (const node of this._pokerNodes) {
+                    if (!node.active) {
+                        node.active = true;
+                    }
+                }
+            }
             const label = this._cardCountLabel.getComponent(Label);
             if (label) {
                 label.string = newCount.toString();

@@ -526,6 +526,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
                         // 获取手牌显示组件用于更新数量
                         const handDisplay = playerUIController.getHandDisplay();
                         const startCount = oldHandCount;
+                        // 动画开始前，先初始化手牌堆显示（带数字标签），这样每发一张牌可以递增数字
+                        if (handDisplay) {
+                            handDisplay.initStackForDealing(startCount);
+                        }
                         // 其他玩家使用简单动画，只发补牌数量
                         this.dealingAnimator.dealToOtherPlayer(
                             playerIndex,
@@ -615,6 +619,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
                         if (this.dealingAnimator && this.deckPile && otherDealCount > 0) {
                             const otherHandDisplay = otherPlayerUIController?.getHandDisplay();
                             const otherStartCount = oldOtherHandCount;
+                            // 动画开始前，先初始化手牌堆显示（带数字标签）
+                            if (otherHandDisplay) {
+                                otherHandDisplay.initStackForDealing(otherStartCount);
+                            }
                             this.dealingAnimator.dealToOtherPlayer(
                                 i,
                                 otherDealCount,

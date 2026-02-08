@@ -285,12 +285,15 @@ export class PlayerUIController extends Component {
     }
 
     /**
-     * 获取手牌容器的世界坐标（用于 dealer indicator 定位）
+     * 获取手牌堆的世界坐标（用于发牌动画目标位置）
+     * HandContainer 在座位节点原点，handPileOffset 作为卡牌内部偏移
+     * 这里将两者合并，返回手牌堆实际显示的世界坐标
      */
     public getHandContainerWorldPosition(): { x: number, y: number } {
         if (this.handContainer) {
             const worldPos = this.handContainer.getWorldPosition();
-            return { x: worldPos.x, y: worldPos.y };
+            const hpOffset = this._positionConfig?.handPileOffset || { x: 0, y: 0 };
+            return { x: worldPos.x + hpOffset.x, y: worldPos.y + hpOffset.y };
         }
         // 如果没有手牌容器，返回节点自身的世界坐标
         return this.getWorldPosition();

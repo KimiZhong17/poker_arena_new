@@ -286,6 +286,7 @@ export class PlayerUIManager extends Component {
             infoPanel.updatePlayerInfo(player.info);
 
             // 创建手牌容器
+            const positionConfig = this._layoutConfig[relativeSeat];
             let handContainer = seatNode.getChildByName('HandContainer');
             if (!handContainer) {
                 handContainer = new Node('HandContainer');
@@ -304,9 +305,6 @@ export class PlayerUIManager extends Component {
             // 初始化 PlayerUIController（传入已存在的 InfoPanel）
             playerUIController.handContainer = handContainer;
             playerUIController.infoPanel = infoPanel.node;
-
-            // 获取对应的位置配置
-            const positionConfig = this._layoutConfig[relativeSeat];
 
             const glowMat = this._glowMaterial;
             playerUIController.init(player, relativeSeat, pokerSprites, pokerPrefab, levelRank, enableGrouping, positionConfig, glowMat);
