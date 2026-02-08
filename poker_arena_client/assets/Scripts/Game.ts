@@ -13,10 +13,11 @@ import { SeatLayoutConfig } from './Config/SeatConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { NetworkManager } from './Network/NetworkManager';
 import { NetworkConfig } from './Config/NetworkConfig';
-import { EventCenter } from './Utils/EventCenter';
+import { EventCenter, GameEvents } from './Utils/EventCenter';
 import { GameService } from './Services/GameService';
 import { SceneUIController } from './UI/SceneUIController';
 import { LoadingUI } from './UI/LoadingUI';
+import { LocalRoomStore, RoomState } from './LocalStore/LocalRoomStore';
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -61,6 +62,7 @@ export class Game extends Component {
     private _pokerPrefab: Prefab = null!;
     private _glowMaterial: Material | null = null; // 边缘光材质
     private _hasEnteredGame: boolean = false;
+    private _holdLoadingForReconnect: boolean = false;
 
     // Game configuration from scene transition
     private _gameMode: string = '';
@@ -163,6 +165,10 @@ export class Game extends Component {
 
                 this._glowMaterial = material;
                 console.log("CardGlow material loaded.");
+
+                if (this._playerUIManager) {
+                    this._playerUIManager.applyGlowMaterialToMainHand(material);
+                }
                 this._checkAllLoaded();
             });
         });
@@ -181,6 +187,11 @@ export class Game extends Component {
 
     private _enterGame(): void {
         console.log("[Game] Entering game - initializing systems...");
+        console.log('[Game] instance:', {
+            node: this.node?.name,
+            uuid: this.node?.uuid,
+            scene: this.node?.scene?.name
+        });
 
         if (this.loadingUI) {
             this.loadingUI.updateProgress(1.0, '加载完成！');
@@ -209,16 +220,46 @@ export class Game extends Component {
         // 7. Setup event listeners for stage switching
         this.setupStageEventListeners();
 
-        // 8. Enter Ready Stage
-        console.log("[Game] All systems initialized, entering Ready stage");
-        this.stageManager.switchToStage(GameStage.READY);
+        // 8. 根据房间状态决定进入哪个阶段
+        const roomStore = LocalRoomStore.getInstance();
+        const currentRoom = roomStore.getCurrentRoom();
+        console.log('[Game] Room snapshot at enter:', {
+            hasRoom: !!currentRoom,
+            roomId: currentRoom?.id,
+            state: currentRoom?.state,
+            players: currentRoom?.players?.length,
+            maxPlayers: currentRoom?.maxPlayers
+        });
+
+        if (currentRoom && currentRoom.state === RoomState.PLAYING) {
+            // 重连场景：房间正在游戏中，直接进入 PlayingStage
+            console.log("[Game] Reconnect scenario: Room is PLAYING, entering Playing stage");
+            this._holdLoadingForReconnect = true;
+            if (this.loadingUI) {
+                this.loadingUI.show();
+                this.loadingUI.updateProgress(1.0, '正在进入游戏...');
+            }
+            console.log('[Game] Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+            this.stageManager.switchToStage(GameStage.PLAYING);
+        } else {
+            // 正常场景：进入 ReadyStage
+            console.log("[Game] All systems initialized, entering Ready stage");
+            this.stageManager.switchToStage(GameStage.READY);
+            this._holdLoadingForReconnect = false;
+            console.log('[Game] Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+        }
 
         // 延迟隐藏加载界面（让用户看到100%）
-        this.scheduleOnce(() => {
-            if (this.loadingUI) {
-                this.loadingUI.hide();
-            }
-        }, 0.5);
+        if (!this._holdLoadingForReconnect) {
+            this.scheduleOnce(() => {
+                if (this.loadingUI) {
+                    console.log('[Game] Auto-hide loading UI (non-reconnect)');
+                    this.loadingUI.hide();
+                }
+            }, 0.5);
+        } else {
+            console.log('[Game] Holding loading UI for reconnect');
+        }
     }
 
     /**
@@ -634,6 +675,21 @@ export class Game extends Component {
         });
 
         console.log("[Game] All hand positions configured with Widget alignment");
+    }
+
+    public finishReconnectLoading(): void {
+        console.log('[Game] finishReconnectLoading called, hold:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+        if (!this._holdLoadingForReconnect) {
+            console.log('[Game] finishReconnectLoading: hold=false, forcing hide anyway');
+        }
+
+        this._holdLoadingForReconnect = false;
+        if (this.loadingUI) {
+            console.log('[Game] Hiding loading UI after reconnect');
+            this.loadingUI.hide();
+        } else {
+            console.warn('[Game] finishReconnectLoading: loadingUI missing');
+        }
     }
 
     // ==================== Public Accessors ====================

@@ -203,6 +203,12 @@ export class PlayerUIController extends Component {
         }
     }
 
+    public setAutoStatus(isAuto: boolean, reason?: 'manual' | 'timeout' | 'disconnect'): void {
+        if (this._infoPanelComponent) {
+            this._infoPanelComponent.setAutoStatus(isAuto, reason);
+        }
+    }
+
     // ===== 手牌显示管理 =====
     /**
      * 更新手牌显示

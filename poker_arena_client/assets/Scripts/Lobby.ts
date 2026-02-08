@@ -11,6 +11,7 @@ import { NetworkConfig } from './Config/NetworkConfig';
 import { NetworkClient } from './Network/NetworkClient';
 import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
 import { LocalRoomStore, RoomData, RoomState } from './LocalStore/LocalRoomStore';
+import { EventCenter, GameEvents } from './Utils/EventCenter';
 
 const { ccclass, property } = _decorator;
 
@@ -143,6 +144,9 @@ export class Lobby extends Component {
 
         console.log(`[Lobby] Game mode: ${this.currentGameMode}`);
 
+        // 监听 UI_NAVIGATE_TO_GAME 事件（用于重连成功后跳转）
+        EventCenter.on(GameEvents.UI_NAVIGATE_TO_GAME, this.onNavigateToGame, this);
+
         // 初始化网络客户端
         this.initNetworkClient();
 
@@ -180,6 +184,7 @@ export class Lobby extends Component {
         if (this.networkClient.getIsConnected()) {
             console.log('[Lobby] Already connected to server');
             this.setupNetworkEvents();
+            this.checkAutoReconnect();
             return;
         }
 
@@ -188,11 +193,23 @@ export class Lobby extends Component {
             .then(() => {
                 console.log('[Lobby] Connected to server');
                 this.setupNetworkEvents();
+                this.checkAutoReconnect();
             })
             .catch((error) => {
                 console.error('[Lobby] Failed to connect to server:', error);
                 this.showStatus('连接服务器失败');
             });
+    }
+
+    /**
+     * 检查是否需要自动重连到之前的房间
+     */
+    private checkAutoReconnect(): void {
+        if (this.roomService.hasPendingReconnect()) {
+            console.log('[Lobby] Found pending reconnect, attempting to reconnect...');
+            this.showStatus('正在重连到游戏...');
+            this.roomService.tryAutoReconnect();
+        }
     }
 
     /**
@@ -610,7 +627,36 @@ export class Lobby extends Component {
         }
     }
 
+    /**
+     * 处理 UI_NAVIGATE_TO_GAME 事件（重连成功后跳转到游戏场景）
+     */
+    private onNavigateToGame = () => {
+        console.log('[Lobby] Navigating to game scene (reconnect or join)');
+
+        // 确保 sceneManager 已初始化
+        if (!this.sceneManager) {
+            this.sceneManager = SceneManager.getInstance();
+        }
+
+        // 获取当前房间信息
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (currentRoom) {
+            // 跳转到游戏场景
+            this.sceneManager.goToGame({
+                roomId: currentRoom.id,
+                gameMode: currentRoom.gameModeId || this.currentGameMode,
+                isOnlineMode: true
+            });
+        } else {
+            console.error('[Lobby] No room data found for navigation');
+        }
+    };
+
     onDestroy() {
+        // Clean up EventCenter listeners
+        EventCenter.off(GameEvents.UI_NAVIGATE_TO_GAME, this.onNavigateToGame, this);
         // Clean up event listeners with null checks
         if (this.createRoomButton?.node && this.createRoomButton.isValid) {
             this.createRoomButton.node.off(Button.EventType.CLICK, this.onCreateRoomClicked, this);

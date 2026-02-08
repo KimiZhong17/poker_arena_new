@@ -35,6 +35,7 @@ export enum ClientMessageType {
  */
 export interface CreateRoomRequest {
     playerName: string;
+    guestId?: string;  // 客户端持久化的游客ID，用于识别同一用户
     gameMode: 'the_decree'; // 将来可扩展其他模式
     maxPlayers: number;
 }
@@ -45,6 +46,7 @@ export interface CreateRoomRequest {
 export interface JoinRoomRequest {
     roomId: string;
     playerName: string;
+    guestId?: string;  // 客户端持久化的游客ID，用于识别同一用户
 }
 
 /**
@@ -52,7 +54,8 @@ export interface JoinRoomRequest {
  */
 export interface ReconnectRequest {
     roomId: string;
-    playerId: string;  // 原来的玩家ID
+    playerId?: string;  // 原来的玩家ID（已废弃，保留兼容）
+    guestId?: string;   // 客户端持久化的游客ID，优先使用
     playerName: string;
 }
 

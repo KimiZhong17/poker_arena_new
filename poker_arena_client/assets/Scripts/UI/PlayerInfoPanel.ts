@@ -45,6 +45,10 @@ export class PlayerInfoPanel extends Component {
     private playerInfo: PlayerInfo | null = null;
     private isMyPlayer: boolean = false;
     private prefabLoaded: boolean = false;
+    private isAuto: boolean = false;
+    private autoReason?: 'manual' | 'timeout' | 'disconnect';
+    private handTypeText: string | null = null;
+    private handTypeColor: Color | null = null;
     private stateLabelAlignment: StateLabelAlignment = StateLabelAlignment.RIGHT;  // 默认右侧
 
     /**
@@ -307,9 +311,7 @@ export class PlayerInfoPanel extends Component {
         }
 
         // 暂时不显示状态
-        if (this.stateLabel) {
-            this.stateLabel.string = '';
-        }
+        this.updateGameStateLabel();
     }
 
     // ==================== 游戏模式专用方法 ====================
@@ -329,24 +331,54 @@ export class PlayerInfoPanel extends Component {
      */
     public setHandType(handTypeText: string, color?: string): void {
         // 暂时使用 stateLabel 显示牌型
-        if (this.stateLabel && this.currentMode === InfoPanelMode.GAME) {
-            this.stateLabel.string = handTypeText;
-            if (color) {
-                const hexColor = color.replace('#', '');
-                const r = parseInt(hexColor.substring(0, 2), 16);
-                const g = parseInt(hexColor.substring(2, 4), 16);
-                const b = parseInt(hexColor.substring(4, 6), 16);
-                this.stateLabel.color = new Color(r, g, b, 255);
-            }
+        if (this.currentMode !== InfoPanelMode.GAME) return;
+
+        this.handTypeText = handTypeText;
+        this.handTypeColor = null;
+        if (color) {
+            const hexColor = color.replace('#', '');
+            const r = parseInt(hexColor.substring(0, 2), 16);
+            const g = parseInt(hexColor.substring(2, 4), 16);
+            const b = parseInt(hexColor.substring(4, 6), 16);
+            this.handTypeColor = new Color(r, g, b, 255);
         }
+
+        this.updateGameStateLabel();
     }
 
     /**
      * 清除牌型显示（仅GAME模式）
      */
     public clearHandType(): void {
-        if (this.stateLabel && this.currentMode === InfoPanelMode.GAME) {
+        if (this.currentMode !== InfoPanelMode.GAME) return;
+
+        this.handTypeText = null;
+        this.handTypeColor = null;
+        this.updateGameStateLabel();
+    }
+
+    public setAutoStatus(isAuto: boolean, reason?: 'manual' | 'timeout' | 'disconnect'): void {
+        this.isAuto = isAuto;
+        this.autoReason = reason;
+        this.updateGameStateLabel();
+    }
+
+    private updateGameStateLabel(): void {
+        if (!this.stateLabel || this.currentMode !== InfoPanelMode.GAME) return;
+
+        if (this.isAuto) {
+            this.stateLabel.string = '托管中...';
+            this.stateLabel.color = UIColors.playerState.notReady;
+        } else {
             this.stateLabel.string = '';
+        }
+
+        if (this.handTypeText) {
+            this.stateLabel.string = this.handTypeText;
+            if (this.handTypeColor) {
+                this.stateLabel.color = this.handTypeColor;
+            }
+            return;
         }
     }
 
@@ -376,5 +408,9 @@ export class PlayerInfoPanel extends Component {
         if (this.nameLabel) this.nameLabel.string = '';
         if (this.scoreLabel) this.scoreLabel.string = '';
         if (this.stateLabel) this.stateLabel.string = '';
+        this.isAuto = false;
+        this.autoReason = undefined;
+        this.handTypeText = null;
+        this.handTypeColor = null;
     }
 }

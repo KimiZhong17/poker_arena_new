@@ -77,6 +77,7 @@ export class LocalGameStore {
     private myPlayerId: string = '';                          // 我的玩家ID（用于快速查询）
 
     // ==================== 牌相关 ====================
+    private myHandCards: number[] = [];             // 我的手牌（兼容旧逻辑）
     private communityCards: number[] = [];           // 公共牌（4张）
     private deckSize: number = 0;                    // 牌堆剩余牌数
 
@@ -122,6 +123,13 @@ export class LocalGameStore {
                 isAuto: false,
                 autoReason: undefined
             });
+        }
+
+        if (this.myPlayerId && this._pendingHandCards.length > 0) {
+            this.setPlayerHandCards(this.myPlayerId, this._pendingHandCards);
+            this.myHandCards = [...this._pendingHandCards];
+            console.log(`[LocalGameStore] Applied pending hand cards: ${this._pendingHandCards.length} cards`);
+            this._pendingHandCards = [];
         }
 
         console.log(`[LocalGameStore] Initialized ${playerIds.length} players, myPlayerId: ${myPlayerId}`);
@@ -360,69 +368,19 @@ export class LocalGameStore {
         return player ? player.autoReason : undefined;
     }
 
-    // ==================== 向后兼容方法（旧架构）====================
-
-    /**
-     * @deprecated 使用 setPlayerHandCards(myPlayerId, cards) 代替
-     */
-    public setMyHandCards(cards: number[]): void {
-        if (this.myPlayerId) {
-            this.setPlayerHandCards(this.myPlayerId, cards);
-        } else {
-            console.warn('[LocalGameStore] myPlayerId not set, cannot set hand cards');
-        }
-    }
-
-    /**
-     * @deprecated 使用 getPlayerHandCards(myPlayerId) 代替
-     */
-    public getMyHandCards(): number[] {
-        return this.getPlayerHandCards(this.myPlayerId);
-    }
-
-    /**
-     * @deprecated 使用 setPlayerHandCards 代替
-     */
-    public removeMyHandCards(cards: number[]): void {
-        const myCards = this.getMyHandCards();
-        for (const card of cards) {
-            const index = myCards.indexOf(card);
-            if (index !== -1) {
-                myCards.splice(index, 1);
-            }
-        }
-        this.setPlayerHandCards(this.myPlayerId, myCards);
-        console.log(`[LocalGameStore] Removed ${cards.length} cards, remaining: ${myCards.length}`);
-    }
-
-    /**
-     * @deprecated 使用 setPlayerHandCards 代替
-     */
-    public addMyHandCards(cards: number[]): void {
-        const myCards = this.getMyHandCards();
-        myCards.push(...cards);
-        this.setPlayerHandCards(this.myPlayerId, myCards);
-        console.log(`[LocalGameStore] Added ${cards.length} cards, total: ${myCards.length}`);
-    }
-
-    /**
-     * @deprecated 使用 getPlayerCardCount(myPlayerId) 代替
-     */
-    public getMyHandCardCount(): number {
-        return this.getPlayerCardCount(this.myPlayerId);
-    }
-
     /**
      * 设置我的手牌（用于重连恢复）
      */
     public setHandCards(cards: number[]): void {
         if (this.myPlayerId) {
             this.setPlayerHandCards(this.myPlayerId, cards);
+            this.myHandCards = [...cards];
         } else {
             // 如果 myPlayerId 还没设置，先临时保存
             console.log(`[LocalGameStore] Hand cards set (myPlayerId not yet set): ${cards.length} cards`);
             // 创建一个临时存储
             this._pendingHandCards = [...cards];
+            this.myHandCards = [...cards];
         }
     }
 
@@ -445,7 +403,7 @@ export class LocalGameStore {
                 handCards: Array(state.handCardCount).fill(-1),
                 cardCount: state.handCardCount,
                 score: 0,
-                state: state.hasPlayed ? PlayerState.PLAYED : PlayerState.WAITING,
+                state: state.hasPlayed ? PlayerState.IDLE : PlayerState.WAITING,
                 isDealer: false,
                 isTurn: false,
                 isAuto: state.isAuto,
@@ -454,10 +412,12 @@ export class LocalGameStore {
             this.players.set(playerId, player);
         } else {
             player.cardCount = state.handCardCount;
-            player.state = state.hasPlayed ? PlayerState.PLAYED : PlayerState.WAITING;
+            player.state = state.hasPlayed ? PlayerState.IDLE : PlayerState.WAITING;
             player.isAuto = state.isAuto;
             if (state.isAuto) {
                 player.autoReason = 'disconnect';
+            } else {
+                player.autoReason = undefined;
             }
         }
         console.log(`[LocalGameStore] Player ${playerId} game state restored: cardCount=${state.handCardCount}, hasPlayed=${state.hasPlayed}, isAuto=${state.isAuto}`);
@@ -528,6 +488,12 @@ export class LocalGameStore {
      */
     public setMyHandCards(cards: number[]): void {
         this.myHandCards = [...cards];
+        if (this.myPlayerId) {
+            this.setPlayerHandCards(this.myPlayerId, cards);
+            this._pendingHandCards = [];
+        } else {
+            this._pendingHandCards = [...cards];
+        }
         console.log(`[LocalGameStore] My hand cards updated: ${cards.length} cards`);
     }
 
@@ -535,35 +501,46 @@ export class LocalGameStore {
      * 获取我的手牌
      */
     public getMyHandCards(): number[] {
-        return [...this.myHandCards];
+        const player = this.players.get(this.myPlayerId);
+        if (player && Array.isArray(player.handCards)) {
+            return [...player.handCards];
+        }
+        if (this._pendingHandCards.length > 0) {
+            return [...this._pendingHandCards];
+        }
+        return Array.isArray(this.myHandCards) ? [...this.myHandCards] : [];
     }
 
     /**
      * 移除我的手牌（出牌后）
      */
     public removeMyHandCards(cards: number[]): void {
+        const myCards = this.getMyHandCards();
         for (const card of cards) {
-            const index = this.myHandCards.indexOf(card);
+            const index = myCards.indexOf(card);
             if (index !== -1) {
-                this.myHandCards.splice(index, 1);
+                myCards.splice(index, 1);
             }
         }
-        console.log(`[LocalGameStore] Removed ${cards.length} cards, remaining: ${this.myHandCards.length}`);
+        this.setMyHandCards(myCards);
+        console.log(`[LocalGameStore] Removed ${cards.length} cards, remaining: ${myCards.length}`);
     }
 
     /**
      * 添加手牌（补牌后）
      */
     public addMyHandCards(cards: number[]): void {
-        this.myHandCards.push(...cards);
-        console.log(`[LocalGameStore] Added ${cards.length} cards, total: ${this.myHandCards.length}`);
+        const myCards = this.getMyHandCards();
+        myCards.push(...cards);
+        this.setMyHandCards(myCards);
+        console.log(`[LocalGameStore] Added ${cards.length} cards, total: ${myCards.length}`);
     }
 
     /**
      * 获取我的手牌数量
      */
     public getMyHandCardCount(): number {
-        return this.myHandCards.length;
+        return this.getMyHandCards().length;
     }
 
     // ==================== 公共牌管理 ====================
@@ -779,9 +756,9 @@ export class LocalGameStore {
             currentRoundPlays: this.currentRoundPlays,
             lastPlayedCards: this.lastPlayedCards,
             lastPlayerId: this.lastPlayerId,
-            scores: Object.fromEntries(this.scores),
-            playerCardCounts: Object.fromEntries(this.playerCardCounts),
-            playerTurnState: Object.fromEntries(this.playerTurnState),
+            scores: this.getScoresSnapshot(),
+            playerCardCounts: this.getPlayerCardCountsSnapshot(),
+            playerTurnState: this.getPlayerTurnStateSnapshot(),
             roundHistoryCount: this.roundHistory.length
         };
     }
@@ -798,7 +775,31 @@ export class LocalGameStore {
         console.log('[LocalGameStore] Community:', this.communityCards.length, 'cards');
         console.log('[LocalGameStore] Dealer:', this.dealerId);
         console.log('[LocalGameStore] Cards to Play:', this.cardsToPlay);
-        console.log('[LocalGameStore] Scores:', Object.fromEntries(this.scores));
+        console.log('[LocalGameStore] Scores:', this.getScoresSnapshot());
         console.log('[LocalGameStore] =====================================');
+    }
+
+    private getScoresSnapshot(): { [playerId: string]: number } {
+        const scores: { [playerId: string]: number } = {};
+        for (const [playerId, player] of this.players) {
+            scores[playerId] = player.score;
+        }
+        return scores;
+    }
+
+    private getPlayerCardCountsSnapshot(): { [playerId: string]: number } {
+        const cardCounts: { [playerId: string]: number } = {};
+        for (const [playerId, player] of this.players) {
+            cardCounts[playerId] = player.cardCount;
+        }
+        return cardCounts;
+    }
+
+    private getPlayerTurnStateSnapshot(): { [playerId: string]: boolean } {
+        const turnState: { [playerId: string]: boolean } = {};
+        for (const [playerId, player] of this.players) {
+            turnState[playerId] = player.isTurn;
+        }
+        return turnState;
     }
 }

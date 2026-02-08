@@ -29,6 +29,8 @@ import { TheDecreeGameState } from './TheDecreeGameState';
 import { DeckPile } from '../../UI/DeckPile';
 import { DealingAnimator, DealingResult } from '../../UI/DealingAnimator';
 import { PlayerHandDisplay } from '../../UI/PlayerHandDisplay';
+import { SeatLayoutConfig } from '../../Config/SeatConfig';
+import { EventCenter, GameEvents } from '../../Utils/EventCenter';
 
 /**
  * The Decree game mode - Network/Client version
@@ -116,6 +118,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 注册网络事件监听器（使用基类方法）
         this.setupNetworkEvents();
+        this.setupLocalEvents();
+
+        // 检查是否是重连场景，如果是则恢复游戏状态
+        this.checkAndRestoreReconnectState();
 
         console.log('[TheDecreeModeClient] Waiting for server events...');
     }
@@ -133,12 +139,14 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 注销网络事件监听器（使用基类方法）
         this.unregisterAllNetworkEvents();
+        this.cleanupLocalEvents();
 
         // 隐藏 UI
         this.hideUI();
 
         // 清理公牌节点的子元素（重要：防止再来一局时看到上一局的公牌）
-        if (this.communityCardsNode) {
+        // 注意：需要检查 isValid，因为在场景销毁时节点可能已经被销毁
+        if (this.communityCardsNode && this.communityCardsNode.isValid) {
             console.log('[TheDecreeModeClient] Clearing community cards node children');
             this.communityCardsNode.removeAllChildren();
         }
@@ -153,6 +161,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.clearShowdownTimer();
         super.cleanup();
         this.unregisterAllNetworkEvents();
+        this.cleanupLocalEvents();
     }
 
     // ==================== 节点查找 ====================
@@ -373,6 +382,47 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] ✓ All network events registered');
         console.log('[TheDecreeModeClient] ========================================');
     }
+
+    private setupLocalEvents(): void {
+        EventCenter.on(GameEvents.GAME_RECONNECTED, this.onGameReconnected, this);
+        EventCenter.on(GameEvents.PLAYER_AUTO_CHANGED, this.onPlayerAutoChangedEvent, this);
+    }
+
+    private cleanupLocalEvents(): void {
+        EventCenter.off(GameEvents.GAME_RECONNECTED, this.onGameReconnected, this);
+        EventCenter.off(GameEvents.PLAYER_AUTO_CHANGED, this.onPlayerAutoChangedEvent, this);
+    }
+
+    private onGameReconnected = () => {
+        console.log('[TheDecreeModeClient] Game reconnected, resyncing UI/state...');
+        console.log('[TheDecreeModeClient] game instance:', {
+            node: this.game?.node?.name,
+            uuid: this.game?.node?.uuid,
+            scene: this.game?.node?.scene?.name,
+            holdLoading: (this.game as any)?._holdLoadingForReconnect
+        });
+        console.log('[TheDecreeModeClient] playerUIManager exists:', !!this.game.playerUIManager);
+        console.log('[TheDecreeModeClient] current room:', !!LocalRoomStore.getInstance().getCurrentRoom());
+
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager && playerUIManager.getPlayerCount() === 0) {
+            this.upgradePlayerUIToPlayingMode();
+        } else {
+            this.refreshPlayerIdMapping();
+        }
+
+        this.checkAndRestoreReconnectState(true);
+    };
+
+    private onPlayerAutoChangedEvent = (data: PlayerAutoChangedEvent) => {
+        const playerIndex = this.getPlayerIndex(data.playerId);
+        if (playerIndex === -1) return;
+
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            playerUIManager.setPlayerAutoStatus(playerIndex, data.isAuto, data.reason);
+        }
+    };
 
     // ==================== 事件处理器 ====================
 
@@ -1691,6 +1741,25 @@ export class TheDecreeModeClient extends GameModeClientBase {
             return;
         }
 
+        // 获取当前玩家的 ID 和 seatIndex
+        const myPlayerId = localRoomStore.getMyPlayerId();
+        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
+        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
+
+        // 检查 PlayerUIManager 是否已初始化（重连场景可能跳过了 ReadyStage）
+        // @ts-ignore - accessing private property
+        if (playerUIManager._maxSeats === 0) {
+            console.log('[TheDecreeModeClient] PlayerUIManager not initialized, calling initForReadyStage first...');
+            const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
+            playerUIManager.initForReadyStage(
+                currentRoom.players,
+                currentRoom.maxPlayers,
+                mySeatIndex,
+                layoutConfig
+            );
+            console.log('[TheDecreeModeClient] PlayerUIManager initialized for reconnect scenario');
+        }
+
         // 设置玩家 ID 映射（关键！）
         console.log('[TheDecreeModeClient] Setting up player ID mapping...');
         console.log('[TheDecreeModeClient] Room players:', currentRoom.players.map(p => ({
@@ -1699,19 +1768,15 @@ export class TheDecreeModeClient extends GameModeClientBase {
             seatIndex: p.seatIndex
         })));
 
-        // 获取当前玩家的 ID 和 seatIndex
-        const myPlayerId = localRoomStore.getMyPlayerId();
-        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
-        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
-
         console.log('[TheDecreeModeClient] My player ID:', myPlayerId);
         console.log('[TheDecreeModeClient] My seat index:', mySeatIndex);
 
         // 重新映射玩家位置：让当前玩家总是显示在 index 0（底部）
         // 其他玩家按顺序显示在其他位置
+        const totalSeats = currentRoom.maxPlayers;
         const remappedPlayers = [];
-        for (let i = 0; i < currentRoom.players.length; i++) {
-            const actualSeatIndex = (mySeatIndex + i) % currentRoom.players.length;
+        for (let i = 0; i < totalSeats; i++) {
+            const actualSeatIndex = (mySeatIndex + i) % totalSeats;
             const playerInfo = currentRoom.players.find(p => p.seatIndex === actualSeatIndex);
             if (playerInfo) {
                 remappedPlayers.push({
@@ -2158,5 +2223,233 @@ export class TheDecreeModeClient extends GameModeClientBase {
         networkClient.send(ClientMessageType.SET_AUTO, request);
 
         console.log(`[TheDecreeModeClient] Set auto mode: ${isAuto}`);
+    }
+
+    
+    // ==================== 重连恢复方法 ====================
+
+    /**
+     * 检查并恢复重连状态
+     * 如果 LocalGameStore 中有游戏数据，说明是重连场景，需要恢复 UI
+     */
+    private checkAndRestoreReconnectState(force: boolean = false): void {
+        console.log('[TheDecreeModeClient] checkAndRestoreReconnectState, force:', force);
+        console.log('[TheDecreeModeClient] game instance:', {
+            node: this.game?.node?.name,
+            uuid: this.game?.node?.uuid,
+            scene: this.game?.node?.scene?.name,
+            holdLoading: (this.game as any)?._holdLoadingForReconnect
+        });
+        try {
+            const gameStore = LocalGameStore.getInstance();
+            const communityCards = gameStore.getCommunityCards();
+            const myHandCards = gameStore.getMyHandCards();
+            console.log('[TheDecreeModeClient] reconnect snapshot:', {
+                communityCards: communityCards.length,
+                myHandCards: myHandCards.length,
+                gameState: gameStore.getGameState(),
+                dealerId: gameStore.getDealerId(),
+                cardsToPlay: gameStore.getCardsToPlay(),
+                round: gameStore.getCurrentRound()
+            });
+
+            // 如果没有公共牌数据，说明不是重连场景
+            if (!force && communityCards.length === 0 && myHandCards.length === 0) {
+                console.log('[TheDecreeModeClient] No reconnect data found, waiting for server events');
+                return;
+            }
+
+            console.log('[TheDecreeModeClient] ========== Restoring Reconnect State ==========');
+            console.log('[TheDecreeModeClient] Community cards:', communityCards);
+            console.log('[TheDecreeModeClient] My hand cards:', myHandCards.length);
+
+            this.refreshPlayerIdMapping();
+
+            // 1. 恢复游戏状态
+            const savedGameState = gameStore.getGameState();
+            if (savedGameState) {
+                this.gameState = savedGameState;
+                console.log('[TheDecreeModeClient] Restored game state:', this.gameState);
+            }
+
+            // 2. 恢复庄家信息
+            const savedDealerId = gameStore.getDealerId();
+            if (savedDealerId) {
+                this.dealerId = savedDealerId;
+                console.log('[TheDecreeModeClient] Restored dealer ID:', this.dealerId);
+
+                // 显示庄家指示器
+                const dealerIndex = this.getPlayerIndex(savedDealerId);
+                if (dealerIndex !== -1 && this.game.playerUIManager) {
+                    this.game.playerUIManager.showDealer(dealerIndex);
+                }
+            }
+
+            // 3. 恢复叫牌数
+            const savedCardsToPlay = gameStore.getCardsToPlay();
+            if (savedCardsToPlay > 0) {
+                this.cardsToPlay = savedCardsToPlay;
+                console.log('[TheDecreeModeClient] Restored cards to play:', this.cardsToPlay);
+            }
+
+            // 4. 恢复回合数
+            const savedRound = gameStore.getCurrentRound();
+            if (savedRound > 0) {
+                this.currentRoundNumber = savedRound;
+                console.log('[TheDecreeModeClient] Restored round number:', this.currentRoundNumber);
+            }
+
+            // 5. 恢复公共牌显示
+            if (communityCards.length > 0) {
+                this.communityCards = communityCards;
+                this._communityCardsDealt = true;  // 标记公共牌已发
+                this.displayCommunityCards();
+                console.log('[TheDecreeModeClient] Restored community cards display');
+            }
+
+            // 6. 恢复手牌显示
+            if (myHandCards.length > 0) {
+                this._initialDealAnimationComplete = true;  // 跳过发牌动画
+                this.restoreHandCardsDisplay(myHandCards);
+                console.log('[TheDecreeModeClient] Restored hand cards display');
+            }
+            if (myHandCards.length === 0) {
+                this.restoreHandCardsDisplay(myHandCards);
+                console.log('[TheDecreeModeClient] Restored hand cards display (empty hand)');
+            }
+
+            // 7. 恢复分数显示
+            this.restoreScoresDisplay();
+            this.applyAutoStatesFromGameStore();
+
+            // 8. 更新 UI 状态（启用/禁用按钮等）
+            if (this.theDecreeUIController) {
+                this.theDecreeUIController.updateUIState();
+                this.theDecreeUIController.updateCallButtonsVisibility();
+            }
+
+            console.log('[TheDecreeModeClient] ========== Reconnect State Restored ==========');
+        } catch (error) {
+            console.error('[TheDecreeModeClient] Failed to restore reconnect state:', error);
+        } finally {
+            console.log('[TheDecreeModeClient] finishing reconnect loading');
+            this.game.finishReconnectLoading();
+        }
+    }
+
+    /**
+     * 恢复手牌显示
+     */
+    private restoreHandCardsDisplay(myHandCards: number[]): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            console.error('[TheDecreeModeClient] PlayerUIManager not found');
+            return;
+        }
+
+        // 恢复主玩家手牌
+        const playerUIController = playerUIManager.getPlayerUINode(0);
+        if (playerUIController) {
+            const player = playerUIController.getPlayer();
+            if (player) {
+                player.setHandCards(myHandCards);
+                playerUIManager.updatePlayerHand(0);
+                console.log('[TheDecreeModeClient] Main player hand restored:', myHandCards.length, 'cards');
+
+                // 应用 glow 特效（重连场景可能在 glow material 加载后才恢复手牌）
+                // @ts-ignore - accessing private property
+                const glowMaterial = this.game['_glowMaterial'];
+                if (glowMaterial) {
+                    const handDisplay = playerUIController.getHandDisplay();
+                    if (handDisplay) {
+                        handDisplay.setGlowMaterialAndApply(glowMaterial);
+                    }
+                }
+            }
+        }
+
+        // 恢复其他玩家手牌数量
+        const gameStore = LocalGameStore.getInstance();
+        const allPlayerData = gameStore.getAllPlayerGameData();
+
+        for (const playerData of allPlayerData) {
+            const playerIndex = this.getPlayerIndex(playerData.playerId);
+            if (playerIndex <= 0) continue;  // 跳过主玩家和未找到的玩家
+
+            const otherPlayerUIController = playerUIManager.getPlayerUINode(playerIndex);
+            if (otherPlayerUIController) {
+                const otherPlayer = otherPlayerUIController.getPlayer();
+                if (otherPlayer) {
+                    // 设置手牌数量（用 -1 表示未知牌）
+                    const emptyCards = Array(playerData.cardCount).fill(-1);
+                    otherPlayer.setHandCards(emptyCards);
+                    playerUIManager.updatePlayerHand(playerIndex);
+                    console.log(`[TheDecreeModeClient] Player ${playerIndex} hand count restored: ${playerData.cardCount}`);
+                }
+            }
+        }
+
+        // 启用卡牌选择
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.enableCardSelection();
+        }
+    }
+
+    /**
+     * 恢复分数显示
+     */
+    private restoreScoresDisplay(): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) return;
+
+        const gameStore = LocalGameStore.getInstance();
+        const allScores = gameStore.getAllScores();
+
+        for (const [playerId, score] of allScores) {
+            const playerIndex = this.getPlayerIndex(playerId);
+            if (playerIndex === -1) continue;
+
+            const playerUINode = playerUIManager.getPlayerUINode(playerIndex);
+            if (playerUINode) {
+                playerUINode.updateScore(score);
+                console.log(`[TheDecreeModeClient] Restored score for player ${playerIndex}: ${score}`);
+            }
+        }
+    }
+
+    private applyAutoStatesFromGameStore(): void {
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) return;
+
+        const gameStore = LocalGameStore.getInstance();
+        const allPlayerData = gameStore.getAllPlayerGameData();
+
+        for (const playerData of allPlayerData) {
+            const playerIndex = this.getPlayerIndex(playerData.playerId);
+            if (playerIndex === -1) continue;
+            playerUIManager.setPlayerAutoStatus(playerIndex, playerData.isAuto, playerData.autoReason);
+        }
+    }
+
+    private refreshPlayerIdMapping(): void {
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            console.warn('[TheDecreeModeClient] No current room for player mapping');
+            return;
+        }
+
+        const myPlayerId = localRoomStore.getMyPlayerId();
+        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
+        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
+        const totalSeats = currentRoom.maxPlayers;
+
+        this.playerIdToIndexMap.clear();
+        for (const playerInfo of currentRoom.players) {
+            const relativeIndex = (playerInfo.seatIndex - mySeatIndex + totalSeats) % totalSeats;
+            this.playerIdToIndexMap.set(playerInfo.id, relativeIndex);
+        }
+
+        console.log('[TheDecreeModeClient] Player ID mapping refreshed:', Array.from(this.playerIdToIndexMap.entries()));
     }
 }

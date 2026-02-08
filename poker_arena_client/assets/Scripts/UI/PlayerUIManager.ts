@@ -486,6 +486,26 @@ export class PlayerUIManager extends Component {
         }
     }
 
+    public setPlayerAutoStatus(playerIndex: number, isAuto: boolean, reason?: 'manual' | 'timeout' | 'disconnect'): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.setAutoStatus(isAuto, reason);
+        }
+    }
+
+    public applyGlowMaterialToMainHand(material: Material): void {
+        if (!material) return;
+
+        this._glowMaterial = material;
+        const node = this._playerUINodes[0];
+        if (!node) return;
+
+        const handDisplay = node.getHandDisplay();
+        if (handDisplay) {
+            handDisplay.setGlowMaterialAndApply(material);
+        }
+    }
+
     /**
      * 显示庄家标识（使用独立的 DealerIndicator 组件）
      * @param dealerIndex 庄家玩家索引

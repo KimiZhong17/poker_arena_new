@@ -240,8 +240,8 @@ export class GameServer {
             const room = new GameRoom(data.gameMode, data.maxPlayers);
             this.rooms.set(room.id, room);
 
-            // 创建玩家会话（使用净化后的名称）
-            const player = new PlayerSession(socket, sanitizedName);
+            // 创建玩家会话（使用净化后的名称和guestId）
+            const player = new PlayerSession(socket, sanitizedName, data.guestId);
             this.players.set(socket.id, player);
 
             // 玩家加入房间
@@ -269,6 +269,7 @@ export class GameServer {
 
     /**
      * 处理加入房间
+     * 如果玩家（通过guestId）已经在对局中断线，自动处理为重连
      */
     private handleJoinRoom(socket: Socket, data: JoinRoomRequest): void {
         try {
@@ -283,13 +284,29 @@ export class GameServer {
                 return;
             }
 
+            // 检查是否是重连场景（通过guestId查找）
+            if (data.guestId && room.state === 'playing') {
+                // 先检查断线玩家列表
+                const reconnectResult = this.tryReconnectByGuestId(socket, data.guestId, room, sanitizedName);
+                if (reconnectResult) {
+                    return; // 重连成功，直接返回
+                }
+
+                // 再检查在线玩家列表（处理刷新页面时新socket先于旧socket断开的情况）
+                const onlineReconnectResult = this.tryReconnectOnlinePlayer(socket, data.guestId, room, sanitizedName);
+                if (onlineReconnectResult) {
+                    return; // 重连成功，直接返回
+                }
+            }
+
+            // 正常加入逻辑
             if (room.isFull()) {
                 this.sendError(socket, ErrorCode.ROOM_FULL, 'Room is full');
                 return;
             }
 
-            // 创建玩家会话（使用净化后的名称）
-            const player = new PlayerSession(socket, sanitizedName);
+            // 创建玩家会话（使用净化后的名称和guestId）
+            const player = new PlayerSession(socket, sanitizedName, data.guestId);
             this.players.set(socket.id, player);
 
             // 玩家加入房间
@@ -325,11 +342,169 @@ export class GameServer {
     }
 
     /**
+     * 尝试通过guestId重连到房间
+     * @returns true 如果重连成功，false 如果不是重连场景
+     */
+    private tryReconnectByGuestId(socket: Socket, guestId: string, room: GameRoom, playerName: string): boolean {
+        // 通过 guestId 查找断线的玩家
+        let disconnectedPlayer: PlayerSession | undefined;
+        let originalPlayerId: string | undefined;
+
+        for (const [playerId, player] of this.disconnectedPlayers) {
+            if (player.guestId === guestId && player.roomId === room.id) {
+                disconnectedPlayer = player;
+                originalPlayerId = playerId;
+                Logger.info('GameServer', `Found disconnected player by guestId: ${guestId}`);
+                break;
+            }
+        }
+
+        if (!disconnectedPlayer || !originalPlayerId) {
+            return false; // 不是重连场景
+        }
+
+        // 检查玩家是否在房间中
+        const playerInRoom = room.getPlayer(originalPlayerId);
+        if (!playerInRoom) {
+            return false;
+        }
+
+        // 更新玩家的socket连接
+        disconnectedPlayer.socket = socket;
+        disconnectedPlayer.isConnected = true;
+        disconnectedPlayer.updateHeartbeat();
+
+        // 从断线列表移除，加入在线列表
+        this.disconnectedPlayers.delete(originalPlayerId);
+        this.players.set(socket.id, disconnectedPlayer);
+
+        // Socket加入房间
+        socket.join(room.id);
+
+        // 获取完整游戏状态
+        const reconnectState = room.getReconnectState(disconnectedPlayer.id);
+
+        // 发送重连成功响应（包含完整游戏状态）
+        const response: ReconnectSuccessEvent = {
+            roomId: room.id,
+            playerId: disconnectedPlayer.id,
+            myPlayerIdInRoom: disconnectedPlayer.id,
+            hostId: room.getHostId(),
+            players: room.getPlayersInfo(),
+            maxPlayers: room.maxPlayers,
+            // 游戏状态
+            gameState: reconnectState.gameState,
+            roundNumber: reconnectState.roundNumber,
+            dealerId: reconnectState.dealerId,
+            cardsToPlay: reconnectState.cardsToPlay,
+            deckSize: reconnectState.deckSize,
+            handCards: reconnectState.handCards,
+            communityCards: reconnectState.communityCards,
+            scores: reconnectState.scores,
+            playerGameStates: reconnectState.playerGameStates
+        };
+
+        socket.emit(ServerMessageType.RECONNECT_SUCCESS, response);
+
+        // 广播给其他玩家：玩家重连
+        room.broadcast(ServerMessageType.PLAYER_JOINED, {
+            player: disconnectedPlayer.getInfo()
+        }, disconnectedPlayer.id);
+
+        // 关闭该玩家的托管模式
+        room.handleSetAuto(disconnectedPlayer.id, false);
+
+        Logger.info('GameServer', `Player ${playerName} auto-reconnected to room ${room.id} via JOIN_ROOM`);
+        return true;
+    }
+
+    /**
+     * 尝试重连在线玩家（处理刷新页面时新socket先于旧socket断开的情况）
+     * @returns true 如果重连成功，false 如果不是重连场景
+     */
+    private tryReconnectOnlinePlayer(socket: Socket, guestId: string, room: GameRoom, playerName: string): boolean {
+        // 通过 guestId 查找在线玩家
+        let existingPlayer: PlayerSession | undefined;
+        let oldSocketId: string | undefined;
+
+        for (const [socketId, player] of this.players) {
+            if (player.guestId === guestId && player.roomId === room.id) {
+                existingPlayer = player;
+                oldSocketId = socketId;
+                Logger.info('GameServer', `Found online player by guestId: ${guestId}, replacing socket`);
+                break;
+            }
+        }
+
+        if (!existingPlayer || !oldSocketId) {
+            return false; // 不是重连场景
+        }
+
+        // 检查玩家是否在房间中
+        const playerInRoom = room.getPlayer(existingPlayer.id);
+        if (!playerInRoom) {
+            return false;
+        }
+
+        // 关闭旧的 socket 连接
+        const oldSocket = existingPlayer.socket;
+        if (oldSocket && oldSocket.id !== socket.id) {
+            oldSocket.leave(room.id);
+            oldSocket.disconnect(true);
+            Logger.info('GameServer', `Disconnected old socket: ${oldSocketId}`);
+        }
+
+        // 更新玩家的 socket 连接
+        existingPlayer.socket = socket;
+        existingPlayer.isConnected = true;
+        existingPlayer.updateHeartbeat();
+
+        // 更新房间中的玩家 ID 映射
+        const oldPlayerId = existingPlayer.id;
+        room.updatePlayerSocketId(oldPlayerId, socket.id);
+
+        // 从旧的 socketId 移除，用新的 socketId 重新注册
+        this.players.delete(oldSocketId);
+        this.players.set(socket.id, existingPlayer);
+
+        // Socket 加入房间
+        socket.join(room.id);
+
+        // 获取完整游戏状态（使用新的 playerId）
+        const reconnectState = room.getReconnectState(socket.id);
+
+        // 发送重连成功响应（包含完整游戏状态）
+        const response: ReconnectSuccessEvent = {
+            roomId: room.id,
+            playerId: existingPlayer.id,
+            myPlayerIdInRoom: existingPlayer.id,
+            hostId: room.getHostId(),
+            players: room.getPlayersInfo(),
+            maxPlayers: room.maxPlayers,
+            // 游戏状态
+            gameState: reconnectState.gameState,
+            roundNumber: reconnectState.roundNumber,
+            dealerId: reconnectState.dealerId,
+            cardsToPlay: reconnectState.cardsToPlay,
+            deckSize: reconnectState.deckSize,
+            handCards: reconnectState.handCards,
+            communityCards: reconnectState.communityCards,
+            scores: reconnectState.scores,
+            playerGameStates: reconnectState.playerGameStates
+        };
+
+        socket.emit(ServerMessageType.RECONNECT_SUCCESS, response);
+
+        Logger.info('GameServer', `Player ${playerName} reconnected (socket replaced) to room ${room.id} via JOIN_ROOM`);
+        return true;
+    }
+
+    /**
      * 处理重连房间
      */
     private handleReconnect(socket: Socket, data: ReconnectRequest): void {
         try {
-            Logger.info('GameServer', `Reconnect request: playerId=${data.playerId}, roomId=${data.roomId}`);
+            Logger.info('GameServer', `Reconnect request: guestId=${data.guestId}, playerId=${data.playerId}, roomId=${data.roomId}`);
 
             // 验证玩家名称
             if (!this.validateAndSanitizePlayerName(socket, data.playerName)) return;
@@ -346,15 +521,35 @@ export class GameServer {
                 return;
             }
 
-            // 查找断线的玩家
-            const disconnectedPlayer = this.disconnectedPlayers.get(data.playerId);
-            if (!disconnectedPlayer) {
+            // 优先使用 guestId 查找断线的玩家，其次使用 playerId
+            let disconnectedPlayer: PlayerSession | undefined;
+            let originalPlayerId: string | undefined;
+
+            if (data.guestId) {
+                // 通过 guestId 查找
+                for (const [playerId, player] of this.disconnectedPlayers) {
+                    if (player.guestId === data.guestId) {
+                        disconnectedPlayer = player;
+                        originalPlayerId = playerId;
+                        Logger.info('GameServer', `Found disconnected player by guestId: ${data.guestId}`);
+                        break;
+                    }
+                }
+            }
+
+            // 如果 guestId 没找到，尝试用 playerId（向后兼容）
+            if (!disconnectedPlayer && data.playerId) {
+                disconnectedPlayer = this.disconnectedPlayers.get(data.playerId);
+                originalPlayerId = data.playerId;
+            }
+
+            if (!disconnectedPlayer || !originalPlayerId) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Player session not found');
                 return;
             }
 
             // 检查玩家是否在房间中
-            const playerInRoom = room.getPlayer(data.playerId);
+            const playerInRoom = room.getPlayer(originalPlayerId);
             if (!playerInRoom) {
                 this.sendError(socket, ErrorCode.INTERNAL_ERROR, 'Player not in room');
                 return;
@@ -366,7 +561,7 @@ export class GameServer {
             disconnectedPlayer.updateHeartbeat();
 
             // 从断线列表移除，加入在线列表
-            this.disconnectedPlayers.delete(data.playerId);
+            this.disconnectedPlayers.delete(originalPlayerId);
             this.players.set(socket.id, disconnectedPlayer);
 
             // Socket加入房间
@@ -421,6 +616,29 @@ export class GameServer {
 
         const room = this.rooms.get(player.roomId);
         if (!room) return;
+
+        // 游戏中离开：按断线处理，保留座位并进入托管
+        if (room.state === 'playing') {
+            Logger.info('GameServer', `Player ${player.name} left during game, switching to auto mode`);
+
+            player.isConnected = false;
+
+            // 保存断线信息，允许重连
+            this.disconnectedPlayers.set(player.id, player);
+
+            // 从在线列表移除
+            this.players.delete(socket.id);
+
+            // Socket 离开房间
+            socket.leave(room.id);
+
+            // 自动开启托管（会广播 PLAYER_AUTO_CHANGED）
+            room.handleSetAuto(player.id, true);
+
+            // 如果所有玩家都断线，销毁房间
+            this.checkAndDestroyEmptyRoom(room);
+            return;
+        }
 
         // 从房间移除玩家
         const { player: removedPlayer, newHostId } = room.removePlayer(player.id);
@@ -760,16 +978,37 @@ export class GameServer {
                 // 自动开启托管
                 room.handleSetAuto(player.id, true);
 
-                // 广播玩家断线（但不移除）
-                room.broadcast(ServerMessageType.PLAYER_LEFT, {
-                    playerId: player.id
-                });
-
                 Logger.info('GameServer', `Player ${player.name} saved for reconnection (5 min timeout)`);
+
+                // 检查是否所有玩家都断线了，如果是则销毁房间
+                this.checkAndDestroyEmptyRoom(room);
             } else {
                 // 不在游戏中，直接离开房间
                 this.handleLeaveRoom(socket);
             }
+        }
+    }
+
+    /**
+     * 检查房间是否所有玩家都断线了，如果是则销毁房间
+     */
+    private checkAndDestroyEmptyRoom(room: GameRoom): void {
+        // 检查房间中是否还有在线玩家
+        const allPlayers = room.getAllPlayers();
+        const hasOnlinePlayer = allPlayers.some(p => p.isConnected);
+
+        if (!hasOnlinePlayer) {
+            Logger.info('GameServer', `All players disconnected from room ${room.id}, destroying room...`);
+
+            // 从断线列表中移除该房间的所有玩家
+            for (const player of allPlayers) {
+                this.disconnectedPlayers.delete(player.id);
+                Logger.debug('GameServer', `Removed disconnected player ${player.name} from list`);
+            }
+
+            // 销毁房间
+            this.rooms.delete(room.id);
+            Logger.info('GameServer', `Room ${room.id} destroyed (all players disconnected)`);
         }
     }
 
@@ -781,20 +1020,34 @@ export class GameServer {
             try {
                 const now = Date.now();
 
-                // 检查玩家超时
+                // 检查玩家超时 - 先收集要移除的玩家，避免在迭代时修改 Map
+                const playersToRemove: string[] = [];
                 for (const [id, player] of this.players) {
                     if (player.isTimeout(ServerConfig.PLAYER_DISCONNECT_TIMEOUT)) {
                         Logger.info('GameServer', `Player ${player.name} timeout, removing...`);
+                        playersToRemove.push(id);
+                    }
+                }
+                for (const socketId of playersToRemove) {
+                    const player = this.players.get(socketId);
+                    if (player) {
                         this.handleLeaveRoom(player.socket);
+                        Logger.info('GameServer', `Player removed successfully`);
                     }
                 }
 
-                // 检查断线玩家超时（5分钟）
+                // 检查断线玩家超时（5分钟）- 先收集要移除的玩家
                 const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
+                const disconnectedToRemove: string[] = [];
                 for (const [playerId, player] of this.disconnectedPlayers) {
                     if (now - player.lastHeartbeat > RECONNECT_TIMEOUT) {
                         Logger.info('GameServer', `Disconnected player ${player.name} timeout, removing...`);
-
+                        disconnectedToRemove.push(playerId);
+                    }
+                }
+                for (const playerId of disconnectedToRemove) {
+                    const player = this.disconnectedPlayers.get(playerId);
+                    if (player) {
                         // 从房间移除
                         if (player.roomId) {
                             const room = this.rooms.get(player.roomId);
@@ -805,26 +1058,26 @@ export class GameServer {
                                 room.broadcast(ServerMessageType.PLAYER_LEFT, {
                                     playerId: playerId
                                 });
-
-                                // 如果房间为空，删除房间
-                                if (room.isEmpty()) {
-                                    this.rooms.delete(room.id);
-                                    Logger.info('GameServer', `Room ${room.id} deleted (empty)`);
-                                }
                             }
                         }
 
                         // 从断线列表移除
                         this.disconnectedPlayers.delete(playerId);
+                        Logger.info('GameServer', `Disconnected player ${player.name} removed successfully`);
                     }
                 }
 
-                // 检查空闲房间
+                // 检查空闲房间 - 先收集要删除的房间
+                const roomsToRemove: string[] = [];
                 for (const [id, room] of this.rooms) {
                     if (room.isEmpty() || room.isIdle(ServerConfig.ROOM_IDLE_TIMEOUT)) {
                         Logger.info('GameServer', `Room ${id} idle, removing...`);
-                        this.rooms.delete(id);
+                        roomsToRemove.push(id);
                     }
+                }
+                for (const roomId of roomsToRemove) {
+                    this.rooms.delete(roomId);
+                    Logger.info('GameServer', `Room ${roomId} removed successfully`);
                 }
             } catch (error) {
                 Logger.error('GameServer', 'Heartbeat error:', error);

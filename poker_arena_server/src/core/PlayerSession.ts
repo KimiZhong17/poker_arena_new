@@ -6,6 +6,7 @@ import { Socket } from 'socket.io';
  */
 export class PlayerSession {
     public id: string;
+    public guestId: string | null = null;  // 客户端持久化的游客ID
     public name: string;
     public socket: Socket;
     public roomId: string | null = null;
@@ -17,8 +18,9 @@ export class PlayerSession {
     public isConnected: boolean = true;
     public lastHeartbeat: number = Date.now();
 
-    constructor(socket: Socket, name: string) {
+    constructor(socket: Socket, name: string, guestId?: string) {
         this.id = socket.id;
+        this.guestId = guestId || null;
         this.name = name;
         this.socket = socket;
     }

@@ -144,6 +144,54 @@ export class GameRoom {
     }
 
     /**
+     * 更新玩家的 socket ID（用于重连场景）
+     * @param oldPlayerId 旧的玩家ID (socket.id)
+     * @param newPlayerId 新的玩家ID (socket.id)
+     * @returns 是否更新成功
+     */
+    public updatePlayerSocketId(oldPlayerId: string, newPlayerId: string): boolean {
+        const player = this.players.get(oldPlayerId);
+        if (!player) {
+            return false;
+        }
+
+        // 从旧的 key 删除
+        this.players.delete(oldPlayerId);
+
+        // 更新玩家的 id
+        player.id = newPlayerId;
+
+        // 用新的 key 重新添加
+        this.players.set(newPlayerId, player);
+
+        // 如果是房主，更新房主 ID
+        if (this.hostId === oldPlayerId) {
+            this.hostId = newPlayerId;
+        }
+
+        // 更新游戏逻辑中的玩家 ID
+        if (this.theDecreeGame) {
+            this.theDecreeGame.updatePlayerId(oldPlayerId, newPlayerId);
+        }
+
+        // 更新 playersWantRestart
+        if (this.playersWantRestart.has(oldPlayerId)) {
+            this.playersWantRestart.delete(oldPlayerId);
+            this.playersWantRestart.add(newPlayerId);
+        }
+
+        // 更新 playerAutoStates
+        if (this.playerAutoStates.has(oldPlayerId)) {
+            const autoState = this.playerAutoStates.get(oldPlayerId)!;
+            this.playerAutoStates.delete(oldPlayerId);
+            this.playerAutoStates.set(newPlayerId, autoState);
+        }
+
+        Logger.info('GameRoom', `[Room ${this.id}] Player socket ID updated: ${oldPlayerId} -> ${newPlayerId}`);
+        return true;
+    }
+
+    /**
      * 获取所有玩家
      */
     public getAllPlayers(): PlayerSession[] {

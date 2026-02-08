@@ -60,6 +60,11 @@ export class LoadingUI extends Component {
         this.node.active = true;
         this.currentProgress = 0;
         this.updateDisplay();
+        console.log('[LoadingUI] show', {
+            node: this.node?.name,
+            uuid: this.node?.uuid,
+            scene: this.node?.scene?.name
+        });
 
         // 确保完全不透明
         const uiOpacity = this.node.getComponent(UIOpacity);
@@ -74,6 +79,11 @@ export class LoadingUI extends Component {
     public hide(): void {
         this._isShowing = false;
         this.node.active = false;
+        console.log('[LoadingUI] hide', {
+            node: this.node?.name,
+            uuid: this.node?.uuid,
+            scene: this.node?.scene?.name
+        });
     }
 
     /**

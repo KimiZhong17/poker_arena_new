@@ -191,11 +191,30 @@ export class Switch extends Component {
      * Trigger value changed event
      */
     private triggerValueChangedEvent(): void {
-        console.log('[Switch] Triggering onValueChanged event, isOn:', this.isOn);
+        console.log('[Switch] ========== triggerValueChangedEvent ==========');
+        console.log('[Switch] isOn:', this.isOn);
+        console.log('[Switch] onValueChanged handlers count:', this.onValueChanged.length);
+
+        // 打印每个 handler 的详细信息
+        this.onValueChanged.forEach((handler, index) => {
+            console.log(`[Switch] Handler[${index}]:`, {
+                target: handler.target?.name || 'null',
+                component: handler.component,
+                handler: handler.handler,
+                customEventData: handler.customEventData
+            });
+        });
+
+        if (this.onValueChanged.length === 0) {
+            console.warn('[Switch] WARNING: No handlers registered! Check editor configuration.');
+        }
 
         // Trigger EventHandler callbacks
         // 第一个参数是事件数组，第二个参数会作为 event 传递给回调函数
         EventHandler.emitEvents(this.onValueChanged, this);
+
+        console.log('[Switch] EventHandler.emitEvents called');
+        console.log('[Switch] ================================================');
     }
 
     /**

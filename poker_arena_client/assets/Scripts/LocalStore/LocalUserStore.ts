@@ -193,6 +193,14 @@ export class LocalUserStore {
         return this.userData?.isGuest || false;
     }
 
+    /**
+     * 获取游客ID（持久化的唯一标识）
+     * 用于服务器识别同一用户
+     */
+    public getGuestId(): string | null {
+        return this.userData?.guestId || null;
+    }
+
     // ==================== 用户数据更新 ====================
 
     /**
@@ -279,24 +287,28 @@ export class LocalUserStore {
         let sessionId = sessionStorage.getItem('poker_arena_session_id');
 
         if (!sessionId) {
-            // 从localStorage获取已使用的会话ID列表
-            const usedSessionIds = this.getUsedSessionIds();
+            // 获取当前活跃的会话ID列表
+            const activeSessionIds = this.getActiveSessionIds();
 
-            // 生成新的会话ID（从1开始递增）
+            // 找到第一个未被占用的会话ID（从1开始）
             let newSessionId = 1;
-            while (usedSessionIds.has(newSessionId.toString())) {
+            while (activeSessionIds.has(newSessionId.toString())) {
                 newSessionId++;
             }
 
             sessionId = newSessionId.toString();
             sessionStorage.setItem('poker_arena_session_id', sessionId);
 
-            // 记录到localStorage
-            usedSessionIds.add(sessionId);
-            localStorage.setItem('poker_arena_used_sessions', JSON.stringify(Array.from(usedSessionIds)));
+            // 注册到localStorage
+            this.registerActiveSession(sessionId);
+
+            // 注册 beforeunload 事件，在标签页关闭时注销会话
+            this.registerUnloadHandler(sessionId);
 
             console.log(`[LocalUserStore] Created new session ID: ${sessionId}`);
         } else {
+            // 刷新当前会话的时间戳
+            this.registerActiveSession(sessionId);
             console.log(`[LocalUserStore] Using existing session ID: ${sessionId}`);
         }
 
@@ -304,18 +316,109 @@ export class LocalUserStore {
     }
 
     /**
-     * 获取已使用的会话ID集合
+     * 注册 beforeunload 事件处理器
+     * 在标签页关闭时注销会话ID
      */
-    private getUsedSessionIds(): Set<string> {
+    private registerUnloadHandler(sessionId: string): void {
+        // 检查是否在浏览器环境
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const unloadHandler = () => {
+            this.unregisterActiveSession(sessionId);
+        };
+
+        // 使用 beforeunload 和 pagehide 事件（pagehide 在移动端更可靠）
+        window.addEventListener('beforeunload', unloadHandler);
+        window.addEventListener('pagehide', unloadHandler);
+
+        console.log(`[LocalUserStore] Registered unload handler for session: ${sessionId}`);
+    }
+
+    /**
+     * 注销会话（从活跃会话列表中移除）
+     */
+    private unregisterActiveSession(sessionId: string): void {
         try {
-            const usedSessionsStr = localStorage.getItem('poker_arena_used_sessions');
-            if (usedSessionsStr) {
-                return new Set(JSON.parse(usedSessionsStr));
+            const sessionsStr = localStorage.getItem('poker_arena_active_sessions');
+            if (sessionsStr) {
+                const sessions: Record<string, number> = JSON.parse(sessionsStr);
+                delete sessions[sessionId];
+                localStorage.setItem('poker_arena_active_sessions', JSON.stringify(sessions));
+                console.log(`[LocalUserStore] Unregistered session: ${sessionId}`);
             }
         } catch (error) {
-            console.error('[LocalUserStore] Failed to load used session IDs:', error);
+            console.error('[LocalUserStore] Failed to unregister session:', error);
         }
-        return new Set(); // 空集合，从1开始分配
+    }
+
+    /**
+     * 获取当前活跃的会话ID集合
+     * 通过检查 localStorage 中的记录来判断
+     * 注意：主要依赖 beforeunload 事件来清理，过期时间只是后备机制
+     */
+    private getActiveSessionIds(): Set<string> {
+        const activeIds = new Set<string>();
+        const now = Date.now();
+        // 使用24小时作为后备过期时间（主要依赖 beforeunload 清理）
+        const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24小时
+
+        try {
+            const sessionsStr = localStorage.getItem('poker_arena_active_sessions');
+            if (sessionsStr) {
+                const sessions: Record<string, number> = JSON.parse(sessionsStr);
+
+                // 只保留未过期的会话
+                for (const [id, timestamp] of Object.entries(sessions)) {
+                    if (now - timestamp < SESSION_TIMEOUT) {
+                        activeIds.add(id);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[LocalUserStore] Failed to load active session IDs:', error);
+        }
+
+        return activeIds;
+    }
+
+    /**
+     * 注册当前会话为活跃状态
+     */
+    private registerActiveSession(sessionId: string): void {
+        try {
+            const now = Date.now();
+            let sessions: Record<string, number> = {};
+
+            const sessionsStr = localStorage.getItem('poker_arena_active_sessions');
+            if (sessionsStr) {
+                sessions = JSON.parse(sessionsStr);
+            }
+
+            // 更新当前会话的时间戳
+            sessions[sessionId] = now;
+
+            // 清理过期的会话（超过24小时，作为后备机制）
+            const SESSION_TIMEOUT = 24 * 60 * 60 * 1000;
+            for (const [id, timestamp] of Object.entries(sessions)) {
+                if (now - timestamp >= SESSION_TIMEOUT) {
+                    delete sessions[id];
+                }
+            }
+
+            localStorage.setItem('poker_arena_active_sessions', JSON.stringify(sessions));
+        } catch (error) {
+            console.error('[LocalUserStore] Failed to register active session:', error);
+        }
+    }
+
+    /**
+     * 获取已使用的会话ID集合
+     * @deprecated 使用 getActiveSessionIds 代替
+     */
+    private getUsedSessionIds(): Set<string> {
+        return this.getActiveSessionIds();
     }
 
     /**

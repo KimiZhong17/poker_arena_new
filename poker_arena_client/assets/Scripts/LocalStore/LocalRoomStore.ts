@@ -143,6 +143,9 @@ export class LocalRoomStore {
 
         this.currentRoom.state = state;
         console.log(`[RoomStateStore] Room state updated: ${state}`);
+
+        // 保存到localStorage以便断线重连
+        this.saveRoomToStorage();
     }
 
     /**

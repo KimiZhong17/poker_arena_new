@@ -16,7 +16,7 @@ import { NetworkManager } from '../Network/NetworkManager';
 import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
 import { LocalGameStore } from '../LocalStore/LocalGameStore';
-import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
+import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
 import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 
 /**
@@ -101,6 +101,9 @@ export class GameService {
             gameStore.initializePlayers(playerIds, myPlayerId);
             console.log(`[GameService] Initialized ${playerIds.length} players in LocalGameStore`);
         }
+
+        // 更新房间状态为 PLAYING（触发保存重连信息到 localStorage）
+        roomStore.updateRoomState(RoomState.PLAYING);
 
         // 触发阶段切换到 Playing
         EventCenter.emit('SWITCH_TO_PLAYING_STAGE');

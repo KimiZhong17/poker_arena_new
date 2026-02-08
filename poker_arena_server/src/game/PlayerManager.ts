@@ -69,4 +69,35 @@ export class PlayerManager {
         this.players.clear();
         this.playerOrder = [];
     }
+
+    /**
+     * 更新玩家 ID（用于重连场景）
+     * @param oldPlayerId 旧的玩家ID
+     * @param newPlayerId 新的玩家ID
+     * @returns 是否更新成功
+     */
+    public updatePlayerId(oldPlayerId: string, newPlayerId: string): boolean {
+        const player = this.players.get(oldPlayerId);
+        if (!player) {
+            return false;
+        }
+
+        // 从旧的 key 删除
+        this.players.delete(oldPlayerId);
+
+        // 更新玩家的 id
+        player.id = newPlayerId;
+
+        // 用新的 key 重新添加
+        this.players.set(newPlayerId, player);
+
+        // 更新 playerOrder
+        const index = this.playerOrder.indexOf(oldPlayerId);
+        if (index !== -1) {
+            this.playerOrder[index] = newPlayerId;
+        }
+
+        Logger.info('PlayerManager', `Player ID updated: ${oldPlayerId} -> ${newPlayerId}`);
+        return true;
+    }
 }

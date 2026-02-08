@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Button, EventHandler } from 'cc';
 import { Game } from '../Game';
 import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
 import { LocalGameStore } from '../LocalStore/LocalGameStore';
+import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 import { ClientMessageType } from '../Network/Messages';
 import { Switch } from './Switch';
 import { MessageTip } from './MessageTip';
@@ -133,8 +134,17 @@ export class TheDecreeUIController extends Component {
 
         console.log('[TheDecreeUI]   currentPlayerId:', currentPlayerId);
 
-        // Show buttons only when current player is the dealer
-        const shouldShow = dealerId && currentPlayerId === dealerId;
+        const gameState = theDecreeMode.getState ? theDecreeMode.getState() : null;
+        const cardsToPlay = theDecreeMode.getCardsToPlay ? theDecreeMode.getCardsToPlay() : 0;
+        console.log('[TheDecreeUI]   gameState:', gameState);
+        console.log('[TheDecreeUI]   cardsToPlay:', cardsToPlay);
+
+        // Show buttons only when current player is the dealer and in DEALER_CALL state
+        // If cardsToPlay already set, dealer has already called, hide buttons.
+        const isDealer = dealerId && currentPlayerId === dealerId;
+        const shouldShow = !!isDealer &&
+            gameState === TheDecreeGameState.DEALER_CALL &&
+            cardsToPlay === 0;
 
         console.log('[TheDecreeUI]   shouldShow:', shouldShow);
 
@@ -657,12 +667,33 @@ export class TheDecreeUIController extends Component {
      * @param customEventData - Custom data from editor (optional)
      */
     public onAutoPlaySwitchChanged(event: Switch, customEventData?: string): void {
-        console.log('[TheDecreeUI] onAutoPlaySwitchChanged called');
+        console.log('[TheDecreeUI] ========== Auto Play Switch Changed ==========');
         console.log('[TheDecreeUI] event:', event);
-        console.log('[TheDecreeUI] customEventData:', customEventData);
+        console.log('[TheDecreeUI] _game:', !!this._game);
 
-        if (!this._game || !this._game.theDecreeMode) {
+        if (!this._game) {
             console.error('[TheDecreeUI] Cannot toggle auto-play - game not ready');
+            return;
+        }
+
+        // 优先使用 Game 上缓存的 theDecreeMode（在 PlayingStage 创建时设置）
+        // 这样即使当前不在 PlayingStage 也能工作
+        let theDecreeMode = this._game.theDecreeMode;
+        console.log('[TheDecreeUI] theDecreeMode from Game:', !!theDecreeMode);
+
+        // 如果没有，尝试从 PlayingStage 获取
+        if (!theDecreeMode) {
+            const playingStage = this._game.stageManager?.getCurrentStage();
+            console.log('[TheDecreeUI] playingStage:', !!playingStage);
+            if (playingStage && typeof (playingStage as any).getCurrentGameMode === 'function') {
+                theDecreeMode = (playingStage as any).getCurrentGameMode();
+                console.log('[TheDecreeUI] theDecreeMode from PlayingStage:', !!theDecreeMode);
+            }
+        }
+
+        if (!theDecreeMode) {
+            console.error('[TheDecreeUI] Cannot toggle auto-play - game mode not ready');
+            console.log('[TheDecreeUI] =====================================');
             return;
         }
 
@@ -670,12 +701,12 @@ export class TheDecreeUIController extends Component {
         const isOn = event ? event.getValue() : false;
         console.log('[TheDecreeUI] Switch value:', isOn);
 
-        const theDecreeMode = this._game.theDecreeMode;
-
-        // 调用 setAuto() 发送到服务器，而不是只设置本地状态
+        // 调用 setAuto() 发送到服务器
+        console.log('[TheDecreeUI] Calling theDecreeMode.setAuto(' + isOn + ')...');
         theDecreeMode.setAuto(isOn);
 
-        console.log(`[TheDecreeUI] Auto-play switched to: ${isOn ? 'ON' : 'OFF'}`);
+        console.log(`[TheDecreeUI] ✓ Auto-play switched to: ${isOn ? 'ON' : 'OFF'}`);
+        console.log('[TheDecreeUI] =====================================');
     }
 
     // Temporarily disabled - Clear Selection button handler

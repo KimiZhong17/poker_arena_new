@@ -759,6 +759,67 @@ export class TheDecreeMode extends GameModeBase {
         return this.playerManager.getAllPlayers() as TheDecreePlayer[];
     }
 
+    /**
+     * 更新玩家 ID（用于重连场景）
+     * @param oldPlayerId 旧的玩家ID
+     * @param newPlayerId 新的玩家ID
+     * @returns 是否更新成功
+     */
+    public updatePlayerId(oldPlayerId: string, newPlayerId: string): boolean {
+        // 更新 playerManager 中的玩家 ID
+        const success = this.playerManager.updatePlayerId(oldPlayerId, newPlayerId);
+        if (!success) {
+            return false;
+        }
+
+        // 更新 currentRound 中的相关 ID
+        if (this.currentRound) {
+            // 更新 dealerId
+            if (this.currentRound.dealerId === oldPlayerId) {
+                this.currentRound.dealerId = newPlayerId;
+            }
+
+            // 更新 playerPlays
+            if (this.currentRound.playerPlays.has(oldPlayerId)) {
+                const plays = this.currentRound.playerPlays.get(oldPlayerId)!;
+                this.currentRound.playerPlays.delete(oldPlayerId);
+                this.currentRound.playerPlays.set(newPlayerId, plays);
+            }
+
+            // 更新 roundWinnerId 和 roundLoserId
+            if (this.currentRound.roundWinnerId === oldPlayerId) {
+                this.currentRound.roundWinnerId = newPlayerId;
+            }
+            if (this.currentRound.roundLoserId === oldPlayerId) {
+                this.currentRound.roundLoserId = newPlayerId;
+            }
+
+            // 更新 handResults
+            if (this.currentRound.handResults?.has(oldPlayerId)) {
+                const result = this.currentRound.handResults.get(oldPlayerId)!;
+                this.currentRound.handResults.delete(oldPlayerId);
+                this.currentRound.handResults.set(newPlayerId, result);
+            }
+        }
+
+        // 更新 firstDealerSelections
+        if (this.firstDealerSelections.has(oldPlayerId)) {
+            const selection = this.firstDealerSelections.get(oldPlayerId)!;
+            this.firstDealerSelections.delete(oldPlayerId);
+            this.firstDealerSelections.set(newPlayerId, selection);
+        }
+
+        // 更新 autoPlayTimers
+        if (this.autoPlayTimers.has(oldPlayerId)) {
+            const timer = this.autoPlayTimers.get(oldPlayerId)!;
+            this.autoPlayTimers.delete(oldPlayerId);
+            this.autoPlayTimers.set(newPlayerId, timer);
+        }
+
+        Logger.info('TheDecree', `Player ID updated: ${oldPlayerId} -> ${newPlayerId}`);
+        return true;
+    }
+
     // ==================== 托管相关方法 ====================
 
     /**

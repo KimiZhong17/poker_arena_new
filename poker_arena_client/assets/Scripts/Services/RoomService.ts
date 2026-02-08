@@ -35,6 +35,28 @@ export class RoomService {
     }
 
     /**
+     * 检查是否有保存的重连信息，如果有则尝试重连
+     * 应该在客户端启动并连接到服务器后调用
+     * @returns 是否有重连信息并尝试重连
+     */
+    public tryAutoReconnect(): boolean {
+        const reconnectInfo = this.localRoomStore.getReconnectInfo();
+        if (reconnectInfo) {
+            console.log('[RoomService] Found reconnect info, attempting to reconnect:', reconnectInfo);
+            this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 检查是否有待重连的房间
+     */
+    public hasPendingReconnect(): boolean {
+        return this.localRoomStore.getReconnectInfo() !== null;
+    }
+
+    /**
      * 初始化网络监听
      * 使用具名函数进行绑定,以便符合双参数 off(event, handler) 的要求
      */
@@ -147,10 +169,17 @@ export class RoomService {
 
         // 3. 恢复游戏状态到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
+        gameStore.resetGame();
+        gameStore.setGameActive(true);
+        gameStore.initializePlayers(
+            data.players.map(player => player.id),
+            data.myPlayerIdInRoom
+        );
         gameStore.setHandCards(data.handCards);
         gameStore.setCommunityCards(data.communityCards);
         gameStore.setGameState(data.gameState);
         gameStore.setRoundNumber(data.roundNumber);
+        gameStore.setDeckSize(data.deckSize);
         if (data.dealerId) {
             gameStore.setDealerId(data.dealerId);
         }
@@ -207,9 +236,11 @@ export class RoomService {
     public createRoom(gameMode: string, maxPlayers: number): void {
         const client = this.getNetworkClient();
         const playerName = this.localUserStore.getNickname();  // 使用昵称而不是用户名
-        console.log(`[RoomService] Creating room with playerName: ${playerName}`);
+        const guestId = this.localUserStore.getGuestId();  // 获取持久化的游客ID
+        console.log(`[RoomService] Creating room with playerName: ${playerName}, guestId: ${guestId}`);
         if (client) client.send(ClientMessageType.CREATE_ROOM, {
             playerName: playerName,
+            guestId: guestId || undefined,
             gameMode: gameMode as 'the_decree',
             maxPlayers
         });
@@ -217,20 +248,24 @@ export class RoomService {
 
     public joinRoom(roomId: string): void {
         const client = this.getNetworkClient();
+        const guestId = this.localUserStore.getGuestId();
         if (client) client.send(ClientMessageType.JOIN_ROOM, {
             roomId,
-            playerName: this.localUserStore.getNickname()  // 使用昵称而不是用户名
+            playerName: this.localUserStore.getNickname(),
+            guestId: guestId || undefined
         });
     }
 
     public reconnectToRoom(roomId: string, playerId: string): void {
         const client = this.getNetworkClient();
+        const guestId = this.localUserStore.getGuestId();
         if (client) {
-            console.log(`[RoomService] Attempting to reconnect to room ${roomId} as player ${playerId}`);
+            console.log(`[RoomService] Attempting to reconnect to room ${roomId} with guestId: ${guestId}, playerId: ${playerId}`);
             client.send(ClientMessageType.RECONNECT, {
                 roomId,
                 playerId,
-                playerName: this.localUserStore.getNickname()  // 使用昵称而不是用户名
+                guestId: guestId || undefined,
+                playerName: this.localUserStore.getNickname()
             });
         }
     }

@@ -939,4 +939,26 @@ export class PlayerHandDisplay extends Component {
     public getPokerNodes(): Node[] {
         return this._pokerNodes;
     }
+
+    /**
+     * Set glow material and apply to all existing cards
+     * Used for reconnect scenario where glow material may be loaded after cards are created
+     * @param material The glow material to use
+     */
+    public setGlowMaterialAndApply(material: Material): void {
+        if (!material) return;
+
+        this._glowMaterial = material;
+
+        // Only apply glow for main player (SPREAD mode)
+        if (this._displayMode !== HandDisplayMode.SPREAD) return;
+
+        // Apply glow to all existing poker components
+        for (const poker of this._pokerComponents) {
+            poker.setGlowMaterial(material);
+            poker.setGlowEnabled(true);
+        }
+
+        console.log(`[PlayerHandDisplay] Applied glow material to ${this._pokerComponents.length} cards`);
+    }
 }
