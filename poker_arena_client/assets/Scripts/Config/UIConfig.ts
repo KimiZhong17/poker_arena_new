@@ -24,6 +24,7 @@ export const UIColors = {
     text: {
         default: new Color(255, 255, 255, 255),      // 默认 - 白色
         highlight: new Color(255, 215, 0, 255),      // 高亮 - 金色
+        hint: new Color(255, 235, 150, 255),          // 提示 - 暖黄色
     },
 } as const;
 
@@ -33,6 +34,12 @@ export const UIFonts = {
     messageTip: {
         fontSize: 28,
         lineHeight: 32,
+    },
+
+    // 出牌数量提示
+    cardsToPlayHint: {
+        fontSize: 32,
+        lineHeight: 40,
     },
 
     // 卡牌计数
@@ -67,6 +74,15 @@ export const UIAnimations = {
         defaultDuration: 2.0,   // 默认显示时长（秒）
         fadeInDuration: 0.3,    // 淡入时长（秒）
         fadeOutDuration: 0.3,   // 淡出时长（秒）
+    },
+
+    // 出牌数量提示呼吸动画
+    cardsToPlayHint: {
+        breathDuration: 1.5,        // 单次呼吸周期（秒）
+        minOpacity: 140,            // 最低透明度 (0-255)
+        maxOpacity: 255,            // 最高透明度 (0-255)
+        minScale: 0.95,             // 最小缩放
+        maxScale: 1.0,              // 最大缩放
     },
 
     // 开关组件

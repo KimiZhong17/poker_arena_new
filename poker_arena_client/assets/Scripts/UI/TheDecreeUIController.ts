@@ -6,6 +6,7 @@ import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 import { ClientMessageType } from '../Network/Messages';
 import { Switch } from './Switch';
 import { MessageTip } from './MessageTip';
+import { CardsToPlayHint } from './CardsToPlayHint';
 const { ccclass, property } = _decorator;
 
 /**
@@ -31,6 +32,9 @@ export class TheDecreeUIController extends Component {
 
     @property(MessageTip)
     public messageTip: MessageTip | null = null;
+
+    @property(CardsToPlayHint)
+    public cardsToPlayHint: CardsToPlayHint | null = null;
 
     // Auto-found references (don't need to assign in editor)
     private callOneButton: Button | null = null;
@@ -202,6 +206,14 @@ export class TheDecreeUIController extends Component {
             console.log('[TheDecreeUI] MessageTip search result:', !!this.messageTip);
         }
 
+        // Auto-find cards-to-play hint (under AdaptiveNodes)
+        if (!this.cardsToPlayHint) {
+            const adaptiveNodes = this.node.getChildByName('AdaptiveNodes');
+            const hintNode = adaptiveNodes?.getChildByName('CardsToPlayHint') || null;
+            this.cardsToPlayHint = hintNode?.getComponent(CardsToPlayHint) || null;
+            console.log('[TheDecreeUI] CardsToPlayHint search result:', !!this.cardsToPlayHint);
+        }
+
         // Auto-find Btn_Call123 container node if not assigned
         console.log('[TheDecreeUI] Looking for Btn_Call123 container...');
         if (!this.btnCall123Node) {
@@ -263,6 +275,7 @@ export class TheDecreeUIController extends Component {
             callOneButton: !!this.callOneButton,
             callTwoButton: !!this.callTwoButton,
             callThreeButton: !!this.callThreeButton,
+            cardsToPlayHint: !!this.cardsToPlayHint,
             // clearSelectionButton: !!this.clearSelectionButton,
             // statusLabel: !!this.statusLabel
         });
@@ -885,6 +898,29 @@ export class TheDecreeUIController extends Component {
     }
 
     /**
+     * Show the cards-to-play hint
+     * @param cardsToPlay Number of cards the dealer called (1, 2, or 3)
+     */
+    public showCardsToPlayHint(cardsToPlay: number): void {
+        if (this.cardsToPlayHint) {
+            this.cardsToPlayHint.show(cardsToPlay);
+            console.log(`[TheDecreeUI] Showing cards-to-play hint: ${cardsToPlay}`);
+        } else {
+            console.warn('[TheDecreeUI] CardsToPlayHint not found, cannot show hint');
+        }
+    }
+
+    /**
+     * Hide the cards-to-play hint
+     */
+    public hideCardsToPlayHint(): void {
+        if (this.cardsToPlayHint) {
+            this.cardsToPlayHint.hide();
+            console.log('[TheDecreeUI] Cards-to-play hint hidden');
+        }
+    }
+
+    /**
      * Clean up
      */
     onDestroy() {
@@ -929,6 +965,12 @@ export class TheDecreeUIController extends Component {
         if (this.messageTip) {
             this.messageTip.hide();
             console.log('[TheDecreeUI] MessageTip hidden');
+        }
+
+        // 隐藏出牌数量提示
+        if (this.cardsToPlayHint) {
+            this.cardsToPlayHint.hide();
+            console.log('[TheDecreeUI] CardsToPlayHint hidden');
         }
 
         // 重置托管开关状态（但保持可见，因为游戏开始时需要显示）

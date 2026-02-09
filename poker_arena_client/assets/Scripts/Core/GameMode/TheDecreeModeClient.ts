@@ -1346,6 +1346,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
             // 更新 UI 状态（这会根据选牌数量启用/禁用出牌按钮）
             this.theDecreeUIController.updateUIState();
             console.log('[TheDecreeModeClient] ✓ UI state updated');
+
+            // 显示出牌数量提示（持久显示，直到摊牌）
+            this.theDecreeUIController.showCardsToPlayHint(data.cardsToPlay);
+            console.log('[TheDecreeModeClient] Showing cards-to-play hint');
         } else {
             console.warn('[TheDecreeModeClient] TheDecreeUIController not found');
         }
@@ -1385,6 +1389,12 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 设置游戏状态
         this.gameState = data.gameState as TheDecreeGameState;
+
+        // 隐藏出牌数量提示
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.hideCardsToPlayHint();
+            console.log('[TheDecreeModeClient] Hiding cards-to-play hint at showdown');
+        }
 
         // 显示所有玩家的牌型和结果（日志）
         for (const result of data.results) {
@@ -1604,6 +1614,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         // 重置 cardsToPlay 为 0，准备下一回合
         this.cardsToPlay = 0;
         console.log('[TheDecreeModeClient] Reset cardsToPlay to 0 at round end');
+
+        // 隐藏出牌数量提示（安全兜底，正常情况下已在 showdown 时隐藏）
+        if (this.theDecreeUIController) {
+            this.theDecreeUIController.hideCardsToPlayHint();
+        }
 
         // 注意：赢家消息已经在 showWinnerMessageAndCleanup 中显示了
         // 这里只更新分数，不再重复显示消息
@@ -2370,6 +2385,12 @@ export class TheDecreeModeClient extends GameModeClientBase {
             if (this.theDecreeUIController) {
                 this.theDecreeUIController.updateUIState();
                 this.theDecreeUIController.updateCallButtonsVisibility();
+
+                // 如果在 PLAYER_SELECTION 状态且有叫牌数，恢复出牌提示
+                if (this.gameState === TheDecreeGameState.PLAYER_SELECTION && this.cardsToPlay > 0) {
+                    this.theDecreeUIController.showCardsToPlayHint(this.cardsToPlay);
+                    console.log('[TheDecreeModeClient] Restored cards-to-play hint on reconnect');
+                }
             }
 
             console.log('[TheDecreeModeClient] ========== Reconnect State Restored ==========');
