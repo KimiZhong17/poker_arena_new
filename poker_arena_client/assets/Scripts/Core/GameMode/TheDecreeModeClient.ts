@@ -53,6 +53,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
     // 自动出牌设置（仅用于 player_0）
     private isPlayer0AutoPlay: boolean = true;
 
+    // setTimeout handles to cleanup on exit
+    private _pendingTimeouts: number[] = [];
+
     // 摊牌显示清除定时器
     private showdownClearTimer: number | null = null;
 
@@ -97,6 +100,21 @@ export class TheDecreeModeClient extends GameModeClientBase {
         super(game, config || defaultConfig);
     }
 
+    private resetRuntimeState(): void {
+        this.communityCards = [];
+        this.dealerId = '';
+        this.currentRoundNumber = 0;
+        this.cardsToPlay = 0;
+        this.gameState = TheDecreeGameState.SETUP;
+        this._communityCardsDealt = false;
+        this._pendingPlayerDeals = [];
+        this._initialDealAnimationComplete = false;
+        this._pendingMessage = null;
+        this._isShowdownInProgress = false;
+        this._pendingGameOver = null;
+        this.clearPendingTimeouts();
+    }
+
     // ==================== 生命周期方法 ====================
 
     public onEnter(): void {
@@ -104,8 +122,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.isActive = true;
 
         // 重置动画状态标志
-        this._initialDealAnimationComplete = false;
-        this._pendingMessage = null;
+        this.resetRuntimeState();
 
         // 查找并缓存游戏模式特定的节点
         this.findModeSpecificNodes();
@@ -132,6 +149,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         // 清除摊牌显示定时器
         this.clearShowdownTimer();
+        this.clearPendingTimeouts();
 
         // 清除待处理的 GameOver 事件
         this._pendingGameOver = null;
@@ -159,6 +177,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
     public cleanup(): void {
         console.log('[TheDecreeModeClient] Cleaning up');
         this.clearShowdownTimer();
+        this.clearPendingTimeouts();
         super.cleanup();
         this.unregisterAllNetworkEvents();
         this.cleanupLocalEvents();
@@ -549,6 +568,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
                     }
                 } else {
                     // 无动画或无新牌，直接更新显示
+                    player.setHandCards(data.handCards);
                     if (actualDealCount <= 0) {
                         console.log(`[TheDecreeModeClient] No new cards to deal (actualDealCount: ${actualDealCount}), updating display directly`);
                     } else {
@@ -1041,7 +1061,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.displayFirstDealerSelections(data.selections, data.dealerId);
 
         // 延迟后清除选择状态和显示的牌，准备游戏
-        setTimeout(() => {
+        this.registerTimeout(() => {
             const playerUIManager = this.game.playerUIManager;
             if (playerUIManager) {
                 // 清除手牌的选中状态
@@ -1944,7 +1964,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
             if (pokerCtrl) {
                 // 使用延迟让翻牌有层次感
                 const delay = i * 0.08;
-                setTimeout(() => {
+                this.registerTimeout(() => {
                     pokerCtrl.flip();
                 }, delay * 1000);
             }
@@ -1960,6 +1980,18 @@ export class TheDecreeModeClient extends GameModeClientBase {
             this.showdownClearTimer = null;
             console.log('[TheDecreeModeClient] Showdown clear timer cancelled');
         }
+    }
+
+    private registerTimeout(callback: () => void, delayMs: number): void {
+        const timerId = window.setTimeout(callback, delayMs);
+        this._pendingTimeouts.push(timerId);
+    }
+
+    private clearPendingTimeouts(): void {
+        for (const timerId of this._pendingTimeouts) {
+            window.clearTimeout(timerId);
+        }
+        this._pendingTimeouts = [];
     }
 
     /**
@@ -2028,7 +2060,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log('[TheDecreeModeClient] initGame called with', playerInfos.length, 'players');
 
         // 设置玩家 ID 映射
-        this.setupPlayerIdMapping(playerInfos);
+        this.refreshPlayerIdMapping();
+        if (this.playerIdToIndexMap.size === 0) {
+            console.warn('[TheDecreeModeClient] Player mapping not ready, falling back to absolute seatIndex mapping');
+            this.setupPlayerIdMapping(playerInfos);
+        }
 
         // 不需要初始化游戏逻辑，等待服务器事件
     }
