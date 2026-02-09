@@ -63,6 +63,14 @@ export class Game extends Component {
     private _glowMaterial: Material | null = null; // 边缘光材质
     private _hasEnteredGame: boolean = false;
     private _holdLoadingForReconnect: boolean = false;
+    private readonly _debugLayout: boolean = false;
+
+    private _onSwitchToPlayingStage = (): void => {
+        console.log("[Game] Received SWITCH_TO_PLAYING_STAGE event, switching stage...");
+        if (this.stageManager) {
+            this.stageManager.switchToStage(GameStage.PLAYING);
+        }
+    };
 
     // Game configuration from scene transition
     private _gameMode: string = '';
@@ -92,6 +100,21 @@ export class Game extends Component {
         this.isOnlineMode = transitionData.isOnlineMode || false;
 
         console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}, Online Mode: ${this.isOnlineMode}`);
+
+        const existingBundle = assetManager.getBundle("Pokers");
+        if (existingBundle) {
+            this._pokerBundle = existingBundle;
+            console.log("Poker bundle already loaded.");
+
+            if (this.loadingUI) {
+                this.loadingUI.updateProgress(0.3, '姝ｅ湪鍔犺浇鎵戝厠鐗?..');
+            }
+
+            this._onLoadPokerAtlas();
+            this._onLoadPokerPrefab();
+            this._onLoadGlowMaterial();
+            return;
+        }
 
         assetManager.loadBundle("Pokers", (err, bundle) => {
             if (err) {
@@ -148,6 +171,26 @@ export class Game extends Component {
     }
 
     private _onLoadGlowMaterial(): void {
+        const existingBundle = assetManager.getBundle("Effects");
+        if (existingBundle) {
+            existingBundle.load("CardGlow", Material, (err, material) => {
+                if (err) {
+                    console.warn("CardGlow material not found, glow effect will be disabled.");
+                    this._checkAllLoaded();
+                    return;
+                }
+
+                this._glowMaterial = material;
+                console.log("CardGlow material loaded.");
+
+                if (this._playerUIManager) {
+                    this._playerUIManager.applyGlowMaterialToMainHand(material);
+                }
+                this._checkAllLoaded();
+            });
+            return;
+        }
+
         assetManager.loadBundle("Effects", (err, bundle) => {
             if (err) {
                 // Effects bundle not found, continue without glow material
@@ -198,7 +241,8 @@ export class Game extends Component {
         }
 
         // 1. Initialize PokerFactory (global singleton)
-        this.node.addComponent(PokerFactory).init(this._pokerSprites, this._pokerPrefab);
+        const pokerFactory = this.node.getComponent(PokerFactory) || this.node.addComponent(PokerFactory);
+        pokerFactory.init(this._pokerSprites, this._pokerPrefab);
 
         // 2. Auto-find nodes if not manually assigned
         this.autoFindNodes();
@@ -411,12 +455,7 @@ export class Game extends Component {
         console.log("[Game] Setting up stage event listeners...");
 
         // Listen for game start event to switch to Playing stage
-        EventCenter.on('SWITCH_TO_PLAYING_STAGE', () => {
-            console.log("[Game] Received SWITCH_TO_PLAYING_STAGE event, switching stage...");
-            if (this.stageManager) {
-                this.stageManager.switchToStage(GameStage.PLAYING);
-            }
-        }, this);
+        EventCenter.on('SWITCH_TO_PLAYING_STAGE', this._onSwitchToPlayingStage, this);
 
         console.log("[Game] Stage event listeners setup complete");
     }
@@ -448,6 +487,8 @@ export class Game extends Component {
      * Clean up when game is destroyed
      */
     onDestroy(): void {
+        EventCenter.off('SWITCH_TO_PLAYING_STAGE', this._onSwitchToPlayingStage, this);
+
         if (this.stageManager) {
             this.stageManager.cleanup();
         }
@@ -552,12 +593,15 @@ export class Game extends Component {
         // 根据游戏模式选择布局
         // TheDecree: 2-4人，Guandan: 5-6人
         let layoutConfig;
+        const layoutPlayerCount = this.getLayoutPlayerCount();
         if (this._gameMode === 'the_decree') {
-            layoutConfig = SeatLayoutConfig.getTheDecreeLayout(4);
-            console.log(`[Game] Using TheDecree 4-player layout`);
+            const count = layoutPlayerCount >= 2 ? Math.min(layoutPlayerCount, 4) : 4;
+            layoutConfig = SeatLayoutConfig.getTheDecreeLayout(count);
+            console.log(`[Game] Using TheDecree ${count}-player layout`);
         } else {
-            layoutConfig = SeatLayoutConfig.getGuandanLayout(5);
-            console.log(`[Game] Using Guandan 5-player layout`);
+            const count = layoutPlayerCount >= 5 ? Math.min(layoutPlayerCount, 6) : 5;
+            layoutConfig = SeatLayoutConfig.getGuandanLayout(count);
+            console.log(`[Game] Using Guandan ${count}-player layout`);
         }
 
         const activeCount = layoutConfig.filter(c => c.active).length;
@@ -612,7 +656,9 @@ export class Game extends Component {
 
             // 应用 widget 配置
             const w = config.widget;
-            console.log(`[Game] ${config.name} widget config:`, JSON.stringify(w));
+            if (this._debugLayout) {
+                console.log(`[Game] ${config.name} widget config:`, JSON.stringify(w));
+            }
             if (w.alignLeft !== undefined) {
                 handWidget.isAlignLeft = w.alignLeft;
                 if (w.left !== undefined) {
@@ -635,32 +681,42 @@ export class Game extends Component {
                 handWidget.isAlignBottom = w.alignBottom;
                 if (w.bottom !== undefined) {
                     handWidget.bottom = w.bottom;
-                    console.log(`[Game] ${config.name} bottom set to ${w.bottom}`);
+                    if (this._debugLayout) {
+                        console.log(`[Game] ${config.name} bottom set to ${w.bottom}`);
+                    }
                 }
             }
             if (w.alignHorizontalCenter !== undefined) {
                 handWidget.isAlignHorizontalCenter = w.alignHorizontalCenter;
                 if (w.horizontalCenter !== undefined) {
                     handWidget.horizontalCenter = w.horizontalCenter;
-                    console.log(`[Game] ${config.name} horizontalCenter set to ${w.horizontalCenter}`);
+                    if (this._debugLayout) {
+                        console.log(`[Game] ${config.name} horizontalCenter set to ${w.horizontalCenter}`);
+                    }
                 }
             }
             if (w.alignVerticalCenter !== undefined) {
                 handWidget.isAlignVerticalCenter = w.alignVerticalCenter;
                 if (w.verticalCenter !== undefined) {
                     handWidget.verticalCenter = w.verticalCenter;
-                    console.log(`[Game] ${config.name} verticalCenter set to ${w.verticalCenter}`);
+                    if (this._debugLayout) {
+                        console.log(`[Game] ${config.name} verticalCenter set to ${w.verticalCenter}`);
+                    }
                 }
             }
 
             // 强制立即更新 Widget 对齐
             handWidget.updateAlignment();
-            console.log(`[Game] ${config.name} Widget alignment updated, position: (${handNode.position.x}, ${handNode.position.y})`);
+            if (this._debugLayout) {
+                console.log(`[Game] ${config.name} Widget alignment updated, position: (${handNode.position.x}, ${handNode.position.y})`);
+            }
 
             // 延迟检查位置是否被改变
-            this.scheduleOnce(() => {
-                console.log(`[Game] ${config.name} position after 1 second: (${handNode.position.x}, ${handNode.position.y})`);
-            }, 1.0);
+            if (this._debugLayout) {
+                this.scheduleOnce(() => {
+                    console.log(`[Game] ${config.name} position after 1 second: (${handNode.position.x}, ${handNode.position.y})`);
+                }, 1.0);
+            }
 
             // 设置节点激活状态
             handNode.active = config.active;
@@ -675,6 +731,12 @@ export class Game extends Component {
         });
 
         console.log("[Game] All hand positions configured with Widget alignment");
+    }
+
+    private getLayoutPlayerCount(): number {
+        const roomStore = LocalRoomStore.getInstance();
+        const currentRoom = roomStore.getCurrentRoom();
+        return currentRoom?.maxPlayers ?? currentRoom?.players?.length ?? 0;
     }
 
     public finishReconnectLoading(): void {
