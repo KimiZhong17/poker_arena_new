@@ -11,18 +11,18 @@ export class NetworkConfig {
     // 服务器 IP 地址
     // 本机测试：'localhost'
     // 局域网游戏：修改为服务器的局域网 IP，例如 '192.168.1.100'
-    // private static SERVER_IP: string = 'localhost';192.168.1.5
+    private static SERVER_IP: string = 'localhost';
     // private static SERVER_IP: string = '10.0.38.17';
-    private static SERVER_IP: string = '192.168.1.5';
+    // private static SERVER_IP: string = '192.168.1.5';
 
     // 服务器端口
     private static SERVER_PORT: number = 3000;
 
     /**
-     * 获取服务器 URL
+     * 获取服务器 URL（保留兼容，但不再用于连接）
      */
     public static getServerUrl(): string {
-        return `http://${this.SERVER_IP}:${this.SERVER_PORT}`;
+        return `ws://${this.SERVER_IP}:${this.SERVER_PORT}/ws`;
     }
 
     /**

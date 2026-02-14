@@ -1,6 +1,3 @@
-// 必须在最前面导入 polyfills
-import './Utils/polyfills';
-
 import { _decorator, Component, Button, Label, EditBox, Node, Toggle, profiler, assetManager, SpriteFrame, Prefab } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';

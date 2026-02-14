@@ -21,7 +21,7 @@ export class NetworkManager {
     /**
      * 获取或创建 NetworkClient
      */
-    public getClient(serverUrl: string = 'http://localhost:3000'): NetworkClient {
+    public getClient(serverUrl: string = 'ws://localhost:3000/ws'): NetworkClient {
         if (!this.client) {
             console.log('[NetworkManager] Creating new NetworkClient');
             this.client = new NetworkClient(serverUrl);
