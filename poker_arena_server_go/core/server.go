@@ -285,17 +285,23 @@ func (s *GameServer) tryReconnectByGuestID(session *PlayerSession, guestID strin
 		return false
 	}
 
-	// Swap connection
-	disconnected.Conn = session.Conn
-	disconnected.IsConnected = true
-	disconnected.UpdateHeartbeat()
-	disconnected.send = session.send
+	// Stop the new session's WritePump (it was started in HandleWebSocket)
+	session.StopWritePump()
+
+	// Reset the disconnected session with the new connection
+	disconnected.ResetForReconnect(session.Conn)
+
+	// Update player ID in room and game to match new session ID
+	room.UpdatePlayerSocketID(originalID, session.ID)
 
 	delete(s.disconnectedPlayers, originalID)
 	s.sessions[session.ID] = disconnected
 
-	// Build reconnect state
-	reconnectState := room.GetReconnectState(disconnected.ID)
+	// Start new WritePump for the reconnected session
+	go disconnected.WritePump()
+
+	// Build reconnect state (use new ID since we updated it)
+	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
 		disconnected.Send(protocol.ReconnectSuccess, reconnectState)
 	}
@@ -331,23 +337,28 @@ func (s *GameServer) tryReconnectOnlinePlayer(session *PlayerSession, guestID st
 		return false
 	}
 
-	// Close old connection
-	if existing.Conn != nil && existing.ID != session.ID {
-		existing.Close()
-		existing.Conn.Close()
+	// Stop old connection's WritePump and close old WebSocket
+	if existing.ID != session.ID {
+		existing.StopWritePump()
+		if existing.Conn != nil {
+			existing.Conn.Close()
+		}
 	}
 
-	// Swap connection
-	existing.Conn = session.Conn
-	existing.IsConnected = true
-	existing.UpdateHeartbeat()
-	existing.send = session.send
+	// Stop the new session's WritePump (it was started in HandleWebSocket)
+	session.StopWritePump()
+
+	// Reset existing session with the new connection
+	existing.ResetForReconnect(session.Conn)
 
 	oldPlayerID := existing.ID
 	room.UpdatePlayerSocketID(oldPlayerID, session.ID)
 
 	delete(s.sessions, oldSocketID)
 	s.sessions[session.ID] = existing
+
+	// Start new WritePump for the reconnected session
+	go existing.WritePump()
 
 	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
@@ -415,16 +426,22 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 		return
 	}
 
-	// Swap connection
-	disconnected.Conn = session.Conn
-	disconnected.IsConnected = true
-	disconnected.UpdateHeartbeat()
-	disconnected.send = session.send
+	// Stop the new session's WritePump (it was started in HandleWebSocket)
+	session.StopWritePump()
+
+	// Reset the disconnected session with the new connection
+	disconnected.ResetForReconnect(session.Conn)
+
+	// Update player ID in room and game to match new session ID
+	room.UpdatePlayerSocketID(originalID, session.ID)
 
 	delete(s.disconnectedPlayers, originalID)
 	s.sessions[session.ID] = disconnected
 
-	reconnectState := room.GetReconnectState(disconnected.ID)
+	// Start new WritePump for the reconnected session
+	go disconnected.WritePump()
+
+	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
 		disconnected.Send(protocol.ReconnectSuccess, reconnectState)
 	}
@@ -734,19 +751,27 @@ func (s *GameServer) heartbeatCheck() {
 	}
 	for _, id := range toRemove {
 		if player, ok := s.sessions[id]; ok {
-			// Simulate leave
 			if player.RoomID != "" {
 				if room, ok := s.rooms[player.RoomID]; ok {
 					room.mu.Lock()
-					removed, newHostID := room.RemovePlayer(player.ID)
-					if removed != nil {
-						room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
-						if newHostID != "" {
-							room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
+					if room.State == RoomPlaying {
+						// During game: switch to auto-play instead of removing
+						player.IsConnected = false
+						s.disconnectedPlayers[player.ID] = player
+						room.HandleSetAuto(player.ID, true)
+						s.checkAndDestroyEmptyRoom(room)
+					} else {
+						// Not in game: remove from room
+						removed, newHostID := room.RemovePlayer(player.ID)
+						if removed != nil {
+							room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
+							if newHostID != "" {
+								room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
+							}
 						}
-					}
-					if room.IsEmpty() {
-						delete(s.rooms, room.ID)
+						if room.IsEmpty() {
+							delete(s.rooms, room.ID)
+						}
 					}
 					room.mu.Unlock()
 				}
@@ -930,7 +955,9 @@ func (s *GameServer) Shutdown() {
 
 	for _, session := range s.sessions {
 		session.Close()
-		session.Conn.Close()
+		if session.Conn != nil {
+			session.Conn.Close()
+		}
 	}
 
 	util.Info("GameServer", "Shutdown complete")

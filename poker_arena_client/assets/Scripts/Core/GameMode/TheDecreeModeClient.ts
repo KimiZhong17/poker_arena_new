@@ -1188,16 +1188,24 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     /**
      * 根据卡牌编码获取卡牌名称（用于显示）
+     * 支持 Guandan 编码: A=14, 2=15, 3-13 标准
      */
     private getCardName(card: number): string {
-        const suits = ['♠', '♥', '♣', '♦'];
-        const points = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+        // Suit order matches encoding: 0=Diamond, 1=Club, 2=Heart, 3=Spade
+        const suits = ['♦', '♣', '♥', '♠'];
+        const pointMap: Record<number, string> = {
+            3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
+            10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A', 15: '2',
+        };
 
         const suit = (card & 0xF0) >> 4;
         const point = card & 0x0F;
 
-        if (suit >= 0 && suit < 4 && point >= 1 && point <= 13) {
-            return suits[suit] + points[point];
+        const suitStr = suits[suit];
+        const pointStr = pointMap[point];
+
+        if (suitStr && pointStr) {
+            return suitStr + pointStr;
         }
 
         return '未知牌';

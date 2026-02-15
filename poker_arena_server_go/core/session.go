@@ -31,8 +31,10 @@ type PlayerSession struct {
 	IsConnected   bool
 	LastHeartbeat time.Time
 
-	send chan []byte
-	mu   sync.Mutex // protects Conn writes via channel, and field updates
+	send     chan []byte
+	done     chan struct{} // signals WritePump to stop
+	mu       sync.Mutex   // protects Conn writes via channel, and field updates
+	closeOnce sync.Once
 }
 
 func NewPlayerSession(conn *websocket.Conn, id, name, guestID string) *PlayerSession {
@@ -45,6 +47,7 @@ func NewPlayerSession(conn *websocket.Conn, id, name, guestID string) *PlayerSes
 		IsConnected:   true,
 		LastHeartbeat: time.Now(),
 		send:          make(chan []byte, sendBufSize),
+		done:          make(chan struct{}),
 	}
 }
 
@@ -141,7 +144,8 @@ func (s *PlayerSession) ReadPump(server *GameServer) {
 	}
 }
 
-// WritePump writes messages to the WebSocket connection
+// WritePump writes messages to the WebSocket connection.
+// It stops when the done channel is closed or the send channel is closed.
 func (s *PlayerSession) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -151,6 +155,8 @@ func (s *PlayerSession) WritePump() {
 
 	for {
 		select {
+		case <-s.done:
+			return
 		case message, ok := <-s.send:
 			s.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
@@ -170,8 +176,29 @@ func (s *PlayerSession) WritePump() {
 	}
 }
 
-// Close shuts down the session's send channel
+// StopWritePump signals the WritePump goroutine to exit without closing the send channel.
+// Used during reconnection to stop the old pump before swapping connections.
+func (s *PlayerSession) StopWritePump() {
+	s.closeOnce.Do(func() {
+		close(s.done)
+	})
+}
+
+// ResetForReconnect prepares the session for a new connection by creating fresh
+// send/done channels and resetting closeOnce. Must be called after StopWritePump
+// and before starting a new WritePump.
+func (s *PlayerSession) ResetForReconnect(conn *websocket.Conn) {
+	s.Conn = conn
+	s.IsConnected = true
+	s.UpdateHeartbeat()
+	s.send = make(chan []byte, sendBufSize)
+	s.done = make(chan struct{})
+	s.closeOnce = sync.Once{}
+}
+
+// Close shuts down the session's send channel and done channel
 func (s *PlayerSession) Close() {
-	defer func() { recover() }() // ignore double close
-	close(s.send)
+	s.closeOnce.Do(func() {
+		close(s.done)
+	})
 }

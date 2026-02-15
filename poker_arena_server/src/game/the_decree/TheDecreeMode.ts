@@ -121,6 +121,10 @@ export class TheDecreeMode extends GameModeBase {
         // 延迟发牌，给客户端时间注册事件监听器
         // 避免客户端还在 ReadyStage -> PlayingStage 切换过程中错过事件
         setTimeout(() => {
+            if (!this.isActive) {
+                Logger.warn('TheDecree', 'Game already cleaned up, skipping delayed deal');
+                return;
+            }
             try {
                 Logger.debug('TheDecree', 'Delayed dealing cards...');
                 this.dealCards();
@@ -499,7 +503,13 @@ export class TheDecreeMode extends GameModeBase {
         Logger.info('TheDecree', `Round ${this.currentRound.roundNumber} - Winner: ${winnerId}, Loser: ${loserId}`);
 
         // Automatically proceed to refill after a delay (handled by caller)
-        setTimeout(() => this.proceedToRefill(), 2000);
+        setTimeout(() => {
+            if (!this.isActive) {
+                Logger.warn('TheDecree', 'Game already cleaned up, skipping refill');
+                return;
+            }
+            this.proceedToRefill();
+        }, 2000);
     }
 
     private calculateScores(results: Map<string, TexasHandResult>): void {

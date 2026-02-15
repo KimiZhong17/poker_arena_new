@@ -1,9 +1,6 @@
-import { _decorator, Component } from 'cc';
 import {
     ClientMessageType
 } from './Messages';
-
-const { ccclass } = _decorator;
 
 /**
  * 消息回调函数类型
@@ -18,8 +15,7 @@ interface Envelope {
     data?: any;
 }
 
-@ccclass('NetworkClient')
-export class NetworkClient extends Component {
+export class NetworkClient {
     private ws: WebSocket | null = null;
     private serverUrl: string;
     private isConnected: boolean = false;
@@ -40,7 +36,6 @@ export class NetworkClient extends Component {
     private manualDisconnect: boolean = false;
 
     constructor(serverUrl: string = 'ws://localhost:3000/ws') {
-        super();
         this.serverUrl = serverUrl;
     }
 

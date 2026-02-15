@@ -7,20 +7,30 @@ type AutoPlayStrategy interface {
 	PlayCards(handCards []int, cardsToPlay int) []int
 }
 
-// ConservativeStrategy plays smallest cards, avoids risk
+// compareByRankAsc compares two cards by Texas rank (ascending), then by suit
+func compareByRankAsc(a, b int) int {
+	rankA := TexasRank(GetPoint(a))
+	rankB := TexasRank(GetPoint(b))
+	if rankA != rankB {
+		return rankA - rankB
+	}
+	return SuitValue(GetSuit(a)) - SuitValue(GetSuit(b))
+}
+
+// ConservativeStrategy plays smallest-rank cards, avoids risk
 type ConservativeStrategy struct{}
 
 func (s *ConservativeStrategy) SelectFirstDealerCard(handCards []int) int {
 	if len(handCards) == 0 {
 		return 0
 	}
-	min := handCards[0]
+	best := handCards[0]
 	for _, c := range handCards[1:] {
-		if c < min {
-			min = c
+		if compareByRankAsc(c, best) < 0 {
+			best = c
 		}
 	}
-	return min
+	return best
 }
 
 func (s *ConservativeStrategy) DealerCall(handCards []int, communityCards []int) int {
@@ -35,20 +45,20 @@ func (s *ConservativeStrategy) PlayCards(handCards []int, cardsToPlay int) []int
 	return sorted[:cardsToPlay]
 }
 
-// AggressiveStrategy plays biggest cards
+// AggressiveStrategy plays biggest-rank cards
 type AggressiveStrategy struct{}
 
 func (s *AggressiveStrategy) SelectFirstDealerCard(handCards []int) int {
 	if len(handCards) == 0 {
 		return 0
 	}
-	max := handCards[0]
+	best := handCards[0]
 	for _, c := range handCards[1:] {
-		if c > max {
-			max = c
+		if compareByRankAsc(c, best) > 0 {
+			best = c
 		}
 	}
-	return max
+	return best
 }
 
 func (s *AggressiveStrategy) DealerCall(handCards []int, communityCards []int) int {
