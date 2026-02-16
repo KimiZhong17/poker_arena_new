@@ -23,8 +23,9 @@ var upgrader = websocket.Upgrader{
 type GameServer struct {
 	mu                  sync.RWMutex
 	rooms               map[string]*GameRoom
-	sessions            map[string]*PlayerSession // key: connection ID
-	disconnectedPlayers map[string]*PlayerSession // key: player ID
+	connections         map[string]*PlayerSession // key: connID (for ReadPump/WritePump dispatch)
+	playersByID         map[string]*PlayerSession // key: stable playerID (for game logic)
+	disconnectedPlayers map[string]*PlayerSession // key: stable playerID
 
 	cfg             *config.Config
 	heartbeatTicker *time.Ticker
@@ -38,7 +39,8 @@ type GameServer struct {
 func NewGameServer(cfg *config.Config) *GameServer {
 	s := &GameServer{
 		rooms:               make(map[string]*GameRoom),
-		sessions:            make(map[string]*PlayerSession),
+		connections:         make(map[string]*PlayerSession),
+		playersByID:         make(map[string]*PlayerSession),
 		disconnectedPlayers: make(map[string]*PlayerSession),
 		cfg:                 cfg,
 		gameActionLimiter:   util.NewRateLimiter(util.GameActionLimit),
@@ -63,7 +65,13 @@ func (s *GameServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	connID := fmt.Sprintf("conn_%d_%d", time.Now().UnixMilli(), s.connCounter)
 	s.mu.Unlock()
 
-	session := NewPlayerSession(conn, connID, "", "")
+	// Create a temporary session; playerID defaults to connID and remains stable per player
+	session := NewPlayerSession(conn, connID, "", connID)
+
+	s.mu.Lock()
+	s.connections[connID] = session
+	s.mu.Unlock()
+
 	util.Info("GameServer", "Client connected: %s", connID)
 
 	go session.WritePump()
@@ -73,7 +81,7 @@ func (s *GameServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 // HandleMessage dispatches incoming messages
 func (s *GameServer) HandleMessage(session *PlayerSession, env *protocol.Envelope) {
 	if env.Type != protocol.Ping {
-		util.Info("GameServer", "[%s] Received message: type=%s, data=%s", session.ID, env.Type, string(env.Data))
+		util.Info("GameServer", "[conn=%s player=%s] Received message: type=%s, data=%s", session.ConnID, session.ID, env.Type, string(env.Data))
 	}
 
 	switch env.Type {
@@ -192,7 +200,7 @@ func (s *GameServer) handleCreateRoom(session *PlayerSession, req *protocol.Crea
 
 	session.Name = name
 	session.GuestID = req.GuestID
-	s.sessions[session.ID] = session
+	s.playersByID[session.ID] = session
 
 	room.mu.Lock()
 	room.AddPlayer(session)
@@ -207,7 +215,7 @@ func (s *GameServer) handleCreateRoom(session *PlayerSession, req *protocol.Crea
 		MaxPlayers: room.MaxPlayers,
 	})
 
-	util.Info("GameServer", "Room created: %s by %s", room.ID, name)
+	util.Info("GameServer", "Room created: %s by %s (playerID=%s)", room.ID, name, session.ID)
 }
 
 func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRoomRequest) {
@@ -228,9 +236,9 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	// Check reconnection by guestId during game
+	// Check reconnection by GuestID during game
 	if req.GuestID != "" && room.State == RoomPlaying {
-		if s.tryReconnectByGuestID(session, req.GuestID, room, name) {
+		if s.tryReconnectDisconnected(session, req.GuestID, room, name) {
 			return
 		}
 		if s.tryReconnectOnlinePlayer(session, req.GuestID, room, name) {
@@ -245,7 +253,7 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 
 	session.Name = name
 	session.GuestID = req.GuestID
-	s.sessions[session.ID] = session
+	s.playersByID[session.ID] = session
 
 	room.AddPlayer(session)
 
@@ -262,17 +270,17 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 		Player: session.GetInfo(),
 	}, session.ID)
 
-	util.Info("GameServer", "Player %s joined room %s", name, room.ID)
+	util.Info("GameServer", "Player %s joined room %s (playerID=%s)", name, room.ID, session.ID)
 }
 
-func (s *GameServer) tryReconnectByGuestID(session *PlayerSession, guestID string, room *GameRoom, playerName string) bool {
+// tryReconnectDisconnected reconnects a disconnected player by matching GuestID.
+// Since player ID is stable, we just swap the connection -- no ID updates needed.
+func (s *GameServer) tryReconnectDisconnected(session *PlayerSession, guestID string, room *GameRoom, playerName string) bool {
+	// Find disconnected player with matching GuestID in this room
 	var disconnected *PlayerSession
-	var originalID string
-
-	for pid, p := range s.disconnectedPlayers {
+	for _, p := range s.disconnectedPlayers {
 		if p.GuestID == guestID && p.RoomID == room.ID {
 			disconnected = p
-			originalID = pid
 			break
 		}
 	}
@@ -281,55 +289,38 @@ func (s *GameServer) tryReconnectByGuestID(session *PlayerSession, guestID strin
 		return false
 	}
 
-	if room.GetPlayer(originalID) == nil {
+	if room.GetPlayer(disconnected.ID) == nil {
 		return false
 	}
 
-	// Stop the new session's WritePump (it was started in HandleWebSocket)
-	session.StopWritePump()
+	s.adoptSessionForPlayer(room, disconnected, session)
 
-	// Reset the disconnected session with the new connection
-	disconnected.ResetForReconnect(session.Conn)
-
-	// Update player ID in room and game to match new session ID
-	room.UpdatePlayerSocketID(originalID, session.ID)
-
-	delete(s.disconnectedPlayers, originalID)
-	s.sessions[session.ID] = disconnected
-
-	// Start new WritePump for the reconnected session
-	go disconnected.WritePump()
-
-	// Build reconnect state (use new ID since we updated it)
 	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
-		disconnected.Send(protocol.ReconnectSuccess, reconnectState)
+		session.Send(protocol.ReconnectSuccess, reconnectState)
 	}
 
 	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
-		Player: disconnected.GetInfo(),
-	}, disconnected.ID)
+		Player: session.GetInfo(),
+	}, session.ID)
 
-	// Re-trigger autoplay timer if player was in auto mode and it's their turn
-	room.RetriggerAutoPlayIfNeeded(disconnected.ID)
+	room.RetriggerAutoPlayIfNeeded(session.ID)
 
-	util.Info("GameServer", "Player %s auto-reconnected to room %s via JOIN_ROOM", playerName, room.ID)
+	util.Info("GameServer", "Player %s reconnected (disconnected) to room %s", playerName, room.ID)
 	return true
 }
 
+// tryReconnectOnlinePlayer handles the case where the player is still "online"
+// (connection not yet timed out) but connecting from a new socket.
 func (s *GameServer) tryReconnectOnlinePlayer(session *PlayerSession, guestID string, room *GameRoom, playerName string) bool {
 	var existing *PlayerSession
-	var oldSocketID string
-
-	for sid, p := range s.sessions {
+	for _, p := range s.playersByID {
 		if p.GuestID == guestID && p.RoomID == room.ID {
 			existing = p
-			oldSocketID = sid
 			break
 		}
 	}
-
-	if existing == nil {
+	if existing == nil || existing.RoomID != room.ID {
 		return false
 	}
 
@@ -337,39 +328,59 @@ func (s *GameServer) tryReconnectOnlinePlayer(session *PlayerSession, guestID st
 		return false
 	}
 
-	// Stop old connection's WritePump and close old WebSocket
-	if existing.ID != session.ID {
-		existing.StopWritePump()
-		if existing.Conn != nil {
-			existing.Conn.Close()
-		}
-	}
-
-	// Stop the new session's WritePump (it was started in HandleWebSocket)
-	session.StopWritePump()
-
-	// Reset existing session with the new connection
-	existing.ResetForReconnect(session.Conn)
-
-	oldPlayerID := existing.ID
-	room.UpdatePlayerSocketID(oldPlayerID, session.ID)
-
-	delete(s.sessions, oldSocketID)
-	s.sessions[session.ID] = existing
-
-	// Start new WritePump for the reconnected session
-	go existing.WritePump()
+	s.adoptSessionForPlayer(room, existing, session)
 
 	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
-		existing.Send(protocol.ReconnectSuccess, reconnectState)
+		session.Send(protocol.ReconnectSuccess, reconnectState)
 	}
 
-	// Re-trigger autoplay timer if player was in auto mode and it's their turn
 	room.RetriggerAutoPlayIfNeeded(session.ID)
 
 	util.Info("GameServer", "Player %s reconnected (socket replaced) to room %s", playerName, room.ID)
 	return true
+}
+
+// adoptSessionForPlayer replaces an existing player session with the current connection session.
+// Caller must hold s.mu and room.mu (if room is not nil).
+func (s *GameServer) adoptSessionForPlayer(room *GameRoom, old *PlayerSession, session *PlayerSession) {
+	if old == session {
+		session.IsConnected = true
+		session.UpdateHeartbeat()
+		s.playersByID[session.ID] = session
+		s.connections[session.ConnID] = session
+		delete(s.disconnectedPlayers, session.ID)
+		if room != nil {
+			room.players[session.ID] = session
+		}
+		return
+	}
+
+	// Close old connection and stop its writer
+	old.StopWritePump()
+	if old.Conn != nil {
+		old.Conn.Close()
+	}
+	delete(s.connections, old.ConnID)
+	delete(s.disconnectedPlayers, old.ID)
+
+	// Copy stable player state onto the new session
+	session.ID = old.ID
+	session.GuestID = old.GuestID
+	session.Name = old.Name
+	session.RoomID = old.RoomID
+	session.SeatIndex = old.SeatIndex
+	session.IsReady = old.IsReady
+	session.IsHost = old.IsHost
+	session.IsConnected = true
+	session.LastHeartbeat = time.Now()
+
+	// Update player maps to point to the new session
+	s.playersByID[session.ID] = session
+	s.connections[session.ConnID] = session
+	if room != nil {
+		room.players[session.ID] = session
+	}
 }
 
 func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.ReconnectRequest) {
@@ -395,24 +406,21 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 		return
 	}
 
-	// Find disconnected player by guestId or playerId
+	// Find disconnected player by GuestID or PlayerID
 	var disconnected *PlayerSession
-	var originalID string
 
-	if req.GuestID != "" {
-		for pid, p := range s.disconnectedPlayers {
-			if p.GuestID == req.GuestID {
-				disconnected = p
-				originalID = pid
-				break
-			}
+	if req.PlayerID != "" {
+		if p, ok := s.disconnectedPlayers[req.PlayerID]; ok {
+			disconnected = p
 		}
 	}
 
-	if disconnected == nil && req.PlayerID != "" {
-		if p, ok := s.disconnectedPlayers[req.PlayerID]; ok {
-			disconnected = p
-			originalID = req.PlayerID
+	if disconnected == nil && req.GuestID != "" {
+		for _, p := range s.disconnectedPlayers {
+			if p.GuestID == req.GuestID {
+				disconnected = p
+				break
+			}
 		}
 	}
 
@@ -421,37 +429,23 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 		return
 	}
 
-	if room.GetPlayer(originalID) == nil {
+	if room.GetPlayer(disconnected.ID) == nil {
 		s.sendError(session, protocol.ErrInternal, "Player not in room")
 		return
 	}
 
-	// Stop the new session's WritePump (it was started in HandleWebSocket)
-	session.StopWritePump()
-
-	// Reset the disconnected session with the new connection
-	disconnected.ResetForReconnect(session.Conn)
-
-	// Update player ID in room and game to match new session ID
-	room.UpdatePlayerSocketID(originalID, session.ID)
-
-	delete(s.disconnectedPlayers, originalID)
-	s.sessions[session.ID] = disconnected
-
-	// Start new WritePump for the reconnected session
-	go disconnected.WritePump()
+	s.adoptSessionForPlayer(room, disconnected, session)
 
 	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
-		disconnected.Send(protocol.ReconnectSuccess, reconnectState)
+		session.Send(protocol.ReconnectSuccess, reconnectState)
 	}
 
 	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
-		Player: disconnected.GetInfo(),
-	}, disconnected.ID)
+		Player: session.GetInfo(),
+	}, session.ID)
 
-	// Re-trigger autoplay timer if player was in auto mode and it's their turn
-	room.RetriggerAutoPlayIfNeeded(disconnected.ID)
+	room.RetriggerAutoPlayIfNeeded(session.ID)
 
 	util.Info("GameServer", "Player %s reconnected to room %s", req.PlayerName, room.ID)
 }
@@ -460,7 +454,7 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	player, ok := s.sessions[session.ID]
+	player, ok := s.playersByID[session.ID]
 	if !ok || player.RoomID == "" {
 		return
 	}
@@ -478,7 +472,8 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 		util.Info("GameServer", "Player %s left during game, switching to auto mode", player.Name)
 		player.IsConnected = false
 		s.disconnectedPlayers[player.ID] = player
-		delete(s.sessions, session.ID)
+		delete(s.connections, player.ConnID)
+		delete(s.playersByID, player.ID)
 		room.HandleSetAuto(player.ID, true)
 		s.checkAndDestroyEmptyRoom(room)
 		return
@@ -504,7 +499,8 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 		util.Info("GameServer", "Room %s deleted (empty)", room.ID)
 	}
 
-	delete(s.sessions, session.ID)
+	delete(s.connections, player.ConnID)
+	delete(s.playersByID, player.ID)
 	util.Info("GameServer", "Player %s left room %s", player.Name, room.ID)
 }
 
@@ -646,51 +642,58 @@ func (s *GameServer) handleSetAuto(session *PlayerSession, req *protocol.SetAuto
 // ==================== Connection Management ====================
 
 func (s *GameServer) handlePing(session *PlayerSession) {
-	s.mu.RLock()
-	player := s.sessions[session.ID]
-	s.mu.RUnlock()
-
-	if player != nil {
-		player.UpdateHeartbeat()
-	}
+	// session is the connection-level object, update heartbeat directly
+	session.UpdateHeartbeat()
 	session.SendRaw(protocol.Pong)
 }
 
 // HandleDisconnect is called when a WebSocket connection closes
 func (s *GameServer) HandleDisconnect(session *PlayerSession) {
-	util.Info("GameServer", "Client disconnected: %s", session.ID)
+	util.Info("GameServer", "Client disconnected: conn=%s player=%s", session.ConnID, session.ID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	player, ok := s.sessions[session.ID]
-	if !ok || player.RoomID == "" {
-		delete(s.sessions, session.ID)
+	delete(s.connections, session.ConnID)
+
+	// If this session has no playerID, nothing more to do
+	if session.ID == "" {
 		return
 	}
 
-	room, ok := s.rooms[player.RoomID]
+	// Ensure this session is still the active session for the player
+	current, ok := s.playersByID[session.ID]
+	if !ok || current != session {
+		return
+	}
+
+	if current.RoomID == "" {
+		delete(s.playersByID, current.ID)
+		return
+	}
+
+	room, ok := s.rooms[current.RoomID]
 	if !ok {
-		delete(s.sessions, session.ID)
+		delete(s.playersByID, current.ID)
 		return
 	}
 
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	player.IsConnected = false
+	current.IsConnected = false
 
 	if room.State == RoomPlaying {
-		util.Info("GameServer", "Player %s disconnected during game, enabling auto mode", player.Name)
-		s.disconnectedPlayers[player.ID] = player
-		delete(s.sessions, session.ID)
-		room.HandleSetAuto(player.ID, true)
+		util.Info("GameServer", "Player %s disconnected during game, enabling auto mode", current.Name)
+		s.disconnectedPlayers[current.ID] = current
+		delete(s.playersByID, current.ID)
+		room.HandleSetAuto(current.ID, true)
 		s.checkAndDestroyEmptyRoom(room)
 	} else {
 		// Not in game: remove from room
-		removed, newHostID := room.RemovePlayer(player.ID)
+		removed, newHostID := room.RemovePlayer(current.ID)
 		if removed != nil {
-			room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
+			room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: current.ID})
 			if newHostID != "" {
 				room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
 				room.Broadcast(protocol.PlayerReady, protocol.PlayerReadyEvent{
@@ -701,7 +704,7 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 		if room.IsEmpty() {
 			delete(s.rooms, room.ID)
 		}
-		delete(s.sessions, session.ID)
+		delete(s.playersByID, current.ID)
 	}
 }
 
@@ -741,16 +744,16 @@ func (s *GameServer) heartbeatCheck() {
 
 	now := time.Now()
 
-	// Check player timeouts
+	// Check player timeouts (iterate playersByID, the authoritative player map)
 	var toRemove []string
-	for id, player := range s.sessions {
+	for id, player := range s.playersByID {
 		if player.IsTimeout(s.cfg.PlayerDisconnectTimeout) {
 			util.Info("GameServer", "Player %s timeout, removing...", player.Name)
 			toRemove = append(toRemove, id)
 		}
 	}
 	for _, id := range toRemove {
-		if player, ok := s.sessions[id]; ok {
+		if player, ok := s.playersByID[id]; ok {
 			if player.RoomID != "" {
 				if room, ok := s.rooms[player.RoomID]; ok {
 					room.mu.Lock()
@@ -776,7 +779,8 @@ func (s *GameServer) heartbeatCheck() {
 					room.mu.Unlock()
 				}
 			}
-			delete(s.sessions, id)
+			delete(s.connections, player.ConnID)
+			delete(s.playersByID, id)
 		}
 	}
 
@@ -824,7 +828,7 @@ func (s *GameServer) getPlayerAndRoom(session *PlayerSession) (*PlayerSession, *
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	player, ok := s.sessions[session.ID]
+	player, ok := s.playersByID[session.ID]
 	if !ok || player.RoomID == "" {
 		s.sendError(session, protocol.ErrGameNotStarted, "Not in a game")
 		return nil, nil
@@ -902,9 +906,9 @@ func (s *GameServer) checkRateLimit(session *PlayerSession, limitType string) bo
 		return true
 	}
 
-	if !limiter.IsAllowed(session.ID) {
+	if !limiter.IsAllowed(session.ConnID) {
 		s.sendError(session, protocol.ErrInternal, "Too many requests, please slow down")
-		util.Warn("GameServer", "Rate limit exceeded for %s (%s)", session.ID, limitType)
+		util.Warn("GameServer", "Rate limit exceeded for %s (%s)", session.ConnID, limitType)
 		return false
 	}
 	return true
@@ -939,7 +943,7 @@ func (s *GameServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"rooms":       len(s.rooms),
-		"players":     len(s.sessions),
+		"players":     len(s.playersByID),
 		"roomDetails": details,
 	})
 }
@@ -953,7 +957,14 @@ func (s *GameServer) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, session := range s.sessions {
+	for _, session := range s.playersByID {
+		session.Close()
+		if session.Conn != nil {
+			session.Conn.Close()
+		}
+	}
+
+	for _, session := range s.connections {
 		session.Close()
 		if session.Conn != nil {
 			session.Conn.Close()

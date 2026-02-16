@@ -220,52 +220,6 @@ func (r *GameRoom) IsIdle(timeout time.Duration) bool {
 	return time.Since(r.lastActivityAt) > timeout
 }
 
-// UpdatePlayerSocketID swaps a player's ID (for reconnection). Must be called with mu held.
-func (r *GameRoom) UpdatePlayerSocketID(oldID, newID string) bool {
-	p, ok := r.players[oldID]
-	if !ok {
-		return false
-	}
-
-	delete(r.players, oldID)
-	p.ID = newID
-	r.players[newID] = p
-
-	for i, id := range r.playerOrder {
-		if id == oldID {
-			r.playerOrder[i] = newID
-			break
-		}
-	}
-
-	if r.hostID == oldID {
-		r.hostID = newID
-	}
-
-	if r.theDecreeGame != nil {
-		r.theDecreeGame.UpdatePlayerID(oldID, newID)
-	}
-
-	if r.playersWantRestart[oldID] {
-		delete(r.playersWantRestart, oldID)
-		r.playersWantRestart[newID] = true
-	}
-
-	if auto, ok := r.playerAutoStates[oldID]; ok {
-		delete(r.playerAutoStates, oldID)
-		r.playerAutoStates[newID] = auto
-	}
-
-	// Update auto play timers
-	if timer, ok := r.autoPlayTimers[oldID]; ok {
-		delete(r.autoPlayTimers, oldID)
-		r.autoPlayTimers[newID] = timer
-	}
-
-	util.Info("GameRoom", "[Room %s] Player socket ID updated: %s -> %s", r.ID, oldID, newID)
-	return true
-}
-
 // ==================== Game Lifecycle ====================
 
 // StartGame starts the game. Must be called with mu held.

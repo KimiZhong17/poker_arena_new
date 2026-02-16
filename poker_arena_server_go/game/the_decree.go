@@ -668,45 +668,6 @@ func (g *TheDecreeMode) GetScores() map[string]int {
 	return scores
 }
 
-// UpdatePlayerID updates a player's ID (for reconnection)
-func (g *TheDecreeMode) UpdatePlayerID(oldID, newID string) bool {
-	if !g.playerManager.UpdatePlayerID(oldID, newID) {
-		return false
-	}
-
-	// Update currentRound references
-	if g.currentRound != nil {
-		if g.currentRound.DealerID == oldID {
-			g.currentRound.DealerID = newID
-		}
-		if plays, ok := g.currentRound.PlayerPlays[oldID]; ok {
-			delete(g.currentRound.PlayerPlays, oldID)
-			g.currentRound.PlayerPlays[newID] = plays
-		}
-		if g.currentRound.RoundWinnerID == oldID {
-			g.currentRound.RoundWinnerID = newID
-		}
-		if g.currentRound.RoundLoserID == oldID {
-			g.currentRound.RoundLoserID = newID
-		}
-		if g.currentRound.HandResults != nil {
-			if r, ok := g.currentRound.HandResults[oldID]; ok {
-				delete(g.currentRound.HandResults, oldID)
-				g.currentRound.HandResults[newID] = r
-			}
-		}
-	}
-
-	// Update firstDealerSelections
-	if sel, ok := g.firstDealerSelections[oldID]; ok {
-		delete(g.firstDealerSelections, oldID)
-		g.firstDealerSelections[newID] = sel
-	}
-
-	util.Info("TheDecree", "Player ID updated: %s -> %s", oldID, newID)
-	return true
-}
-
 // Cleanup releases resources
 func (g *TheDecreeMode) Cleanup() {
 	util.Info("TheDecree", "Cleaning up")

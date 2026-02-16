@@ -53,22 +53,3 @@ func (pm *PlayerManager) Clear() {
 	pm.players = make(map[string]*TheDecreePlayer)
 	pm.playerOrder = []string{}
 }
-
-func (pm *PlayerManager) UpdatePlayerID(oldID, newID string) bool {
-	p, ok := pm.players[oldID]
-	if !ok {
-		return false
-	}
-	delete(pm.players, oldID)
-	p.ID = newID
-	pm.players[newID] = p
-
-	for i, id := range pm.playerOrder {
-		if id == oldID {
-			pm.playerOrder[i] = newID
-			break
-		}
-	}
-	util.Info("PlayerManager", "Player ID updated: %s -> %s", oldID, newID)
-	return true
-}

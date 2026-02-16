@@ -18,9 +18,12 @@ const (
 	sendBufSize = 64
 )
 
-// PlayerSession wraps a WebSocket connection
+// PlayerSession wraps a WebSocket connection.
+// ID is the stable player identity (generated per player and kept across reconnects),
+// ConnID is the ephemeral WebSocket connection identifier.
 type PlayerSession struct {
-	ID            string
+	ID            string // stable player identity, never changes after creation
+	ConnID        string // ephemeral connection ID, changes on reconnect
 	GuestID       string
 	Name          string
 	Conn          *websocket.Conn
@@ -37,10 +40,11 @@ type PlayerSession struct {
 	closeOnce sync.Once
 }
 
-func NewPlayerSession(conn *websocket.Conn, id, name, guestID string) *PlayerSession {
+func NewPlayerSession(conn *websocket.Conn, connID, name, playerID string) *PlayerSession {
 	return &PlayerSession{
-		ID:            id,
-		GuestID:       guestID,
+		ID:            playerID,
+		ConnID:        connID,
+		GuestID:       "",
 		Name:          name,
 		Conn:          conn,
 		SeatIndex:     -1,
