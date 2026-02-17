@@ -334,18 +334,22 @@ func (g *TheDecreeMode) processShowdown() {
 
 	g.currentRound.HandResults = results
 
-	// Find winner and loser
+	// Find winner and loser deterministically using player order
 	winnerID, loserID := "", ""
 	var bestHand, worstHand *HandResult
 
-	for playerID, result := range results {
+	for _, pid := range g.playerManager.GetPlayerOrder() {
+		result, ok := results[pid]
+		if !ok {
+			continue
+		}
 		if bestHand == nil || CompareHands(*result, *bestHand) > 0 {
 			bestHand = result
-			winnerID = playerID
+			winnerID = pid
 		}
 		if worstHand == nil || CompareHands(*result, *worstHand) < 0 {
 			worstHand = result
-			loserID = playerID
+			loserID = pid
 		}
 	}
 

@@ -15,9 +15,8 @@ import (
 type RoomState string
 
 const (
-	RoomWaiting  RoomState = "waiting"
-	RoomPlaying  RoomState = "playing"
-	RoomFinished RoomState = "finished"
+	RoomWaiting RoomState = "waiting"
+	RoomPlaying RoomState = "playing"
 )
 
 // GameRoom manages a single game session
@@ -45,9 +44,9 @@ type GameRoom struct {
 	endGameTimer   *time.Timer
 }
 
-func NewGameRoom(gameMode string, maxPlayers int) *GameRoom {
+func NewGameRoom(gameMode string, maxPlayers int, existingIDs map[string]bool) *GameRoom {
 	return &GameRoom{
-		ID:                 generateRoomID(),
+		ID:                 generateUniqueRoomID(existingIDs),
 		GameMode:           gameMode,
 		MaxPlayers:         maxPlayers,
 		State:              RoomWaiting,
@@ -61,8 +60,15 @@ func NewGameRoom(gameMode string, maxPlayers int) *GameRoom {
 	}
 }
 
-func generateRoomID() string {
-	return fmt.Sprintf("%d", 1000+rand.Intn(9000))
+func generateUniqueRoomID(existingIDs map[string]bool) string {
+	for i := 0; i < 100; i++ {
+		id := fmt.Sprintf("%d", 1000+rand.Intn(9000))
+		if !existingIDs[id] {
+			return id
+		}
+	}
+	// Fallback: use timestamp-based ID
+	return fmt.Sprintf("%d", time.Now().UnixMilli()%10000)
 }
 
 // AddPlayer adds a player to the room. Must be called with mu held.
@@ -241,11 +247,9 @@ func (r *GameRoom) StartGame() bool {
 }
 
 func (r *GameRoom) EndGame() {
-	r.State = RoomFinished
 	util.Info("GameRoom", "[Room %s] Game ended", r.ID)
 
 	r.endGameTimer = nil
-	r.State = RoomWaiting
 
 	if r.theDecreeGame != nil {
 		r.theDecreeGame.Cleanup()
@@ -253,6 +257,16 @@ func (r *GameRoom) EndGame() {
 	}
 
 	r.clearAllAutoPlayTimers()
+
+	// Reset to waiting state; players must re-ready
+	r.State = RoomWaiting
+	for _, p := range r.players {
+		if p.IsHost {
+			p.IsReady = true
+		} else {
+			p.IsReady = false
+		}
+	}
 }
 
 func (r *GameRoom) RestartGame() bool {

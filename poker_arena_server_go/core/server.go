@@ -196,7 +196,16 @@ func (s *GameServer) handleCreateRoom(session *PlayerSession, req *protocol.Crea
 		return
 	}
 
-	room := NewGameRoom(req.GameMode, req.MaxPlayers)
+	if req.MaxPlayers < 2 || req.MaxPlayers > 4 {
+		s.sendError(session, protocol.ErrInternal, "Max players must be 2-4")
+		return
+	}
+
+	existingIDs := make(map[string]bool, len(s.rooms))
+	for id := range s.rooms {
+		existingIDs[id] = true
+	}
+	room := NewGameRoom(req.GameMode, req.MaxPlayers, existingIDs)
 
 	session.Name = name
 	session.GuestID = req.GuestID
@@ -509,8 +518,6 @@ func (s *GameServer) handleReady(session *PlayerSession) {
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	isReady := !player.IsReady
@@ -528,8 +535,6 @@ func (s *GameServer) handleStartGame(session *PlayerSession) {
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if !player.IsHost {
@@ -554,8 +559,6 @@ func (s *GameServer) handleRestartGame(session *PlayerSession) {
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	room.SetPlayerReady(player.ID, true)
@@ -577,8 +580,6 @@ func (s *GameServer) handleSelectFirstDealerCard(session *PlayerSession, req *pr
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if req.PlayerID != player.ID {
@@ -594,8 +595,6 @@ func (s *GameServer) handleDealerCall(session *PlayerSession, req *protocol.Deal
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if req.PlayerID != player.ID {
@@ -611,8 +610,6 @@ func (s *GameServer) handlePlayCards(session *PlayerSession, req *protocol.PlayC
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if req.PlayerID != player.ID {
@@ -632,8 +629,6 @@ func (s *GameServer) handleSetAuto(session *PlayerSession, req *protocol.SetAuto
 	if player == nil {
 		return
 	}
-
-	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	room.HandleSetAuto(player.ID, req.IsAuto)
@@ -820,25 +815,38 @@ func (s *GameServer) heartbeatCheck() {
 		delete(s.rooms, id)
 		util.Info("GameServer", "Room %s removed (idle/empty)", id)
 	}
+
+	// Cleanup expired rate limiter entries
+	s.gameActionLimiter.Cleanup()
+	s.roomActionLimiter.Cleanup()
+	s.connectionLimiter.Cleanup()
 }
 
 // ==================== Helpers ====================
 
+// getPlayerAndRoom looks up the player and their room, then locks room.mu
+// before releasing s.mu. This eliminates the TOCTOU gap where the room could
+// be deleted between the lookup and the caller's room.mu.Lock().
+// Callers must defer room.mu.Unlock() themselves.
 func (s *GameServer) getPlayerAndRoom(session *PlayerSession) (*PlayerSession, *GameRoom) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	player, ok := s.playersByID[session.ID]
 	if !ok || player.RoomID == "" {
+		s.mu.RUnlock()
 		s.sendError(session, protocol.ErrGameNotStarted, "Not in a game")
 		return nil, nil
 	}
 
 	room, ok := s.rooms[player.RoomID]
 	if !ok {
+		s.mu.RUnlock()
 		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
 		return nil, nil
 	}
+
+	room.mu.Lock()
+	s.mu.RUnlock()
 
 	return player, room
 }
