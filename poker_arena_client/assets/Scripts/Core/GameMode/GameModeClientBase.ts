@@ -126,12 +126,9 @@ export abstract class GameModeClientBase {
         }
 
         // 获取 poker 资源（从 Game 获取）
-        // @ts-ignore - accessing private property
-        const pokerSprites = this.game['_pokerSprites'];
-        // @ts-ignore - accessing private property
-        const pokerPrefab = this.game['_pokerPrefab'];
-        // @ts-ignore - accessing private property
-        const glowMaterial = this.game['_glowMaterial'];
+        const pokerSprites = this.game.pokerSprites;
+        const pokerPrefab = this.game.pokerPrefab;
+        const glowMaterial = this.game.glowMaterial;
         console.log(`[${this.config.name}] glowMaterial loaded:`, !!glowMaterial);
 
         if (!pokerSprites || !pokerPrefab) {

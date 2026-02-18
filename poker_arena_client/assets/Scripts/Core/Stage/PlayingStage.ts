@@ -182,8 +182,7 @@ export class PlayingStage extends GameStageBase {
             const mode = new TheDecreeModeClient(this.game, config);
 
             // 将模式引用传递给 Game（用于遗留方法）
-            // @ts-ignore - accessing private property
-            this.game['_theDecreeMode'] = mode;
+            this.game.theDecreeModeRef = mode;
 
             return mode;
         } catch (error) {

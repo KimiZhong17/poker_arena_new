@@ -11,6 +11,14 @@ export class PokerFactory extends Component {
     private _pokerSprites: Map<string, SpriteFrame> = new Map();
     private _pokerPrefab: Prefab = null!;
 
+    public get pokerSprites(): Map<string, SpriteFrame> {
+        return this._pokerSprites;
+    }
+
+    public get pokerPrefab(): Prefab {
+        return this._pokerPrefab;
+    }
+
     public init(pokerSprites: Map<string, SpriteFrame>, pokerPrefab: Prefab): void {
         PokerFactory.instance = this;
         this._pokerSprites = pokerSprites;

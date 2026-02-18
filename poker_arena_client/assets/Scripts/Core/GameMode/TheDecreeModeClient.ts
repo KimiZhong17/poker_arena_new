@@ -1,3 +1,4 @@
+import { PlayingStage } from "../Stage/PlayingStage";
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
 import { Game } from "../../Game";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
@@ -247,8 +248,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
             return;
         }
 
-        const pokerSprites = pokerFactory['_pokerSprites'] as Map<string, any>;
-        const pokerPrefab = pokerFactory['_pokerPrefab'];
+        const pokerSprites = pokerFactory.pokerSprites as Map<string, any>;
+        const pokerPrefab = pokerFactory.pokerPrefab;
 
         if (!pokerSprites || !pokerPrefab) {
             console.warn('[TheDecreeModeClient] Poker resources not found');
@@ -418,7 +419,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
             node: this.game?.node?.name,
             uuid: this.game?.node?.uuid,
             scene: this.game?.node?.scene?.name,
-            holdLoading: (this.game as any)?._holdLoadingForReconnect
+            holdLoading: this.game.holdLoadingForReconnect
         });
         console.log('[TheDecreeModeClient] playerUIManager exists:', !!this.game.playerUIManager);
         console.log('[TheDecreeModeClient] current room:', !!LocalRoomStore.getInstance().getCurrentRoom());
@@ -1564,9 +1565,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         console.log(`[TheDecreeModeClient] Displayed hand type for player ${result.playerId} at index ${playerIndex}: ${scoreText}`);
 
         // 延迟展示下一个玩家
-        this.showdownClearTimer = window.setTimeout(() => {
+        this.showdownClearTimer = setTimeout(() => {
             this.showHandTypesSequentially(sortedResults, index + 1);
-        }, this.SHOWDOWN_INTERVAL_MS);
+        }, this.SHOWDOWN_INTERVAL_MS) as unknown as number;
     }
 
     /**
@@ -1590,10 +1591,10 @@ export class TheDecreeModeClient extends GameModeClientBase {
         }
 
         // 在消息显示完毕后清除所有牌型显示
-        this.showdownClearTimer = window.setTimeout(() => {
+        this.showdownClearTimer = setTimeout(() => {
             console.log('[TheDecreeModeClient] Winner message finished, clearing showdown display');
             this.clearShowdownDisplay();
-        }, this.WINNER_MESSAGE_DURATION * 1000);
+        }, this.WINNER_MESSAGE_DURATION * 1000) as unknown as number;
     }
 
     /**
@@ -1721,9 +1722,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const stageManager = this.game.stageManager;
         if (stageManager) {
             const playingStage = stageManager.getCurrentStage();
-            if (playingStage && typeof (playingStage as any).onGameFinished === 'function') {
+            if (playingStage instanceof PlayingStage) {
                 console.log('[TheDecreeModeClient] Notifying PlayingStage that game is finished');
-                (playingStage as any).onGameFinished(gameResult);
+                playingStage.onGameFinished(gameResult);
             } else {
                 console.error('[TheDecreeModeClient] PlayingStage not found or onGameFinished method missing!');
             }
@@ -1798,8 +1799,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
 
         // 检查 PlayerUIManager 是否已初始化（重连场景可能跳过了 ReadyStage）
-        // @ts-ignore - accessing private property
-        if (playerUIManager._maxSeats === 0) {
+        if (playerUIManager.maxSeats === 0) {
             console.log('[TheDecreeModeClient] PlayerUIManager not initialized, calling initForReadyStage first...');
             const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
             playerUIManager.initForReadyStage(
@@ -1856,12 +1856,9 @@ export class TheDecreeModeClient extends GameModeClientBase {
         const players = remappedPlayers.map(playerInfo => new Player(playerInfo));
 
         // 获取 poker 资源（从 Game 获取）
-        // @ts-ignore - accessing private property
-        const pokerSprites = this.game['_pokerSprites'];
-        // @ts-ignore - accessing private property
-        const pokerPrefab = this.game['_pokerPrefab'];
-        // @ts-ignore - accessing private property
-        const glowMaterial = this.game['_glowMaterial'];
+        const pokerSprites = this.game.pokerSprites;
+        const pokerPrefab = this.game.pokerPrefab;
+        const glowMaterial = this.game.glowMaterial;
 
         if (!pokerSprites || !pokerPrefab) {
             console.error('[TheDecreeModeClient] Poker resources not loaded!');
@@ -1928,8 +1925,8 @@ export class TheDecreeModeClient extends GameModeClientBase {
         }
 
         // 获取扑克牌资源
-        const pokerSprites = pokerFactory['_pokerSprites'];
-        const pokerPrefab = pokerFactory['_pokerPrefab'];
+        const pokerSprites = pokerFactory.pokerSprites;
+        const pokerPrefab = pokerFactory.pokerPrefab;
         const pokerBack = pokerSprites.get("CardBack3");
 
         if (!pokerPrefab) {
@@ -1999,20 +1996,20 @@ export class TheDecreeModeClient extends GameModeClientBase {
      */
     private clearShowdownTimer(): void {
         if (this.showdownClearTimer !== null) {
-            window.clearTimeout(this.showdownClearTimer);
+            clearTimeout(this.showdownClearTimer);
             this.showdownClearTimer = null;
             console.log('[TheDecreeModeClient] Showdown clear timer cancelled');
         }
     }
 
     private registerTimeout(callback: () => void, delayMs: number): void {
-        const timerId = window.setTimeout(callback, delayMs);
+        const timerId = setTimeout(callback, delayMs) as unknown as number;
         this._pendingTimeouts.push(timerId);
     }
 
     private clearPendingTimeouts(): void {
         for (const timerId of this._pendingTimeouts) {
-            window.clearTimeout(timerId);
+            clearTimeout(timerId);
         }
         this._pendingTimeouts = [];
     }
@@ -2305,7 +2302,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
             node: this.game?.node?.name,
             uuid: this.game?.node?.uuid,
             scene: this.game?.node?.scene?.name,
-            holdLoading: (this.game as any)?._holdLoadingForReconnect
+            holdLoading: this.game.holdLoadingForReconnect
         });
         try {
             const gameStore = LocalGameStore.getInstance();
@@ -2430,8 +2427,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
                 console.log('[TheDecreeModeClient] Main player hand restored:', myHandCards.length, 'cards');
 
                 // 应用 glow 特效（重连场景可能在 glow material 加载后才恢复手牌）
-                // @ts-ignore - accessing private property
-                const glowMaterial = this.game['_glowMaterial'];
+                const glowMaterial = this.game.glowMaterial;
                 if (glowMaterial) {
                     const handDisplay = playerUIController.getHandDisplay();
                     if (handDisplay) {

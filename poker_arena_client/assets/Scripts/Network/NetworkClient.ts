@@ -210,10 +210,10 @@ export class NetworkClient {
         const delay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
         console.log(`[Net] Reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
 
-        this.reconnectTimer = window.setTimeout(() => {
+        this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             this.doReconnect();
-        }, delay);
+        }, delay) as unknown as number;
     }
 
     private doReconnect(): void {
@@ -265,7 +265,7 @@ export class NetworkClient {
 
     private cancelReconnect(): void {
         if (this.reconnectTimer !== null) {
-            window.clearTimeout(this.reconnectTimer);
+            clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
         this.reconnectAttempts = 0;
@@ -301,9 +301,9 @@ export class NetworkClient {
         this.sendHeartbeat();
 
         // 设置定时发送心跳
-        this.heartbeatTimer = window.setInterval(() => {
+        this.heartbeatTimer = setInterval(() => {
             this.sendHeartbeat();
-        }, this.HEARTBEAT_INTERVAL);
+        }, this.HEARTBEAT_INTERVAL) as unknown as number;
     }
 
     /**
@@ -312,7 +312,7 @@ export class NetworkClient {
     private stopHeartbeat(): void {
         if (this.heartbeatTimer !== null) {
             console.log('[Net] Stopping heartbeat');
-            window.clearInterval(this.heartbeatTimer);
+            clearInterval(this.heartbeatTimer);
             this.heartbeatTimer = null;
         }
     }

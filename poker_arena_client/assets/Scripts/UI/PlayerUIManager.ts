@@ -43,6 +43,11 @@ export class PlayerUIManager extends Component {
 
     // ===== Ready Stage 相关（两阶段初始化支持）=====
     private _maxSeats: number = 0;  // 房间最大玩家数
+
+    public get maxSeats(): number {
+        return this._maxSeats;
+    }
+
     private _mySeatIndex: number = 0;  // 本地玩家的座位索引
     private _seatNodes: Map<number, Node> = new Map();  // 座位节点映射（相对索引 -> Node）
     private _infoPanels: Map<number, PlayerInfoPanel> = new Map();  // 信息面板映射（相对索引 -> InfoPanel）
@@ -200,9 +205,9 @@ export class PlayerUIManager extends Component {
                 const stateLabelAlignment = this._layoutConfig[relativeSeat]?.stateLabelAlignment ?? StateLabelAlignment.RIGHT;
 
                 // 检查是否已经初始化过（避免重复调用 init 导致UI重建）
-                if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === playerInfo.id) {
+                if (infoPanel.playerInfo && infoPanel.playerInfo.id === playerInfo.id) {
                     // 已经初始化过，只更新数据
-                    (infoPanel as any).playerInfo = playerInfo;
+                    infoPanel.playerInfo = playerInfo;
                     infoPanel.refresh();
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Updated ${playerInfo.name} (ready: ${playerInfo.isReady})`);
                 } else {
@@ -222,7 +227,7 @@ export class PlayerUIManager extends Component {
                 const stateLabelAlignment = this._layoutConfig[relativeSeat]?.stateLabelAlignment ?? StateLabelAlignment.RIGHT;
 
                 // 检查是否已经是空座位状态
-                if ((infoPanel as any).playerInfo && (infoPanel as any).playerInfo.id === '') {
+                if (infoPanel.playerInfo && infoPanel.playerInfo.id === '') {
                     // 已经是空座位，不需要重新初始化
                     console.log(`[PlayerUIManager] Seat ${relativeSeat}: Already empty`);
                 } else {

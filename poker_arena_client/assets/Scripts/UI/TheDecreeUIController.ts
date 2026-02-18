@@ -1,3 +1,5 @@
+import { PlayingStage } from '../Core/Stage/PlayingStage';
+import { TheDecreeModeClient } from '../Core/GameMode/TheDecreeModeClient';
 import { _decorator, Component, Node, Button, EventHandler } from 'cc';
 import { Game } from '../Game';
 import { LocalRoomStore } from '../LocalStore/LocalRoomStore';
@@ -118,7 +120,7 @@ export class TheDecreeUIController extends Component {
 
         // 从 StageManager 获取当前 PlayingStage，然后获取 GameMode
         const playingStage = this._game.stageManager?.getCurrentStage();
-        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+        const theDecreeMode = (playingStage instanceof PlayingStage) ? playingStage.getCurrentGameMode() as TheDecreeModeClient : null;
 
         console.log('[TheDecreeUI]   playingStage:', !!playingStage);
         console.log('[TheDecreeUI]   theDecreeMode:', !!theDecreeMode);
@@ -414,7 +416,7 @@ export class TheDecreeUIController extends Component {
         }
 
         const playingStage = this._game.stageManager?.getCurrentStage();
-        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+        const theDecreeMode = (playingStage instanceof PlayingStage) ? playingStage.getCurrentGameMode() as TheDecreeModeClient : null;
 
         if (!theDecreeMode) {
             // No game mode - disable play button
@@ -481,7 +483,7 @@ export class TheDecreeUIController extends Component {
 
         // Get the current game mode from StageManager
         const playingStage = this._game.stageManager?.getCurrentStage();
-        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+        const theDecreeMode = (playingStage instanceof PlayingStage) ? playingStage.getCurrentGameMode() as TheDecreeModeClient : null;
 
         if (!theDecreeMode) {
             console.error('[TheDecreeUI] TheDecreeMode not found!');
@@ -639,7 +641,7 @@ export class TheDecreeUIController extends Component {
 
         // Get TheDecreeModeClient from PlayingStage
         const playingStage = this._game.stageManager?.getCurrentStage();
-        const theDecreeMode = playingStage ? (playingStage as any).getCurrentGameMode() : null;
+        const theDecreeMode = (playingStage instanceof PlayingStage) ? playingStage.getCurrentGameMode() as TheDecreeModeClient : null;
 
         console.log('[TheDecreeUI] playingStage:', !!playingStage);
         console.log('[TheDecreeUI] theDecreeMode:', !!theDecreeMode);
@@ -681,45 +683,39 @@ export class TheDecreeUIController extends Component {
      */
     public onAutoPlaySwitchChanged(event: Switch, customEventData?: string): void {
         console.log('[TheDecreeUI] ========== Auto Play Switch Changed ==========');
-        console.log('[TheDecreeUI] event:', event);
-        console.log('[TheDecreeUI] _game:', !!this._game);
 
         if (!this._game) {
             console.error('[TheDecreeUI] Cannot toggle auto-play - game not ready');
             return;
         }
 
-        // 优先使用 Game 上缓存的 theDecreeMode（在 PlayingStage 创建时设置）
-        // 这样即使当前不在 PlayingStage 也能工作
-        let theDecreeMode = this._game.theDecreeMode;
-        console.log('[TheDecreeUI] theDecreeMode from Game:', !!theDecreeMode);
-
-        // 如果没有，尝试从 PlayingStage 获取
-        if (!theDecreeMode) {
-            const playingStage = this._game.stageManager?.getCurrentStage();
-            console.log('[TheDecreeUI] playingStage:', !!playingStage);
-            if (playingStage && typeof (playingStage as any).getCurrentGameMode === 'function') {
-                theDecreeMode = (playingStage as any).getCurrentGameMode();
-                console.log('[TheDecreeUI] theDecreeMode from PlayingStage:', !!theDecreeMode);
-            }
-        }
-
-        if (!theDecreeMode) {
-            console.error('[TheDecreeUI] Cannot toggle auto-play - game mode not ready');
-            console.log('[TheDecreeUI] =====================================');
-            return;
-        }
-
-        // event 参数是 Switch 组件本身
         const isOn = event ? event.getValue() : false;
         console.log('[TheDecreeUI] Switch value:', isOn);
 
-        // 调用 setAuto() 发送到服务器
-        console.log('[TheDecreeUI] Calling theDecreeMode.setAuto(' + isOn + ')...');
-        theDecreeMode.setAuto(isOn);
+        // 优先通过 TheDecreeModeClient 发送（游戏进行中）
+        let theDecreeMode = this._game.theDecreeMode;
+        if (!theDecreeMode) {
+            const playingStage = this._game.stageManager?.getCurrentStage();
+            if (playingStage instanceof PlayingStage) {
+                theDecreeMode = playingStage.getCurrentGameMode() as TheDecreeModeClient;
+            }
+        }
 
-        console.log(`[TheDecreeUI] ✓ Auto-play switched to: ${isOn ? 'ON' : 'OFF'}`);
-        console.log('[TheDecreeUI] =====================================');
+        if (theDecreeMode) {
+            theDecreeMode.setAuto(isOn);
+        } else {
+            // 准备阶段：TheDecreeModeClient 还不存在，直接通过 NetworkClient 发送
+            const networkClient = this._game.networkClient;
+            if (networkClient && networkClient.getIsConnected()) {
+                networkClient.send(ClientMessageType.SET_AUTO, { isAuto: isOn });
+                console.log('[TheDecreeUI] Sent SET_AUTO directly via NetworkClient (ready phase)');
+            } else {
+                console.error('[TheDecreeUI] Cannot toggle auto-play - no network connection');
+                return;
+            }
+        }
+
+        console.log(`[TheDecreeUI] Auto-play switched to: ${isOn ? 'ON' : 'OFF'}`);
     }
 
     // Temporarily disabled - Clear Selection button handler

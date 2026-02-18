@@ -375,7 +375,7 @@ export class ReadyStage extends GameStageBase {
             const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
 
             // 如果 PlayerUIManager 还没初始化（_maxSeats 为 0），尝试初始化
-            if ((playerUIManager as any)._maxSeats === 0) {
+            if (playerUIManager.maxSeats === 0) {
                 console.log('[ReadyStage] PlayerUIManager not yet initialized, initializing now...');
                 if (myPlayerInfo) {
                     const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);

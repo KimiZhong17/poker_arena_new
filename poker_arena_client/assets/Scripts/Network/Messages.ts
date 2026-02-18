@@ -3,6 +3,9 @@
  * 客户端 ↔ 服务器通信协议
  */
 
+import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
+export { PlayerInfo };
+
 // ==================== 客户端 → 服务器 ====================
 
 /**
@@ -164,17 +167,6 @@ export interface RoomJoinedEvent {
     hostId: string;            // 房主ID
     players: PlayerInfo[];
     maxPlayers: number;
-}
-
-/**
- * 玩家信息
- */
-export interface PlayerInfo {
-    id: string;
-    name: string;
-    seatIndex: number;
-    isReady: boolean;
-    isHost: boolean;
 }
 
 /**

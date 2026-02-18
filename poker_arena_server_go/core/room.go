@@ -257,6 +257,7 @@ func (r *GameRoom) EndGame() {
 	}
 
 	r.clearAllAutoPlayTimers()
+	r.playerAutoStates = make(map[string]bool)
 
 	// Reset to waiting state; players must re-ready
 	r.State = RoomWaiting
@@ -559,6 +560,12 @@ func (r *GameRoom) HandleSetAuto(playerID string, isAuto bool) bool {
 		r.theDecreeGame.SetPlayerAuto(playerID, isAuto, "manual")
 	} else {
 		r.playerAutoStates[playerID] = isAuto
+		// Broadcast during ready phase so clients can sync the toggle state
+		r.Broadcast(protocol.PlayerAutoChanged, protocol.PlayerAutoChangedEvent{
+			PlayerID: playerID,
+			IsAuto:   isAuto,
+			Reason:   "manual",
+		})
 	}
 	return true
 }

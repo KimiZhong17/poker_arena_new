@@ -42,8 +42,16 @@ export class PlayerInfoPanel extends Component {
 
     // ===== 状态 =====
     private currentMode: InfoPanelMode = InfoPanelMode.ROOM;
-    private playerInfo: PlayerInfo | null = null;
+    private _playerInfo: PlayerInfo | null = null;
     private isMyPlayer: boolean = false;
+
+    public get playerInfo(): PlayerInfo | null {
+        return this._playerInfo;
+    }
+
+    public set playerInfo(value: PlayerInfo | null) {
+        this._playerInfo = value;
+    }
     private prefabLoaded: boolean = false;
     private isAuto: boolean = false;
     private autoReason?: 'manual' | 'timeout' | 'disconnect';
@@ -64,7 +72,7 @@ export class PlayerInfoPanel extends Component {
         mode: InfoPanelMode = InfoPanelMode.ROOM,
         stateLabelAlignment: StateLabelAlignment = StateLabelAlignment.RIGHT
     ): void {
-        this.playerInfo = playerInfo;
+        this._playerInfo = playerInfo;
         this.isMyPlayer = isMyPlayer;
         this.currentMode = mode;
         this.stateLabelAlignment = stateLabelAlignment;
@@ -226,7 +234,7 @@ export class PlayerInfoPanel extends Component {
      * 更新玩家信息
      */
     public updatePlayerInfo(playerInfo: PlayerInfo): void {
-        this.playerInfo = playerInfo;
+        this._playerInfo = playerInfo;
         this.refresh();
     }
 
@@ -234,11 +242,11 @@ export class PlayerInfoPanel extends Component {
      * 刷新显示
      */
     public refresh(): void {
-        if (!this.playerInfo || !this.prefabLoaded) return;
+        if (!this._playerInfo || !this.prefabLoaded) return;
 
         // 更新名字（如果是自己，加上标识）
         if (this.nameLabel) {
-            const displayName = this.getShortenedName(this.playerInfo.name);
+            const displayName = this.getShortenedName(this._playerInfo.name);
             const nameText = this.isMyPlayer ? `${displayName} (我)` : displayName;
             this.nameLabel.string = nameText;
         }
@@ -279,7 +287,7 @@ export class PlayerInfoPanel extends Component {
      * 刷新房间模式显示
      */
     private refreshRoomMode(): void {
-        if (!this.playerInfo) return;
+        if (!this._playerInfo) return;
 
         // 隐藏分数标签
         if (this.scoreLabel) {
@@ -288,10 +296,10 @@ export class PlayerInfoPanel extends Component {
 
         // 显示状态
         if (this.stateLabel) {
-            if (this.playerInfo.isHost) {
+            if (this._playerInfo.isHost) {
                 this.stateLabel.string = '房主';
                 this.stateLabel.color = UIColors.playerState.host;
-            } else if (this.playerInfo.isReady) {
+            } else if (this._playerInfo.isReady) {
                 this.stateLabel.string = '已准备';
                 this.stateLabel.color = UIColors.playerState.ready;
             } else {
