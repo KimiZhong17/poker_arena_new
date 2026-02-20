@@ -1,7 +1,7 @@
-import {
 import { logger } from '../Utils/Logger';
 const log = logger('Net');
 
+import {
     ClientMessageType
 } from './Messages';
 
