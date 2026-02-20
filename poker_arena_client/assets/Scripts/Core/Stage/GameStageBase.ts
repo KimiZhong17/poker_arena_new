@@ -1,5 +1,8 @@
 import { Node } from 'cc';
 import { Game } from '../../Game';
+import { logger } from '../../Utils/Logger';
+
+const log = logger('Stage');
 
 /**
  * 游戏阶段基类
@@ -45,7 +48,7 @@ export abstract class GameStageBase {
      * 注意：不需要手动调用 hideUI()，会自动调用
      */
     public onExit(): void {
-        console.log(`[${this.constructor.name}] Exiting stage`);
+        log.debug(`[${this.constructor.name}] Exiting stage`);
         this.isActive = false;
         this.hideUI();  // 自动隐藏 UI
     }

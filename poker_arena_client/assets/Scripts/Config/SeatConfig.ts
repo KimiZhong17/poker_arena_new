@@ -2,6 +2,8 @@
  * 座位配置
  * 定义游戏中各个座位的位置、偏移、对齐方式等配置
  */
+import { logger } from '../Utils/Logger';
+const log = logger('SeatConfig');
 
 // ==================== 类型定义 ====================
 
@@ -240,7 +242,7 @@ export class SeatLayoutConfig {
         } else if (playerCount >= 5 && playerCount <= 6) {
             return this.getGuandanLayout(playerCount);
         } else {
-            console.warn(`[SeatLayoutConfig] Unsupported player count: ${playerCount}, using 4-player layout`);
+            log.warn(`Unsupported player count: ${playerCount}, using 4-player layout`);
             return this.getTheDecreeLayout(4);
         }
     }
@@ -251,7 +253,7 @@ export class SeatLayoutConfig {
     public static getTheDecreeLayout(playerCount: number): SeatPosition[] {
         const seatOrder = TheDecreeSeatOrder[playerCount];
         if (!seatOrder) {
-            console.warn(`[SeatLayoutConfig] Invalid TheDecree player count: ${playerCount}`);
+            log.warn(`Invalid TheDecree player count: ${playerCount}`);
             return this.buildLayout(TheDecreeSeatOrder[4]);
         }
         return this.buildLayout(seatOrder);
@@ -263,7 +265,7 @@ export class SeatLayoutConfig {
     public static getGuandanLayout(playerCount: number): SeatPosition[] {
         const seatOrder = GuandanSeatOrder[playerCount];
         if (!seatOrder) {
-            console.warn(`[SeatLayoutConfig] Invalid Guandan player count: ${playerCount}`);
+            log.warn(`Invalid Guandan player count: ${playerCount}`);
             return this.buildLayout(GuandanSeatOrder[5]);
         }
         return this.buildLayout(seatOrder);

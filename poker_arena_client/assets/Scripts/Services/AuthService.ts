@@ -1,5 +1,8 @@
 import { NetworkClient } from '../Network/NetworkClient';
 import { LocalUserStore } from '../LocalStore/LocalUserStore';
+import { logger } from '../Utils/Logger';
+
+const log = logger('Auth');
 
 /**
  * AuthService - 认证服务
@@ -36,7 +39,7 @@ export class AuthService {
      * TODO: 实现真实的服务器认证
      */
     public async login(username: string, password: string): Promise<boolean> {
-        console.log('[AuthService] Login:', username);
+        log.debug('[AuthService] Login:', username);
 
         try {
             // TODO: 替换为真实的服务器 API 调用
@@ -55,10 +58,10 @@ export class AuthService {
                 isGuest: false
             });
 
-            console.log('[AuthService] Login successful');
+            log.debug('[AuthService] Login successful');
             return true;
         } catch (error) {
-            console.error('[AuthService] Login failed:', error);
+            log.error('[AuthService] Login failed:', error);
             return false;
         }
     }
@@ -69,7 +72,7 @@ export class AuthService {
      * @param customNickname 可选的自定义昵称
      */
     public async loginAsGuest(customNickname?: string): Promise<boolean> {
-        console.log('[AuthService] Guest login', customNickname ? `with nickname: ${customNickname}` : '');
+        log.debug('[AuthService] Guest login', customNickname ? `with nickname: ${customNickname}` : '');
 
         try {
             // LocalUserStore 会生成UUID，确保唯一性
@@ -78,13 +81,13 @@ export class AuthService {
             if (success) {
                 const guestId = this.localUserStore.getUsername();
                 const displayName = this.localUserStore.getNickname();
-                console.log(`[AuthService] Guest login successful: ${guestId} (显示: ${displayName})`);
+                log.debug(`[AuthService] Guest login successful: ${guestId} (显示: ${displayName})`);
                 return true;
             } else {
                 return false;
             }
         } catch (error) {
-            console.error('[AuthService] Guest login failed:', error);
+            log.error('[AuthService] Guest login failed:', error);
             return false;
         }
     }
@@ -95,7 +98,7 @@ export class AuthService {
      * - 清理本地状态
      */
     public logout(): void {
-        console.log('[AuthService] Logout');
+        log.debug('[AuthService] Logout');
 
         // 如果连接到服务器，通知服务器登出
         if (this.networkClient && this.networkClient.getIsConnected()) {
@@ -106,7 +109,7 @@ export class AuthService {
         // 清理本地玩家数据
         this.localUserStore.logout();
 
-        console.log('[AuthService] Logout complete');
+        log.debug('[AuthService] Logout complete');
     }
 
     /**

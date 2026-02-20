@@ -18,6 +18,9 @@ import { GameService } from './Services/GameService';
 import { SceneUIController } from './UI/SceneUIController';
 import { LoadingUI } from './UI/LoadingUI';
 import { LocalRoomStore, RoomState } from './LocalStore/LocalRoomStore';
+import { logger } from './Utils/Logger';
+const log = logger('Game');
+
 const { ccclass, property } = _decorator;
 
 @ccclass('Game')
@@ -66,7 +69,7 @@ export class Game extends Component {
     private readonly _debugLayout: boolean = false;
 
     private _onSwitchToPlayingStage = (): void => {
-        console.log("[Game] Received SWITCH_TO_PLAYING_STAGE event, switching stage...");
+        log.debug("Received SWITCH_TO_PLAYING_STAGE event, switching stage...");
         if (this.stageManager) {
             this.stageManager.switchToStage(GameStage.PLAYING);
         }
@@ -77,7 +80,7 @@ export class Game extends Component {
     private _roomId: string = '';
 
     public onLoad(): void {
-        console.log("Main onLoad");
+        log.debug("Main onLoad");
 
         // 显示加载界面
         if (this.loadingUI) {
@@ -99,12 +102,12 @@ export class Game extends Component {
         // Check if this is online mode (roomId from server)
         this.isOnlineMode = transitionData.isOnlineMode || false;
 
-        console.log(`[Game] Game Mode: ${this._gameMode}, Room ID: ${this._roomId}, Online Mode: ${this.isOnlineMode}`);
+        log.debug(`Game Mode: ${this._gameMode}, Room ID: ${this._roomId}, Online Mode: ${this.isOnlineMode}`);
 
         const existingBundle = assetManager.getBundle("Pokers");
         if (existingBundle) {
             this._pokerBundle = existingBundle;
-            console.log("Poker bundle already loaded.");
+            log.debug("Poker bundle already loaded.");
 
             if (this.loadingUI) {
                 this.loadingUI.updateProgress(0.3, '姝ｅ湪鍔犺浇鎵戝厠鐗?..');
@@ -118,11 +121,11 @@ export class Game extends Component {
 
         assetManager.loadBundle("Pokers", (err, bundle) => {
             if (err) {
-                console.error(err);
+                log.error(err);
                 return;
             }
             this._pokerBundle = bundle;
-            console.log("Poker bundle loaded.");
+            log.debug("Poker bundle loaded.");
 
             if (this.loadingUI) {
                 this.loadingUI.updateProgress(0.3, '正在加载扑克牌...');
@@ -137,10 +140,10 @@ export class Game extends Component {
     private _onLoadPokerAtlas(): void {
         this._pokerBundle.loadDir("", SpriteFrame, (err, sprites) => {
             if (err) {
-                console.error(err);
+                log.error(err);
                 return;
             }
-            console.log("所有扑克牌 SpriteFrame 加载完毕", sprites);
+            log.debug("所有扑克牌 SpriteFrame 加载完毕", sprites);
             sprites.forEach((sprite) => {
                 this._pokerSprites.set(sprite.name, sprite);
             });
@@ -156,11 +159,11 @@ export class Game extends Component {
     private _onLoadPokerPrefab(): void {
         this._pokerBundle.load("PokerPrefab", Prefab, (err, prefab) => {
             if (err) {
-                console.error(err);
+                log.error(err);
                 return;
             }
             this._pokerPrefab = prefab;
-            console.log("Poker prefab loaded.");
+            log.debug("Poker prefab loaded.");
 
             if (this.loadingUI) {
                 this.loadingUI.updateProgress(0.9, '即将进入房间...');
@@ -175,13 +178,13 @@ export class Game extends Component {
         if (existingBundle) {
             existingBundle.load("CardGlow", Material, (err, material) => {
                 if (err) {
-                    console.warn("CardGlow material not found, glow effect will be disabled.");
+                    log.warn("CardGlow material not found, glow effect will be disabled.");
                     this._checkAllLoaded();
                     return;
                 }
 
                 this._glowMaterial = material;
-                console.log("CardGlow material loaded.");
+                log.debug("CardGlow material loaded.");
 
                 if (this._playerUIManager) {
                     this._playerUIManager.applyGlowMaterialToMainHand(material);
@@ -194,20 +197,20 @@ export class Game extends Component {
         assetManager.loadBundle("Effects", (err, bundle) => {
             if (err) {
                 // Effects bundle not found, continue without glow material
-                console.warn("Effects bundle not found, glow effect will be disabled.");
+                log.warn("Effects bundle not found, glow effect will be disabled.");
                 this._checkAllLoaded();
                 return;
             }
 
             bundle.load("CardGlow", Material, (err, material) => {
                 if (err) {
-                    console.warn("CardGlow material not found, glow effect will be disabled.");
+                    log.warn("CardGlow material not found, glow effect will be disabled.");
                     this._checkAllLoaded();
                     return;
                 }
 
                 this._glowMaterial = material;
-                console.log("CardGlow material loaded.");
+                log.debug("CardGlow material loaded.");
 
                 if (this._playerUIManager) {
                     this._playerUIManager.applyGlowMaterialToMainHand(material);
@@ -218,7 +221,7 @@ export class Game extends Component {
     }
 
     private _checkAllLoaded(): void {
-        console.log(this._pokerBundle, this._pokerSprites.size, this._pokerPrefab);
+        log.debug(this._pokerBundle, this._pokerSprites.size, this._pokerPrefab);
         if (this._hasEnteredGame) {
             return;
         }
@@ -229,8 +232,8 @@ export class Game extends Component {
     }
 
     private _enterGame(): void {
-        console.log("[Game] Entering game - initializing systems...");
-        console.log('[Game] instance:', {
+        log.debug("Entering game - initializing systems...");
+        log.debug('instance:', {
             node: this.node?.name,
             uuid: this.node?.uuid,
             scene: this.node?.scene?.name
@@ -267,7 +270,7 @@ export class Game extends Component {
         // 8. 根据房间状态决定进入哪个阶段
         const roomStore = LocalRoomStore.getInstance();
         const currentRoom = roomStore.getCurrentRoom();
-        console.log('[Game] Room snapshot at enter:', {
+        log.debug('Room snapshot at enter:', {
             hasRoom: !!currentRoom,
             roomId: currentRoom?.id,
             state: currentRoom?.state,
@@ -277,32 +280,32 @@ export class Game extends Component {
 
         if (currentRoom && currentRoom.state === RoomState.PLAYING) {
             // 重连场景：房间正在游戏中，直接进入 PlayingStage
-            console.log("[Game] Reconnect scenario: Room is PLAYING, entering Playing stage");
+            log.debug("Reconnect scenario: Room is PLAYING, entering Playing stage");
             this._holdLoadingForReconnect = true;
             if (this.loadingUI) {
                 this.loadingUI.show();
                 this.loadingUI.updateProgress(1.0, '正在进入游戏...');
             }
-            console.log('[Game] Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+            log.debug('Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
             this.stageManager.switchToStage(GameStage.PLAYING);
         } else {
             // 正常场景：进入 ReadyStage
-            console.log("[Game] All systems initialized, entering Ready stage");
+            log.debug("All systems initialized, entering Ready stage");
             this.stageManager.switchToStage(GameStage.READY);
             this._holdLoadingForReconnect = false;
-            console.log('[Game] Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+            log.debug('Reconnect loading hold set:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
         }
 
         // 延迟隐藏加载界面（让用户看到100%）
         if (!this._holdLoadingForReconnect) {
             this.scheduleOnce(() => {
                 if (this.loadingUI) {
-                    console.log('[Game] Auto-hide loading UI (non-reconnect)');
+                    log.debug('Auto-hide loading UI (non-reconnect)');
                     this.loadingUI.hide();
                 }
             }, 0.5);
         } else {
-            console.log('[Game] Holding loading UI for reconnect');
+            log.debug('Holding loading UI for reconnect');
         }
     }
 
@@ -314,7 +317,7 @@ export class Game extends Component {
             this.playerUIManagerNode = this.createPlayerUIManager();
         } else {
             // Node exists (assigned in editor), but we still need to setup Widget for hand nodes
-            console.log("[Game] PlayerUIManager node already exists, setting up Widget components...");
+            log.debug("PlayerUIManager node already exists, setting up Widget components...");
             this.createOrUpdateHandNodes(this.playerUIManagerNode);
         }
 
@@ -325,42 +328,42 @@ export class Game extends Component {
             this._playerUIManager = this.playerUIManagerNode.addComponent(PlayerUIManager);
         }
 
-        console.log("[Game] PlayerUIManager component created (will init with player data later)");
+        log.debug("PlayerUIManager component created (will init with player data later)");
     }
 
     /**
      * Initialize Scene UI (exit button, settings, room ID display)
      */
     private initializeSceneUI(): void {
-        console.log("[Game] Initializing Scene UI...");
+        log.debug("Initializing Scene UI...");
 
         // Find or create Scene UI node
         if (!this.sceneUINode) {
-            console.log("[Game] SceneUI node not manually assigned, creating automatically...");
+            log.debug("SceneUI node not manually assigned, creating automatically...");
             this.sceneUINode = this.createSceneUI();
         } else {
-            console.log("[Game] Using manually assigned SceneUI node");
+            log.debug("Using manually assigned SceneUI node");
         }
 
         // Ensure the node is active
         if (!this.sceneUINode.active) {
             this.sceneUINode.active = true;
-            console.log("[Game] Activated SceneUI node");
+            log.debug("Activated SceneUI node");
         }
 
         // Get or create SceneUIController component
         this._sceneUIController = this.sceneUINode.getComponent(SceneUIController);
         if (!this._sceneUIController) {
             this._sceneUIController = this.sceneUINode.addComponent(SceneUIController);
-            console.log("[Game] Added SceneUIController component to node");
+            log.debug("Added SceneUIController component to node");
         } else {
-            console.log("[Game] Found existing SceneUIController component");
+            log.debug("Found existing SceneUIController component");
         }
 
         // Initialize with room ID and mode
         this._sceneUIController.init(this._roomId, this.isOnlineMode);
 
-        console.log("[Game] Scene UI initialized");
+        log.debug("Scene UI initialized");
     }
 
     /**
@@ -373,7 +376,7 @@ export class Game extends Component {
         if (canvasNode) {
             const existingSceneUI = canvasNode.getChildByName("Node_SceneUI");
             if (existingSceneUI) {
-                console.log("[Game] Found existing Node_SceneUI at Canvas root level");
+                log.debug("Found existing Node_SceneUI at Canvas root level");
                 sceneUINode = existingSceneUI;
             }
         }
@@ -388,7 +391,7 @@ export class Game extends Component {
             // Make sure SceneUI is rendered on top
             const siblingCount = parentNode.children.length;
             sceneUINode.setSiblingIndex(siblingCount - 1);
-            console.log(`[Game] Created new Node_SceneUI at index: ${sceneUINode.getSiblingIndex()} / ${siblingCount}`);
+            log.debug(`Created new Node_SceneUI at index: ${sceneUINode.getSiblingIndex()} / ${siblingCount}`);
         }
 
         // Add UITransform
@@ -396,7 +399,7 @@ export class Game extends Component {
             sceneUINode.addComponent(UITransform);
         }
 
-        console.log('[Game] Node_SceneUI configured');
+        log.debug('Node_SceneUI configured');
 
         return sceneUINode;
     }
@@ -406,30 +409,30 @@ export class Game extends Component {
      * 使用 NetworkManager 获取全局单例，确保与 Lobby 使用同一个连接
      */
     private initializeNetworkClient(): void {
-        console.log("[Game] Initializing network client...");
+        log.debug("Initializing network client...");
 
         // 使用 NetworkManager 获取全局单例 NetworkClient
         const serverUrl = NetworkConfig.getServerUrl();
-        console.log(`[Game] Connecting to server: ${serverUrl}`);
+        log.debug(`Connecting to server: ${serverUrl}`);
         const networkManager = NetworkManager.getInstance();
         this.networkClient = networkManager.getClient(serverUrl);
 
         if (this.networkClient.getIsConnected()) {
-            console.log("[Game] Using existing connected network client");
+            log.debug("Using existing connected network client");
         } else {
-            console.log("[Game] Network client not connected, will connect in Ready stage");
+            log.debug("Network client not connected, will connect in Ready stage");
         }
 
         // 初始化 GameService（单例模式，会自动注册网络监听器）
         GameService.getInstance();
-        console.log("[Game] GameService initialized");
+        log.debug("GameService initialized");
     }
 
     /**
      * Create and register all game stages
      */
     private createStageManager(): void {
-        console.log("[Game] Creating Stage Manager...");
+        log.debug("Creating Stage Manager...");
 
         this.stageManager = new StageManager();
 
@@ -445,19 +448,19 @@ export class Game extends Component {
         const endStage = new EndStage(this, this.nodeEndStage);
         this.stageManager.registerStage(GameStage.END, endStage);
 
-        console.log("[Game] Stage Manager created with 3 stages");
+        log.debug("Stage Manager created with 3 stages");
     }
 
     /**
      * Setup event listeners for stage switching
      */
     private setupStageEventListeners(): void {
-        console.log("[Game] Setting up stage event listeners...");
+        log.debug("Setting up stage event listeners...");
 
         // Listen for game start event to switch to Playing stage
         EventCenter.on('SWITCH_TO_PLAYING_STAGE', this._onSwitchToPlayingStage, this);
 
-        console.log("[Game] Stage event listeners setup complete");
+        log.debug("Stage event listeners setup complete");
     }
 
     /**
@@ -474,12 +477,12 @@ export class Game extends Component {
      * 在浏览器控制台输入：cc.find('Canvas/Main').getComponent('Game').forceApplyWidgetToExistingNodes()
      */
     public forceApplyWidgetToExistingNodes(): void {
-        console.log('[Debug] Forcing Widget application...');
+        log.debug('[Debug] Forcing Widget application...');
         if (this.playerUIManagerNode) {
             this.createOrUpdateHandNodes(this.playerUIManagerNode);
-            console.log('[Debug] Widget force update complete');
+            log.debug('[Debug] Widget force update complete');
         } else {
-            console.error('[Debug] playerUIManagerNode not found');
+            log.error('[Debug] playerUIManagerNode not found');
         }
     }
 
@@ -554,7 +557,7 @@ export class Game extends Component {
         if (canvasNode) {
             const existingPlayerUI = canvasNode.getChildByName("Node_PlayerUI");
             if (existingPlayerUI) {
-                console.log("[Game] Found existing Node_PlayerUI at Canvas root level");
+                log.debug("Found existing Node_PlayerUI at Canvas root level");
                 playerUINode = existingPlayerUI;
             }
         }
@@ -568,7 +571,7 @@ export class Game extends Component {
             // Make sure PlayerUI is rendered on top
             const siblingCount = parentNode.children.length;
             playerUINode.setSiblingIndex(siblingCount - 1);
-            console.log(`[Game] Created new Node_PlayerUI at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
+            log.debug(`Created new Node_PlayerUI at index: ${playerUINode.getSiblingIndex()} / ${siblingCount}`);
         }
 
         // Node_PlayerUI只是一个逻辑容器，不需要Widget
@@ -577,7 +580,7 @@ export class Game extends Component {
             playerUINode.addComponent(UITransform);
         }
 
-        console.log('[Game] Node_PlayerUI configured as container');
+        log.debug('Node_PlayerUI configured as container');
 
         // Create or update hand container nodes with Widget configuration
         this.createOrUpdateHandNodes(playerUINode);
@@ -597,15 +600,15 @@ export class Game extends Component {
         if (this._gameMode === 'the_decree') {
             const count = layoutPlayerCount >= 2 ? Math.min(layoutPlayerCount, 4) : 4;
             layoutConfig = SeatLayoutConfig.getTheDecreeLayout(count);
-            console.log(`[Game] Using TheDecree ${count}-player layout`);
+            log.debug(`Using TheDecree ${count}-player layout`);
         } else {
             const count = layoutPlayerCount >= 5 ? Math.min(layoutPlayerCount, 6) : 5;
             layoutConfig = SeatLayoutConfig.getGuandanLayout(count);
-            console.log(`[Game] Using Guandan ${count}-player layout`);
+            log.debug(`Using Guandan ${count}-player layout`);
         }
 
         const activeCount = layoutConfig.filter(c => c.active).length;
-        console.log(`[Game] Applying Widget layout: ${activeCount} active / ${layoutConfig.length} total positions`);
+        log.debug(`Applying Widget layout: ${activeCount} active / ${layoutConfig.length} total positions`);
 
         layoutConfig.forEach(config => {
             // 查找现有节点或创建新节点
@@ -613,9 +616,9 @@ export class Game extends Component {
             if (!handNode) {
                 handNode = new Node(config.name);
                 playerUINode.addChild(handNode);
-                console.log(`[Game] Created new hand node: ${config.name}`);
+                log.debug(`Created new hand node: ${config.name}`);
             } else {
-                console.log(`[Game] Found existing hand node: ${config.name}, updating Widget`);
+                log.debug(`Found existing hand node: ${config.name}, updating Widget`);
             }
 
             // 添加 UITransform（如果没有）
@@ -629,15 +632,15 @@ export class Game extends Component {
             let handWidget = handNode.getComponent('cc.Widget') as Widget;
             if (!handWidget) {
                 handWidget = handNode.addComponent('cc.Widget') as Widget;
-                console.log(`[Game] Added Widget to ${config.name}`);
+                log.debug(`Added Widget to ${config.name}`);
 
                 // 立即验证
                 const verifyWidget = handNode.getComponent('cc.Widget');
                 if (!verifyWidget) {
-                    console.error(`[Game] ERROR: Failed to add Widget to ${config.name}!`);
+                    log.error(`ERROR: Failed to add Widget to ${config.name}!`);
                     return;
                 } else {
-                    console.log(`[Game] Widget verified on ${config.name}`);
+                    log.debug(`Widget verified on ${config.name}`);
                 }
             }
 
@@ -657,7 +660,7 @@ export class Game extends Component {
             // 应用 widget 配置
             const w = config.widget;
             if (this._debugLayout) {
-                console.log(`[Game] ${config.name} widget config:`, JSON.stringify(w));
+                log.debug(`${config.name} widget config:`, JSON.stringify(w));
             }
             if (w.alignLeft !== undefined) {
                 handWidget.isAlignLeft = w.alignLeft;
@@ -682,7 +685,7 @@ export class Game extends Component {
                 if (w.bottom !== undefined) {
                     handWidget.bottom = w.bottom;
                     if (this._debugLayout) {
-                        console.log(`[Game] ${config.name} bottom set to ${w.bottom}`);
+                        log.debug(`${config.name} bottom set to ${w.bottom}`);
                     }
                 }
             }
@@ -691,7 +694,7 @@ export class Game extends Component {
                 if (w.horizontalCenter !== undefined) {
                     handWidget.horizontalCenter = w.horizontalCenter;
                     if (this._debugLayout) {
-                        console.log(`[Game] ${config.name} horizontalCenter set to ${w.horizontalCenter}`);
+                        log.debug(`${config.name} horizontalCenter set to ${w.horizontalCenter}`);
                     }
                 }
             }
@@ -700,7 +703,7 @@ export class Game extends Component {
                 if (w.verticalCenter !== undefined) {
                     handWidget.verticalCenter = w.verticalCenter;
                     if (this._debugLayout) {
-                        console.log(`[Game] ${config.name} verticalCenter set to ${w.verticalCenter}`);
+                        log.debug(`${config.name} verticalCenter set to ${w.verticalCenter}`);
                     }
                 }
             }
@@ -708,13 +711,13 @@ export class Game extends Component {
             // 强制立即更新 Widget 对齐
             handWidget.updateAlignment();
             if (this._debugLayout) {
-                console.log(`[Game] ${config.name} Widget alignment updated, position: (${handNode.position.x}, ${handNode.position.y})`);
+                log.debug(`${config.name} Widget alignment updated, position: (${handNode.position.x}, ${handNode.position.y})`);
             }
 
             // 延迟检查位置是否被改变
             if (this._debugLayout) {
                 this.scheduleOnce(() => {
-                    console.log(`[Game] ${config.name} position after 1 second: (${handNode.position.x}, ${handNode.position.y})`);
+                    log.debug(`${config.name} position after 1 second: (${handNode.position.x}, ${handNode.position.y})`);
                 }, 1.0);
             }
 
@@ -730,7 +733,7 @@ export class Game extends Component {
             }
         });
 
-        console.log("[Game] All hand positions configured with Widget alignment");
+        log.debug("All hand positions configured with Widget alignment");
     }
 
     private getLayoutPlayerCount(): number {
@@ -740,17 +743,17 @@ export class Game extends Component {
     }
 
     public finishReconnectLoading(): void {
-        console.log('[Game] finishReconnectLoading called, hold:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
+        log.debug('finishReconnectLoading called, hold:', this._holdLoadingForReconnect, 'instance:', this.node?.uuid);
         if (!this._holdLoadingForReconnect) {
-            console.log('[Game] finishReconnectLoading: hold=false, forcing hide anyway');
+            log.debug('finishReconnectLoading: hold=false, forcing hide anyway');
         }
 
         this._holdLoadingForReconnect = false;
         if (this.loadingUI) {
-            console.log('[Game] Hiding loading UI after reconnect');
+            log.debug('Hiding loading UI after reconnect');
             this.loadingUI.hide();
         } else {
-            console.warn('[Game] finishReconnectLoading: loadingUI missing');
+            log.warn('finishReconnectLoading: loadingUI missing');
         }
     }
 

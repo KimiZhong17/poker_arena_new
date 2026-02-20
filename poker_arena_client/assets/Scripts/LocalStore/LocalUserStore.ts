@@ -1,4 +1,7 @@
 import { IdGenerator } from '../Utils/IdGenerator';
+import { logger } from '../Utils/Logger';
+
+const log = logger('LocalUserStore');
 
 /**
  * 本地用户数据结构
@@ -77,7 +80,7 @@ export class LocalUserStore {
         this.isLoggedIn = true;
         this.saveToStorage();
 
-        console.log(`[LocalUserStore] User logged in: ${username}`);
+        log.debug(`User logged in: ${username}`);
         return true;
     }
 
@@ -98,9 +101,9 @@ export class LocalUserStore {
         // 如果没有已保存的游客ID，生成新的
         if (!guestId) {
             guestId = IdGenerator.generateGuestId();
-            console.log(`[LocalUserStore] Generated new guest ID: ${guestId}`);
+            log.debug(`Generated new guest ID: ${guestId}`);
         } else {
-            console.log(`[LocalUserStore] Loaded existing guest ID: ${guestId}`);
+            log.debug(`Loaded existing guest ID: ${guestId}`);
         }
 
         // 为当前标签页添加会话后缀（用于多标签页测试）
@@ -129,7 +132,7 @@ export class LocalUserStore {
         // 游客也保存到 localStorage，以便下次自动登录
         this.saveToStorage();
 
-        console.log(`[LocalUserStore] Guest logged in: ${uniqueGuestId} (显示名: ${displayName})`);
+        log.debug(`Guest logged in: ${uniqueGuestId} (显示名: ${displayName})`);
         return true;
     }
 
@@ -142,7 +145,7 @@ export class LocalUserStore {
         this.selectedGameMode = null;
         this.clearStorage();
 
-        console.log('[LocalUserStore] User logged out');
+        log.debug('User logged out');
     }
 
     /**
@@ -166,7 +169,7 @@ export class LocalUserStore {
      */
     public getUsername(): string {
         const username = this.userData?.username || 'Guest';
-        console.log(`[LocalUserStore] getUsername() returning: ${username}`);
+        log.debug(`getUsername() returning: ${username}`);
         return username;
     }
 
@@ -208,7 +211,7 @@ export class LocalUserStore {
      */
     public updateUserData(data: Partial<LocalUserData>): void {
         if (!this.userData) {
-            console.warn('[LocalUserStore] Cannot update: no user data');
+            log.warn('Cannot update: no user data');
             return;
         }
 
@@ -222,7 +225,7 @@ export class LocalUserStore {
             this.saveToStorage();
         }
 
-        console.log('[LocalUserStore] User data updated:', data);
+        log.debug('User data updated:', data);
     }
 
     /**
@@ -232,12 +235,12 @@ export class LocalUserStore {
      */
     public setCurrentRoomPlayerId(playerId: string): void {
         if (!this.userData) {
-            console.warn('[LocalUserStore] Cannot set room player ID: no user data');
+            log.warn('Cannot set room player ID: no user data');
             return;
         }
 
         this.userData.currentRoomPlayerId = playerId;
-        console.log(`[LocalUserStore] Room player ID set: ${playerId}`);
+        log.debug(`Room player ID set: ${playerId}`);
     }
 
     /**
@@ -248,7 +251,7 @@ export class LocalUserStore {
     public clearCurrentRoomPlayerId(): void {
         if (this.userData) {
             this.userData.currentRoomPlayerId = undefined;
-            console.log('[LocalUserStore] Room player ID cleared');
+            log.debug('Room player ID cleared');
         }
     }
 
@@ -259,7 +262,7 @@ export class LocalUserStore {
      */
     public setSelectedGameMode(gameModeId: string): void {
         this.selectedGameMode = gameModeId;
-        console.log(`[LocalUserStore] Selected game mode: ${gameModeId}`);
+        log.debug(`Selected game mode: ${gameModeId}`);
     }
 
     /**
@@ -305,11 +308,11 @@ export class LocalUserStore {
             // 注册 beforeunload 事件，在标签页关闭时注销会话
             this.registerUnloadHandler(sessionId);
 
-            console.log(`[LocalUserStore] Created new session ID: ${sessionId}`);
+            log.debug(`Created new session ID: ${sessionId}`);
         } else {
             // 刷新当前会话的时间戳
             this.registerActiveSession(sessionId);
-            console.log(`[LocalUserStore] Using existing session ID: ${sessionId}`);
+            log.debug(`Using existing session ID: ${sessionId}`);
         }
 
         return sessionId;
@@ -333,7 +336,7 @@ export class LocalUserStore {
         window.addEventListener('beforeunload', unloadHandler);
         window.addEventListener('pagehide', unloadHandler);
 
-        console.log(`[LocalUserStore] Registered unload handler for session: ${sessionId}`);
+        log.debug(`Registered unload handler for session: ${sessionId}`);
     }
 
     /**
@@ -346,10 +349,10 @@ export class LocalUserStore {
                 const sessions: Record<string, number> = JSON.parse(sessionsStr);
                 delete sessions[sessionId];
                 localStorage.setItem('poker_arena_active_sessions', JSON.stringify(sessions));
-                console.log(`[LocalUserStore] Unregistered session: ${sessionId}`);
+                log.debug(`Unregistered session: ${sessionId}`);
             }
         } catch (error) {
-            console.error('[LocalUserStore] Failed to unregister session:', error);
+            log.error('Failed to unregister session:', error);
         }
     }
 
@@ -377,7 +380,7 @@ export class LocalUserStore {
                 }
             }
         } catch (error) {
-            console.error('[LocalUserStore] Failed to load active session IDs:', error);
+            log.error('Failed to load active session IDs:', error);
         }
 
         return activeIds;
@@ -409,7 +412,7 @@ export class LocalUserStore {
 
             localStorage.setItem('poker_arena_active_sessions', JSON.stringify(sessions));
         } catch (error) {
-            console.error('[LocalUserStore] Failed to register active session:', error);
+            log.error('Failed to register active session:', error);
         }
     }
 
@@ -434,7 +437,7 @@ export class LocalUserStore {
                 }
             }
         } catch (error) {
-            console.error('[LocalUserStore] Failed to load guest ID from storage:', error);
+            log.error('Failed to load guest ID from storage:', error);
         }
         return null;
     }
@@ -459,7 +462,7 @@ export class LocalUserStore {
             localStorage.setItem('poker_arena_user', JSON.stringify(dataToSave));
             localStorage.setItem('poker_arena_logged_in', 'true');
         } catch (error) {
-            console.error('[LocalUserStore] Failed to save to storage:', error);
+            log.error('Failed to save to storage:', error);
         }
     }
 
@@ -491,13 +494,13 @@ export class LocalUserStore {
                         }
                     }
 
-                    console.log('[LocalUserStore] Loaded guest from storage with session suffix:', this.userData.username);
+                    log.debug('Loaded guest from storage with session suffix:', this.userData.username);
                 } else {
-                    console.log('[LocalUserStore] Loaded from storage:', this.userData?.username);
+                    log.debug('Loaded from storage:', this.userData?.username);
                 }
             }
         } catch (error) {
-            console.error('[LocalUserStore] Failed to load from storage:', error);
+            log.error('Failed to load from storage:', error);
         }
     }
 
@@ -509,7 +512,7 @@ export class LocalUserStore {
             localStorage.removeItem('poker_arena_user');
             localStorage.removeItem('poker_arena_logged_in');
         } catch (error) {
-            console.error('[LocalUserStore] Failed to clear storage:', error);
+            log.error('Failed to clear storage:', error);
         }
     }
 
@@ -528,9 +531,9 @@ export class LocalUserStore {
             // 清除sessionStorage
             sessionStorage.removeItem('poker_arena_session_id');
 
-            console.log('[LocalUserStore] All cache cleared');
+            log.debug('All cache cleared');
         } catch (error) {
-            console.error('[LocalUserStore] Failed to clear all cache:', error);
+            log.error('Failed to clear all cache:', error);
         }
     }
 

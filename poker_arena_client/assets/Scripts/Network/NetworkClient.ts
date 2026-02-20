@@ -1,4 +1,7 @@
 import {
+import { logger } from '../Utils/Logger';
+const log = logger('Net');
+
     ClientMessageType
 } from './Messages';
 
@@ -68,7 +71,7 @@ export class NetworkClient {
             this.ws.onopen = () => {
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
-                console.log('[Net] Connected');
+                log.debug('Connected');
 
                 // 启动心跳
                 this.startHeartbeat();
@@ -77,7 +80,7 @@ export class NetworkClient {
             };
 
             this.ws.onerror = (event: Event) => {
-                console.error('[Net] WebSocket error:', event);
+                log.error('WebSocket error:', event);
                 if (!this.isConnected) {
                     reject(new Error('WebSocket connection failed'));
                 }
@@ -86,7 +89,7 @@ export class NetworkClient {
             this.ws.onclose = (event: CloseEvent) => {
                 const wasConnected = this.isConnected;
                 this.isConnected = false;
-                console.log('[Net] Disconnected, code:', event.code, 'reason:', event.reason);
+                log.debug('Disconnected, code:', event.code, 'reason:', event.reason);
 
                 // 停止心跳
                 this.stopHeartbeat();
@@ -115,18 +118,18 @@ export class NetworkClient {
         try {
             envelope = JSON.parse(raw);
         } catch (err) {
-            console.warn('[Net] Invalid JSON message:', raw);
+            log.warn('Invalid JSON message:', raw);
             return;
         }
 
         if (!envelope.type) {
-            console.warn('[Net] Message missing type:', raw);
+            log.warn('Message missing type:', raw);
             return;
         }
 
         // pong 消息不需要打日志
         if (envelope.type !== 'pong') {
-            console.log(`[Net Recv] ${envelope.type}`, envelope.data);
+            log.debug(`[Net Recv] ${envelope.type}`, envelope.data);
         }
 
         this.dispatch(envelope.type, envelope.data);
@@ -169,7 +172,7 @@ export class NetworkClient {
      */
     public send<T>(type: ClientMessageType, data?: T): boolean {
         if (!this.isConnected || !this.ws) {
-            console.error(`[Net] Cannot send ${type}: Not connected`);
+            log.error(`Cannot send ${type}: Not connected`);
             return false;
         }
 
@@ -178,7 +181,7 @@ export class NetworkClient {
             envelope.data = data;
         }
 
-        console.log(`[Net Send] ${type}`, data);
+        log.debug(`[Net Send] ${type}`, data);
         this.ws.send(JSON.stringify(envelope));
         return true;
     }
@@ -201,14 +204,14 @@ export class NetworkClient {
      */
     private scheduleReconnect(): void {
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.log('[Net] Reconnect failed after all attempts');
+            log.debug('Reconnect failed after all attempts');
             this.dispatch('_reconnect_failed', {});
             return;
         }
 
         this.reconnectAttempts++;
         const delay = this.RECONNECT_BASE_DELAY * Math.pow(2, this.reconnectAttempts - 1);
-        console.log(`[Net] Reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+        log.debug(`Reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
@@ -219,14 +222,14 @@ export class NetworkClient {
     private doReconnect(): void {
         if (this.manualDisconnect) return;
 
-        console.log(`[Net] Reconnecting... (attempt ${this.reconnectAttempts})`);
+        log.debug(`Reconnecting... (attempt ${this.reconnectAttempts})`);
 
         this.cleanupWebSocket();
 
         try {
             this.ws = new WebSocket(this.serverUrl);
         } catch (err) {
-            console.error('[Net] Reconnect WebSocket creation failed:', err);
+            log.error('Reconnect WebSocket creation failed:', err);
             this.scheduleReconnect();
             return;
         }
@@ -235,7 +238,7 @@ export class NetworkClient {
             this.isConnected = true;
             const attempt = this.reconnectAttempts;
             this.reconnectAttempts = 0;
-            console.log('[Net] Reconnected after', attempt, 'attempts');
+            log.debug('Reconnected after', attempt, 'attempts');
 
             this.startHeartbeat();
 
@@ -251,7 +254,7 @@ export class NetworkClient {
 
         this.ws.onclose = (event: CloseEvent) => {
             this.isConnected = false;
-            console.log('[Net] Reconnect socket closed, code:', event.code);
+            log.debug('Reconnect socket closed, code:', event.code);
 
             if (!this.manualDisconnect) {
                 this.scheduleReconnect();
@@ -295,7 +298,7 @@ export class NetworkClient {
     private startHeartbeat(): void {
         this.stopHeartbeat();
 
-        console.log('[Net] Starting heartbeat');
+        log.debug('Starting heartbeat');
 
         // 立即发送一次心跳
         this.sendHeartbeat();
@@ -311,7 +314,7 @@ export class NetworkClient {
      */
     private stopHeartbeat(): void {
         if (this.heartbeatTimer !== null) {
-            console.log('[Net] Stopping heartbeat');
+            log.debug('Stopping heartbeat');
             clearInterval(this.heartbeatTimer);
             this.heartbeatTimer = null;
         }

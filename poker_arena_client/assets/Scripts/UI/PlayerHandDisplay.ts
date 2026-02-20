@@ -12,6 +12,9 @@ import {
 } from '../Config/CardDisplayConfig';
 import { SeatPosition, PlayedCardLayout } from '../Config/SeatConfig';
 import { UIColors, UIFonts, UISizes } from '../Config/UIConfig';
+import { logger } from '../Utils/Logger';
+const log = logger('HandDisplay');
+
 const { ccclass, property } = _decorator;
 
 /**
@@ -87,7 +90,7 @@ export class PlayerHandDisplay extends Component {
             this.handContainer = this.node;
         }
 
-        console.log(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}, grouping: ${enableGrouping}, showCardCount: ${this._showCardCount}`);
+        log.debug(`PlayerHandDisplay initialized for ${player.name}, mode: ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'}, cards: ${player.handCards.length}, levelRank: ${levelRank}, playerIndex: ${playerIndex}, grouping: ${enableGrouping}, showCardCount: ${this._showCardCount}`);
     }
 
     /**
@@ -95,7 +98,7 @@ export class PlayerHandDisplay extends Component {
      * @param playedCards Optional array of cards that have been played (for TheDecree mode)
      */
     public updateDisplay(playedCards: number[] = []): void {
-        console.log(`Updating display for ${this._player.name}, cards: ${this._player.handCards.length}, played: ${playedCards.length}, container: ${this.handContainer ? 'exists' : 'NULL'}`);
+        log.debug(`Updating display for ${this._player.name}, cards: ${this._player.handCards.length}, played: ${playedCards.length}, container: ${this.handContainer ? 'exists' : 'NULL'}`);
 
         this._playedCards = playedCards;
 
@@ -108,10 +111,10 @@ export class PlayerHandDisplay extends Component {
         this._cardSpacing = getCardSpacing(cards.length, !this._enableGrouping);
 
         if (this._displayMode === HandDisplayMode.SPREAD) {
-            console.log(`Displaying ${cards.length} cards in SPREAD mode with spacing: ${this._cardSpacing}`);
+            log.debug(`Displaying ${cards.length} cards in SPREAD mode with spacing: ${this._cardSpacing}`);
             this.displaySpread(cards);
         } else {
-            console.log(`Displaying ${cards.length} cards in STACK mode`);
+            log.debug(`Displaying ${cards.length} cards in STACK mode`);
             this.displayStack(cards.length);
         }
 
@@ -134,7 +137,7 @@ export class PlayerHandDisplay extends Component {
         const verticalOffset = CardSpacing.stack.verticalOffset;
         const wildCardGap = CardSpacing.stack.wildCardGap;
 
-        console.log(`[PlayerHandDisplay] displaySpread: enableGrouping=${this._enableGrouping}, cards=${cards.map(c => '0x' + c.toString(16)).join(',')}`);
+        log.debug(`[PlayerHandDisplay] displaySpread: enableGrouping=${this._enableGrouping}, cards=${cards.map(c => '0x' + c.toString(16)).join(',')}`);
 
         // If grouping is disabled (TheDecree mode), display cards in order received from server
         // Server has already sorted the cards, so we don't need to sort again
@@ -203,8 +206,8 @@ export class PlayerHandDisplay extends Component {
         let normalStartX = -normalCardsWidth / 2 + cardWidth / 2;
 
         const totalGroupCount = normalGroupCount + (hasWildCards ? 1 : 0);
-        console.log(`Display spread: ${cardCount} cards (${normalCards.length} normal, ${wildCards.length} wild) in ${totalGroupCount} groups`);
-        console.log(`Normal cards width: ${normalCardsWidth}, centered at 0`);
+        log.debug(`Display spread: ${cardCount} cards (${normalCards.length} normal, ${wildCards.length} wild) in ${totalGroupCount} groups`);
+        log.debug(`Normal cards width: ${normalCardsWidth}, centered at 0`);
 
         // Display normal card groups (centered)
         let groupIndex = 0;
@@ -238,7 +241,7 @@ export class PlayerHandDisplay extends Component {
 
                 // Log first card details
                 if (groupIndex === 0 && i === group.length - 1) {
-                    console.log(`First normal card position: (${finalX}, ${finalY})`);
+                    log.debug(`First normal card position: (${finalX}, ${finalY})`);
                 }
             }
 
@@ -274,12 +277,12 @@ export class PlayerHandDisplay extends Component {
                 this._pokerNodes.push(cardNode);
 
                 if (i === wildCards.length - 1) {
-                    console.log(`First wild card position: (${finalX}, ${finalY})`);
+                    log.debug(`First wild card position: (${finalX}, ${finalY})`);
                 }
             }
         }
 
-        console.log(`Added ${this._pokerNodes.length} card nodes to container`);
+        log.debug(`Added ${this._pokerNodes.length} card nodes to container`);
     }
 
     /**
@@ -292,7 +295,7 @@ export class PlayerHandDisplay extends Component {
         const totalWidth = (cardCount - 1) * cardSpacing + cardWidth;
         const startX = -totalWidth / 2 + cardWidth / 2;
 
-        console.log(`Display spread simple: ${cardCount} cards with overlap, spacing: ${cardSpacing}`);
+        log.debug(`Display spread simple: ${cardCount} cards with overlap, spacing: ${cardSpacing}`);
 
         // Display all cards in a simple horizontal line with overlap
         for (let i = 0; i < cards.length; i++) {
@@ -315,11 +318,11 @@ export class PlayerHandDisplay extends Component {
             this._pokerNodes.push(cardNode);
 
             if (i === 0) {
-                console.log(`First card position: (${finalX}, ${finalY}), card width: ${cardWidth}, spacing: ${cardSpacing}`);
+                log.debug(`First card position: (${finalX}, ${finalY}), card width: ${cardWidth}, spacing: ${cardSpacing}`);
             }
         }
 
-        console.log(`Added ${this._pokerNodes.length} card nodes to container`);
+        log.debug(`Added ${this._pokerNodes.length} card nodes to container`);
     }
 
     /**
@@ -344,7 +347,7 @@ export class PlayerHandDisplay extends Component {
      * If there are played cards, also display them face-up in a spread or vertical stack
      */
     private displayStack(cardCount: number): void {
-        console.log(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
+        log.debug(`[displayStack] Displaying ${cardCount} cards, played: ${this._playedCards.length}`);
 
         // Calculate remaining cards (cards in hand that haven't been played yet)
         // In TheDecree mode, cardCount includes played cards, so we need to subtract them
@@ -371,14 +374,14 @@ export class PlayerHandDisplay extends Component {
                 this._pokerNodes.push(cardNode);
             }
 
-            console.log(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
+            log.debug(`[displayStack] Added ${maxStackDisplay} card backs (remaining: ${remainingCards}) at base offset (${baseOffset.x}, ${baseOffset.y})`);
 
             // 2. Create card count label if enabled
             if (this._showCardCount) {
                 this.createCardCountLabel(remainingCards, baseOffset);
             }
         } else {
-            console.log(`[displayStack] No remaining cards to display (all ${cardCount} cards have been played)`);
+            log.debug(`[displayStack] No remaining cards to display (all ${cardCount} cards have been played)`);
         }
 
         // 3. If there are played cards, display them based on layout configuration
@@ -392,7 +395,7 @@ export class PlayerHandDisplay extends Component {
             }
         }
 
-        console.log(`[displayStack] Total nodes: ${this._pokerNodes.length}`);
+        log.debug(`[displayStack] Total nodes: ${this._pokerNodes.length}`);
     }
 
     /**
@@ -408,13 +411,13 @@ export class PlayerHandDisplay extends Component {
         // Get the offset for played cards based on player position
         const offset = this.getPlayedCardOffset();
 
-        console.log(`[displayPlayedCardsHorizontal] Player ${this._player.name} (index ${this._playerIndex})`);
-        console.log(`[displayPlayedCardsHorizontal] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
-        console.log(`[displayPlayedCardsHorizontal] Offset: (${offset.x}, ${offset.y}), spacing: ${playedCardSpacing}`);
+        log.debug(`[displayPlayedCardsHorizontal] Player ${this._player.name} (index ${this._playerIndex})`);
+        log.debug(`[displayPlayedCardsHorizontal] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
+        log.debug(`[displayPlayedCardsHorizontal] Offset: (${offset.x}, ${offset.y}), spacing: ${playedCardSpacing}`);
 
         for (let i = 0; i < this._playedCards.length; i++) {
             const cardValue = this._playedCards[i];
-            console.log(`[displayPlayedCardsHorizontal] Creating card ${i}: 0x${cardValue.toString(16)}`);
+            log.debug(`[displayPlayedCardsHorizontal] Creating card ${i}: 0x${cardValue.toString(16)}`);
             const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
 
             // 重叠显示：每张卡只偏移 playedCardSpacing 的距离
@@ -427,7 +430,7 @@ export class PlayerHandDisplay extends Component {
             this.handContainer.addChild(cardNode);
             this._pokerNodes.push(cardNode);
 
-            console.log(`[displayPlayedCardsHorizontal] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
+            log.debug(`[displayPlayedCardsHorizontal] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
         }
     }
 
@@ -444,13 +447,13 @@ export class PlayerHandDisplay extends Component {
         // Get the offset for played cards based on player position
         const offset = this.getPlayedCardOffset();
 
-        console.log(`[displayPlayedCardsVertical] Player ${this._player.name} (index ${this._playerIndex})`);
-        console.log(`[displayPlayedCardsVertical] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
-        console.log(`[displayPlayedCardsVertical] Offset: (${offset.x}, ${offset.y}), spacing: ${verticalSpacing}`);
+        log.debug(`[displayPlayedCardsVertical] Player ${this._player.name} (index ${this._playerIndex})`);
+        log.debug(`[displayPlayedCardsVertical] Displaying ${this._playedCards.length} played cards:`, this._playedCards.map(c => '0x' + c.toString(16)));
+        log.debug(`[displayPlayedCardsVertical] Offset: (${offset.x}, ${offset.y}), spacing: ${verticalSpacing}`);
 
         for (let i = 0; i < this._playedCards.length; i++) {
             const cardValue = this._playedCards[i];
-            console.log(`[displayPlayedCardsVertical] Creating card ${i}: 0x${cardValue.toString(16)}`);
+            log.debug(`[displayPlayedCardsVertical] Creating card ${i}: 0x${cardValue.toString(16)}`);
             const cardNode = this.createCardNode(cardValue, true, true); // Show front, is played card
 
             // 竖向堆叠：每张卡向下偏移 verticalSpacing 的距离
@@ -463,7 +466,7 @@ export class PlayerHandDisplay extends Component {
             this.handContainer.addChild(cardNode);
             this._pokerNodes.push(cardNode);
 
-            console.log(`[displayPlayedCardsVertical] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
+            log.debug(`[displayPlayedCardsVertical] Card ${i} (0x${cardValue.toString(16)}): position (${finalX}, ${finalY})`);
         }
     }
 
@@ -515,7 +518,7 @@ export class PlayerHandDisplay extends Component {
         this.handContainer.addChild(labelNode);
         this._cardCountLabel = labelNode;
 
-        console.log(`[createCardCountLabel] Created label "${cardCount}" at position (${topCardX}, ${topCardY})`);
+        log.debug(`[createCardCountLabel] Created label "${cardCount}" at position (${topCardX}, ${topCardY})`);
     }
 
     /**
@@ -548,7 +551,7 @@ export class PlayerHandDisplay extends Component {
             }
         }
 
-        console.log(`[PlayerHandDisplay] initStackForDealing: startCount=${startCount}`);
+        log.debug(`[PlayerHandDisplay] initStackForDealing: startCount=${startCount}`);
     }
 
     /**
@@ -571,7 +574,7 @@ export class PlayerHandDisplay extends Component {
             const label = this._cardCountLabel.getComponent(Label);
             if (label) {
                 label.string = newCount.toString();
-                console.log(`[PlayerHandDisplay] Updated card count label to ${newCount}`);
+                log.debug(`[PlayerHandDisplay] Updated card count label to ${newCount}`);
             }
         }
     }
@@ -610,7 +613,7 @@ export class PlayerHandDisplay extends Component {
             const spriteName = PokerFactory.getCardSpriteName(cardValue);
             const pokerFront = this._pokerSprites.get(spriteName);
 
-            console.log(`Creating card: ${spriteName}, found: ${pokerFront ? 'YES' : 'NO'}`);
+            log.debug(`Creating card: ${spriteName}, found: ${pokerFront ? 'YES' : 'NO'}`);
 
             if (pokerFront) {
                 pokerCtrl.init(cardValue, pokerBack, pokerFront);
@@ -622,7 +625,7 @@ export class PlayerHandDisplay extends Component {
                     pokerCtrl.setGlowEnabled(true);
                 }
             } else {
-                console.warn(`Sprite not found: ${spriteName}`);
+                log.warn(`Sprite not found: ${spriteName}`);
             }
         } else {
             // Just show back
@@ -673,7 +676,7 @@ export class PlayerHandDisplay extends Component {
      */
     public enableCardSelection(callback: SelectionChangedCallback | null = null): void {
         if (this._displayMode !== HandDisplayMode.SPREAD) {
-            console.warn('Card selection only available in SPREAD mode');
+            log.warn('Card selection only available in SPREAD mode');
             return;
         }
 
@@ -685,7 +688,7 @@ export class PlayerHandDisplay extends Component {
             poker.enableClick(index, this.onCardClicked.bind(this));
         });
 
-        console.log(`Card selection enabled for ${this._player.name}`);
+        log.debug(`Card selection enabled for ${this._player.name}`);
     }
 
     /**
@@ -698,14 +701,14 @@ export class PlayerHandDisplay extends Component {
         this._pokerComponents.forEach(poker => poker.disableClick());
 
         this._selectedIndices.clear();
-        console.log(`Card selection disabled for ${this._player.name}`);
+        log.debug(`Card selection disabled for ${this._player.name}`);
     }
 
     /**
      * Handle card click event
      */
     private onCardClicked(card: Poker, cardValue: number, cardIndex: number): void {
-        console.log(`Card clicked: index=${cardIndex}, value=${cardValue}, selected=${card.isSelected()}`);
+        log.debug(`Card clicked: index=${cardIndex}, value=${cardValue}, selected=${card.isSelected()}`);
 
         // Update selected indices
         if (card.isSelected()) {
@@ -720,7 +723,7 @@ export class PlayerHandDisplay extends Component {
             this._selectionChangedCallback(selectedArray);
         }
 
-        console.log(`Selected cards: [${Array.from(this._selectedIndices).join(', ')}]`);
+        log.debug(`Selected cards: [${Array.from(this._selectedIndices).join(', ')}]`);
     }
 
     /**
@@ -782,8 +785,8 @@ export class PlayerHandDisplay extends Component {
      * Call this after player has played their cards
      */
     public lockUnselectedCards(): void {
-        console.log(`[PlayerHandDisplay] Locking unselected cards for ${this._player.name}`);
-        console.log(`[PlayerHandDisplay] Selected indices: [${Array.from(this._selectedIndices).join(', ')}]`);
+        log.debug(`[PlayerHandDisplay] Locking unselected cards for ${this._player.name}`);
+        log.debug(`[PlayerHandDisplay] Selected indices: [${Array.from(this._selectedIndices).join(', ')}]`);
 
         // Disable all card interactions first
         this._isInteractive = false;
@@ -796,15 +799,15 @@ export class PlayerHandDisplay extends Component {
             // If card is NOT selected, dim it
             if (!this._selectedIndices.has(index)) {
                 poker.setOpacity(CardOpacity.dimmed);
-                console.log(`[PlayerHandDisplay] Dimmed card at index ${index}`);
+                log.debug(`[PlayerHandDisplay] Dimmed card at index ${index}`);
             } else {
                 // Keep selected cards at full opacity
                 poker.setOpacity(CardOpacity.normal);
-                console.log(`[PlayerHandDisplay] Kept card at index ${index} at full opacity`);
+                log.debug(`[PlayerHandDisplay] Kept card at index ${index} at full opacity`);
             }
         });
 
-        console.log(`[PlayerHandDisplay] Locked ${this._pokerComponents.length} cards`);
+        log.debug(`[PlayerHandDisplay] Locked ${this._pokerComponents.length} cards`);
     }
 
     // ==================== Sorting Animation Support ====================
@@ -908,8 +911,8 @@ export class PlayerHandDisplay extends Component {
         const hiddenPositions: Vec3[] = [];
         const cardsToHideCopy = [...cardsToHide];
 
-        console.log(`[PlayerHandDisplay] hideCardsWithoutRelayout: looking for ${cardsToHide.map(c => '0x' + c.toString(16)).join(',')}`);
-        console.log(`[PlayerHandDisplay] Current display has ${this._pokerNodes.length} nodes`);
+        log.debug(`[PlayerHandDisplay] hideCardsWithoutRelayout: looking for ${cardsToHide.map(c => '0x' + c.toString(16)).join(',')}`);
+        log.debug(`[PlayerHandDisplay] Current display has ${this._pokerNodes.length} nodes`);
 
         // Log all card values in the display
         const displayedCards: string[] = [];
@@ -919,7 +922,7 @@ export class PlayerHandDisplay extends Component {
                 displayedCards.push('0x' + poker.getValue().toString(16));
             }
         }
-        console.log(`[PlayerHandDisplay] Displayed cards: ${displayedCards.join(',')}`);
+        log.debug(`[PlayerHandDisplay] Displayed cards: ${displayedCards.join(',')}`);
 
         for (let i = 0; i < this._pokerNodes.length && cardsToHideCopy.length > 0; i++) {
             const poker = this._pokerComponents[i];
@@ -941,7 +944,7 @@ export class PlayerHandDisplay extends Component {
             }
         }
 
-        console.log(`[PlayerHandDisplay] Hidden ${hiddenPositions.length} cards without relayout`);
+        log.debug(`[PlayerHandDisplay] Hidden ${hiddenPositions.length} cards without relayout`);
         return hiddenPositions;
     }
 
@@ -1002,6 +1005,6 @@ export class PlayerHandDisplay extends Component {
             poker.setGlowEnabled(true);
         }
 
-        console.log(`[PlayerHandDisplay] Applied glow material to ${this._pokerComponents.length} cards`);
+        log.debug(`[PlayerHandDisplay] Applied glow material to ${this._pokerComponents.length} cards`);
     }
 }

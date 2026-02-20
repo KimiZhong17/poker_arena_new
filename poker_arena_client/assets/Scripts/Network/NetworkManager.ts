@@ -1,4 +1,7 @@
 import { NetworkClient } from './NetworkClient';
+import { logger } from '../Utils/Logger';
+
+const log = logger('Net');
 
 /**
  * 网络管理器（单例）
@@ -23,7 +26,7 @@ export class NetworkManager {
      */
     public getClient(serverUrl: string = 'ws://localhost:3000/ws'): NetworkClient {
         if (!this.client) {
-            console.log('[NetworkManager] Creating new NetworkClient');
+            log.debug('[NetworkManager] Creating new NetworkClient');
             this.client = new NetworkClient(serverUrl);
         }
         return this.client;
@@ -34,7 +37,7 @@ export class NetworkManager {
      */
     public disconnect(): void {
         if (this.client) {
-            console.log('[NetworkManager] Disconnecting');
+            log.debug('[NetworkManager] Disconnecting');
             this.client.disconnect();
             this.client = null;
         }

@@ -1,4 +1,7 @@
 import { GameStageBase } from './GameStageBase';
+import { logger } from '../../Utils/Logger';
+
+const log = logger('StageManager');
 
 /**
  * Game Stage Enum
@@ -45,11 +48,11 @@ export class StageManager {
      */
     public registerStage(stageType: GameStage, stage: GameStageBase): void {
         if (this.stages.has(stageType)) {
-            console.warn(`[StageManager] Stage ${stageType} is already registered. Overwriting...`);
+            log.warn(`Stage ${stageType} is already registered. Overwriting...`);
         }
 
         this.stages.set(stageType, stage);
-        console.log(`[StageManager] Registered stage: ${stageType}`);
+        log.debug(`Registered stage: ${stageType}`);
     }
 
     /**
@@ -68,7 +71,7 @@ export class StageManager {
 
             stage.cleanup();
             this.stages.delete(stageType);
-            console.log(`[StageManager] Unregistered stage: ${stageType}`);
+            log.debug(`Unregistered stage: ${stageType}`);
         }
     }
 
@@ -81,21 +84,21 @@ export class StageManager {
         // 检查目标阶段是否已注册
         const targetStage = this.stages.get(stageType);
         if (!targetStage) {
-            console.error(`[StageManager] Cannot switch to stage ${stageType}: stage not registered`);
+            log.error(`Cannot switch to stage ${stageType}: stage not registered`);
             return false;
         }
 
         // 如果已经在目标阶段，不需要切换
         if (this.currentStageType === stageType) {
-            console.warn(`[StageManager] Already in stage ${stageType}`);
+            log.warn(`Already in stage ${stageType}`);
             return true;
         }
 
-        console.log(`[StageManager] Switching from ${this.currentStageType || 'null'} to ${stageType}`);
+        log.debug(`Switching from ${this.currentStageType || 'null'} to ${stageType}`);
 
         // 退出当前阶段（onExit 会自动调用 hideUI）
         if (this.currentStage) {
-            console.log(`[StageManager] Exiting stage: ${this.currentStageType}`);
+            log.debug(`Exiting stage: ${this.currentStageType}`);
             this.currentStage.onExit();
         }
 
@@ -103,7 +106,7 @@ export class StageManager {
         this.currentStage = targetStage;
         this.currentStageType = stageType;
 
-        console.log(`[StageManager] Entering stage: ${stageType}`);
+        log.debug(`Entering stage: ${stageType}`);
         this.currentStage.onEnter();
 
         return true;
@@ -154,7 +157,7 @@ export class StageManager {
      * 通常在游戏结束或场景切换时调用
      */
     public cleanup(): void {
-        console.log('[StageManager] Cleaning up all stages...');
+        log.debug('Cleaning up all stages...');
 
         // 退出当前阶段
         if (this.currentStage) {
@@ -165,12 +168,12 @@ export class StageManager {
 
         // 清理所有阶段
         for (const [stageType, stage] of this.stages) {
-            console.log(`[StageManager] Cleaning up stage: ${stageType}`);
+            log.debug(`Cleaning up stage: ${stageType}`);
             stage.cleanup();
         }
 
         this.stages.clear();
-        console.log('[StageManager] All stages cleaned up');
+        log.debug('All stages cleaned up');
     }
 
     /**

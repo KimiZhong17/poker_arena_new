@@ -3,6 +3,9 @@ import { PlayerHandDisplay, HandDisplayMode, SelectionChangedCallback } from './
 import { Player, PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
 import { SeatPosition } from '../Config/SeatConfig';
+import { logger } from '../Utils/Logger';
+
+const log = logger('PlayerUICtrl');
 
 const { ccclass, property } = _decorator;
 
@@ -59,7 +62,7 @@ export class PlayerUIController extends Component {
         this._positionConfig = positionConfig || null;
         this._glowMaterial = glowMaterial || null;
 
-        console.log(`[PlayerUIController] Initializing for ${player.name} (index: ${playerIndex})`);
+        log.debug(`[PlayerUIController] Initializing for ${player.name} (index: ${playerIndex})`);
 
         // 自动查找或创建子节点
         this.setupChildNodes();
@@ -70,7 +73,7 @@ export class PlayerUIController extends Component {
         // 初始化玩家信息
         this.updatePlayerInfo();
 
-        console.log(`[PlayerUIController] Initialized for ${player.name}`);
+        log.debug(`[PlayerUIController] Initialized for ${player.name}`);
     }
 
     /**
@@ -90,7 +93,7 @@ export class PlayerUIController extends Component {
             // InfoPanel should already exist (created by PlayerUIManager in ready stage)
             // If not found, log warning but don't create (backward compatibility for old init path)
             if (!this.infoPanel) {
-                console.warn(`[PlayerUIController] InfoPanel not found for ${this._player?.name || 'player'}`);
+                log.warn(`[PlayerUIController] InfoPanel not found for ${this._player?.name || 'player'}`);
             }
         }
 
@@ -98,7 +101,7 @@ export class PlayerUIController extends Component {
         if (this.infoPanel) {
             this._infoPanelComponent = this.infoPanel.getComponent(PlayerInfoPanel);
             if (!this._infoPanelComponent) {
-                console.warn(`[PlayerUIController] PlayerInfoPanel component not found on InfoPanel node`);
+                log.warn(`[PlayerUIController] PlayerInfoPanel component not found on InfoPanel node`);
             }
         }
     }
@@ -112,7 +115,7 @@ export class PlayerUIController extends Component {
         container.layer = this.node.layer;
         container.setPosition(0, 0, 0);
         this.node.addChild(container);
-        console.log(`[PlayerUIController] Created HandContainer for ${this._player?.name || 'player'}`);
+        log.debug(`[PlayerUIController] Created HandContainer for ${this._player?.name || 'player'}`);
         return container;
     }
 
@@ -126,7 +129,7 @@ export class PlayerUIController extends Component {
         enableGrouping: boolean = true
     ): void {
         if (!this.handContainer) {
-            console.error(`[PlayerUIController] HandContainer not found for ${this._player.name}`);
+            log.error(`[PlayerUIController] HandContainer not found for ${this._player.name}`);
             return;
         }
 
@@ -142,7 +145,7 @@ export class PlayerUIController extends Component {
         this._handDisplay.handContainer = this.handContainer;
         this._handDisplay.init(this._player, displayMode, pokerSprites, pokerPrefab, levelRank, this._playerIndex, enableGrouping, false, this._positionConfig, glowMat);
 
-        console.log(`[PlayerUIController] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
+        log.debug(`[PlayerUIController] HandDisplay initialized for ${this._player.name} in ${displayMode === HandDisplayMode.SPREAD ? 'SPREAD' : 'STACK'} mode`);
     }
 
     // ===== 玩家信息管理 =====

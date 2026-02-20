@@ -1,4 +1,7 @@
 import { _decorator, Component, Node, Vec3, tween, UITransform, Sprite, SpriteFrame } from 'cc';
+import { logger } from '../Utils/Logger';
+
+const log = logger('DealerIndicator');
 
 const { ccclass, property } = _decorator;
 
@@ -39,26 +42,26 @@ export class DealerIndicator extends Component {
      * 组件初始化
      */
     protected onLoad(): void {
-        console.log('[DealerIndicator] onLoad - Initializing...');
-        console.log('[DealerIndicator] Node position:', this.node.position);
-        console.log('[DealerIndicator] Node scale:', this.node.scale);
+        log.debug('onLoad - Initializing...');
+        log.debug('Node position:', this.node.position);
+        log.debug('Node scale:', this.node.scale);
 
         // 自动查找 Sprite 组件
         if (!this.iconSprite) {
             this.iconSprite = this.node.getComponent(Sprite);
             if (!this.iconSprite) {
                 this.iconSprite = this.node.addComponent(Sprite);
-                console.log('[DealerIndicator] Created Sprite component');
+                log.debug('Created Sprite component');
             }
         }
 
-        console.log('[DealerIndicator] Sprite component:', this.iconSprite);
-        console.log('[DealerIndicator] Sprite frame:', this.iconSprite?.spriteFrame);
+        log.debug('Sprite component:', this.iconSprite);
+        log.debug('Sprite frame:', this.iconSprite?.spriteFrame);
 
         // 默认隐藏
         this.node.active = false;
 
-        console.log('[DealerIndicator] Initialized - node will be hidden until showDealer is called');
+        log.debug('Initialized - node will be hidden until showDealer is called');
     }
 
     /**
@@ -68,7 +71,7 @@ export class DealerIndicator extends Component {
     public setIcon(spriteFrame: SpriteFrame): void {
         if (this.iconSprite) {
             this.iconSprite.spriteFrame = spriteFrame;
-            console.log('[DealerIndicator] Icon sprite set');
+            log.debug('Icon sprite set');
         }
     }
 
@@ -83,10 +86,10 @@ export class DealerIndicator extends Component {
         targetWorldPos: { x: number, y: number },
         immediate: boolean = false
     ): void {
-        console.log(`[DealerIndicator] ========== Moving to dealer ${dealerIndex} ==========`);
-        console.log(`[DealerIndicator] Target world position: (${targetWorldPos.x}, ${targetWorldPos.y})`);
-        console.log(`[DealerIndicator] Offset: (${this.offsetX}, ${this.offsetY})`);
-        console.log(`[DealerIndicator] Current node active: ${this.node.active}`);
+        log.debug(`========== Moving to dealer ${dealerIndex} ==========`);
+        log.debug(`Target world position: (${targetWorldPos.x}, ${targetWorldPos.y})`);
+        log.debug(`Offset: (${this.offsetX}, ${this.offsetY})`);
+        log.debug(`Current node active: ${this.node.active}`);
 
         this._currentDealerIndex = dealerIndex;
 
@@ -96,22 +99,22 @@ export class DealerIndicator extends Component {
             targetWorldPos.y + this.offsetY,
             0
         );
-        console.log(`[DealerIndicator] Target position with offset: (${targetPos.x}, ${targetPos.y}, ${targetPos.z})`);
+        log.debug(`Target position with offset: (${targetPos.x}, ${targetPos.y}, ${targetPos.z})`);
 
         // 获取父节点
         const parent = this.node.parent;
         if (!parent) {
-            console.error('[DealerIndicator] No parent node found!');
+            log.error('No parent node found!');
             return;
         }
 
-        console.log(`[DealerIndicator] Parent node: ${parent.name}`);
+        log.debug(`Parent node: ${parent.name}`);
 
         // 检查父节点是否有 UITransform
         const parentUITransform = parent.getComponent(UITransform);
         if (!parentUITransform) {
-            console.warn('[DealerIndicator] Parent node has no UITransform component!');
-            console.warn('[DealerIndicator] Attempting to use world position directly...');
+            log.warn('Parent node has no UITransform component!');
+            log.warn('Attempting to use world position directly...');
 
             // 尝试使用世界坐标直接设置
             // 这种情况下，假设节点已经在世界坐标系中
@@ -121,7 +124,7 @@ export class DealerIndicator extends Component {
                 this.node.setWorldPosition(targetPos);
                 this.node.active = true;
                 this._isAnimating = false;
-                console.log(`[DealerIndicator] ✓ Set world position directly to (${targetPos.x}, ${targetPos.y})`);
+                log.debug(`✓ Set world position directly to (${targetPos.x}, ${targetPos.y})`);
             } else {
                 this._isAnimating = true;
                 this.node.active = true;
@@ -129,7 +132,7 @@ export class DealerIndicator extends Component {
 
                 // 获取当前世界坐标
                 const currentWorldPos = this.node.getWorldPosition();
-                console.log(`[DealerIndicator] Starting animation from world pos (${currentWorldPos.x}, ${currentWorldPos.y}) to (${targetPos.x}, ${targetPos.y})`);
+                log.debug(`Starting animation from world pos (${currentWorldPos.x}, ${currentWorldPos.y}) to (${targetPos.x}, ${targetPos.y})`);
 
                 // 创建世界坐标动画
                 tween({ x: currentWorldPos.x, y: currentWorldPos.y })
@@ -140,35 +143,35 @@ export class DealerIndicator extends Component {
                         },
                         onComplete: () => {
                             this._isAnimating = false;
-                            console.log(`[DealerIndicator] ✓ Animation complete at world pos (${targetPos.x}, ${targetPos.y})`);
+                            log.debug(`✓ Animation complete at world pos (${targetPos.x}, ${targetPos.y})`);
                         }
                     })
                     .start();
             }
 
-            console.log(`[DealerIndicator] Final node state (world space):`);
+            log.debug(`Final node state (world space):`);
             const finalWorldPos = this.node.getWorldPosition();
-            console.log(`  - Active: ${this.node.active}`);
-            console.log(`  - World Position: (${finalWorldPos.x}, ${finalWorldPos.y}, ${finalWorldPos.z})`);
-            console.log(`  - Scale: (${this.node.scale.x}, ${this.node.scale.y}, ${this.node.scale.z})`);
-            console.log(`  - Has Sprite: ${!!this.iconSprite}`);
-            console.log(`  - Sprite Frame: ${this.iconSprite?.spriteFrame ? 'YES' : 'NO'}`);
-            console.log('[DealerIndicator] ==========================================');
+            log.debug(`  - Active: ${this.node.active}`);
+            log.debug(`  - World Position: (${finalWorldPos.x}, ${finalWorldPos.y}, ${finalWorldPos.z})`);
+            log.debug(`  - Scale: (${this.node.scale.x}, ${this.node.scale.y}, ${this.node.scale.z})`);
+            log.debug(`  - Has Sprite: ${!!this.iconSprite}`);
+            log.debug(`  - Sprite Frame: ${this.iconSprite?.spriteFrame ? 'YES' : 'NO'}`);
+            log.debug('==========================================');
             return;
         }
 
         // 父节点有 UITransform，使用局部坐标
         const localPos = new Vec3();
         parentUITransform.convertToNodeSpaceAR(targetPos, localPos);
-        console.log(`[DealerIndicator] Converted local position: (${localPos.x}, ${localPos.y}, ${localPos.z})`);
+        log.debug(`Converted local position: (${localPos.x}, ${localPos.y}, ${localPos.z})`);
 
         if (immediate || !this.node.active) {
             // 立即移动（初次显示时）
             this.node.setPosition(localPos);
             this.node.active = true;
             this._isAnimating = false;
-            console.log(`[DealerIndicator] ✓ Moved immediately to (${localPos.x}, ${localPos.y})`);
-            console.log(`[DealerIndicator] Node is now active: ${this.node.active}`);
+            log.debug(`✓ Moved immediately to (${localPos.x}, ${localPos.y})`);
+            log.debug(`Node is now active: ${this.node.active}`);
         } else {
             // 动画移动
             this._isAnimating = true;
@@ -177,7 +180,7 @@ export class DealerIndicator extends Component {
             // 停止之前的动画
             tween(this.node).stop();
 
-            console.log(`[DealerIndicator] Starting animation from (${this.node.position.x}, ${this.node.position.y}) to (${localPos.x}, ${localPos.y})`);
+            log.debug(`Starting animation from (${this.node.position.x}, ${this.node.position.y}) to (${localPos.x}, ${localPos.y})`);
 
             // 创建移动动画
             tween(this.node)
@@ -188,20 +191,20 @@ export class DealerIndicator extends Component {
                     },
                     onComplete: () => {
                         this._isAnimating = false;
-                        console.log(`[DealerIndicator] ✓ Animation complete at (${localPos.x}, ${localPos.y})`);
+                        log.debug(`✓ Animation complete at (${localPos.x}, ${localPos.y})`);
                     }
                 })
                 .start();
         }
 
         // 最终检查
-        console.log(`[DealerIndicator] Final node state:`);
-        console.log(`  - Active: ${this.node.active}`);
-        console.log(`  - Position: (${this.node.position.x}, ${this.node.position.y}, ${this.node.position.z})`);
-        console.log(`  - Scale: (${this.node.scale.x}, ${this.node.scale.y}, ${this.node.scale.z})`);
-        console.log(`  - Has Sprite: ${!!this.iconSprite}`);
-        console.log(`  - Sprite Frame: ${this.iconSprite?.spriteFrame ? 'YES' : 'NO'}`);
-        console.log('[DealerIndicator] ==========================================');
+        log.debug(`Final node state:`);
+        log.debug(`  - Active: ${this.node.active}`);
+        log.debug(`  - Position: (${this.node.position.x}, ${this.node.position.y}, ${this.node.position.z})`);
+        log.debug(`  - Scale: (${this.node.scale.x}, ${this.node.scale.y}, ${this.node.scale.z})`);
+        log.debug(`  - Has Sprite: ${!!this.iconSprite}`);
+        log.debug(`  - Sprite Frame: ${this.iconSprite?.spriteFrame ? 'YES' : 'NO'}`);
+        log.debug('==========================================');
     }
 
     /**
@@ -209,7 +212,7 @@ export class DealerIndicator extends Component {
      */
     public show(): void {
         this.node.active = true;
-        console.log('[DealerIndicator] Shown');
+        log.debug('Shown');
     }
 
     /**
@@ -221,7 +224,7 @@ export class DealerIndicator extends Component {
         this._isAnimating = false;
         this.node.active = false;
         this._currentDealerIndex = -1;
-        console.log('[DealerIndicator] Hidden');
+        log.debug('Hidden');
     }
 
     /**
@@ -246,6 +249,6 @@ export class DealerIndicator extends Component {
     public setOffset(offsetX: number, offsetY: number): void {
         this.offsetX = offsetX;
         this.offsetY = offsetY;
-        console.log(`[DealerIndicator] Offset set to (${offsetX}, ${offsetY})`);
+        log.debug(`Offset set to (${offsetX}, ${offsetY})`);
     }
 }

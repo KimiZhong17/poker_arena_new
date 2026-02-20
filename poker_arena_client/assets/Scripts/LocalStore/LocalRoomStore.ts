@@ -1,4 +1,7 @@
 import { PlayerInfo } from './LocalPlayerStore';
+import { logger } from '../Utils/Logger';
+
+const log = logger('LocalRoomStore');
 
 /**
  * Room state enumeration
@@ -61,7 +64,7 @@ export class LocalRoomStore {
      */
     public setCurrentRoom(roomData: RoomData): void {
         this.currentRoom = roomData;
-        console.log('[RoomStateStore] Current room set:', roomData);
+        log.debug('[RoomStateStore] Current room set:', roomData);
 
         // 保存到localStorage以便断线重连
         this.saveRoomToStorage();
@@ -81,14 +84,14 @@ export class LocalRoomStore {
      */
     public updatePlayerReady(playerId: string, isReady: boolean): void {
         if (!this.currentRoom) {
-            console.warn('[RoomStateStore] No current room, cannot update player ready');
+            log.warn('[RoomStateStore] No current room, cannot update player ready');
             return;
         }
 
         const player = this.currentRoom.players.find(p => p.id === playerId);
         if (player) {
             player.isReady = isReady;
-            console.log(`[RoomStateStore] Player ${playerId} ready: ${isReady}`);
+            log.debug(`[RoomStateStore] Player ${playerId} ready: ${isReady}`);
         }
     }
 
@@ -98,19 +101,19 @@ export class LocalRoomStore {
      */
     public addPlayer(playerInfo: PlayerInfo): void {
         if (!this.currentRoom) {
-            console.warn('[RoomStateStore] No current room, cannot add player');
+            log.warn('[RoomStateStore] No current room, cannot add player');
             return;
         }
 
         // 检查玩家是否已存在
         const existingPlayer = this.currentRoom.players.find(p => p.id === playerInfo.id);
         if (existingPlayer) {
-            console.warn(`[RoomStateStore] Player ${playerInfo.id} already in room`);
+            log.warn(`[RoomStateStore] Player ${playerInfo.id} already in room`);
             return;
         }
 
         this.currentRoom.players.push(playerInfo);
-        console.log(`[RoomStateStore] Player ${playerInfo.name} joined room`);
+        log.debug(`[RoomStateStore] Player ${playerInfo.name} joined room`);
     }
 
     /**
@@ -119,7 +122,7 @@ export class LocalRoomStore {
      */
     public removePlayer(playerId: string): void {
         if (!this.currentRoom) {
-            console.warn('[RoomStateStore] No current room, cannot remove player');
+            log.warn('[RoomStateStore] No current room, cannot remove player');
             return;
         }
 
@@ -127,7 +130,7 @@ export class LocalRoomStore {
         if (index !== -1) {
             const playerName = this.currentRoom.players[index].name;
             this.currentRoom.players.splice(index, 1);
-            console.log(`[RoomStateStore] Player ${playerName} left room`);
+            log.debug(`[RoomStateStore] Player ${playerName} left room`);
         }
     }
 
@@ -137,12 +140,12 @@ export class LocalRoomStore {
      */
     public updateRoomState(state: RoomState): void {
         if (!this.currentRoom) {
-            console.warn('[RoomStateStore] No current room, cannot update state');
+            log.warn('[RoomStateStore] No current room, cannot update state');
             return;
         }
 
         this.currentRoom.state = state;
-        console.log(`[RoomStateStore] Room state updated: ${state}`);
+        log.debug(`[RoomStateStore] Room state updated: ${state}`);
 
         // 保存到localStorage以便断线重连
         this.saveRoomToStorage();
@@ -154,7 +157,7 @@ export class LocalRoomStore {
      */
     public updateHostId(newHostId: string): void {
         if (!this.currentRoom) {
-            console.warn('[RoomStateStore] No current room, cannot update host');
+            log.warn('[RoomStateStore] No current room, cannot update host');
             return;
         }
 
@@ -172,7 +175,7 @@ export class LocalRoomStore {
         }
 
         this.currentRoom.hostId = newHostId;
-        console.log(`[RoomStateStore] Host updated to: ${newHostId}`);
+        log.debug(`[RoomStateStore] Host updated to: ${newHostId}`);
     }
 
     /**
@@ -181,7 +184,7 @@ export class LocalRoomStore {
     public clearCurrentRoom(): void {
         this.currentRoom = null;
         this.myPlayerIdInRoom = null;  // 同时清空玩家ID
-        console.log('[RoomStateStore] Current room cleared');
+        log.debug('[RoomStateStore] Current room cleared');
 
         // 清除localStorage中的房间信息
         this.clearRoomFromStorage();
@@ -195,7 +198,7 @@ export class LocalRoomStore {
      */
     public setMyPlayerId(playerId: string): void {
         this.myPlayerIdInRoom = playerId;
-        console.log(`[LocalRoomStore] My player ID set: ${playerId}`);
+        log.debug(`My player ID set: ${playerId}`);
 
         // 保存到localStorage以便断线重连
         this.saveRoomToStorage();
@@ -215,7 +218,7 @@ export class LocalRoomStore {
      */
     public clearMyPlayerId(): void {
         this.myPlayerIdInRoom = null;
-        console.log('[LocalRoomStore] My player ID cleared');
+        log.debug('My player ID cleared');
     }
 
     /**
@@ -264,7 +267,7 @@ export class LocalRoomStore {
 
         // 只在游戏进行中时保存房间信息
         if (this.currentRoom.state !== RoomState.PLAYING) {
-            console.log('[LocalRoomStore] Room not in PLAYING state, skip saving to storage');
+            log.debug('Room not in PLAYING state, skip saving to storage');
             return;
         }
 
@@ -277,9 +280,9 @@ export class LocalRoomStore {
             };
 
             localStorage.setItem('poker_arena_reconnect_room', JSON.stringify(roomInfo));
-            console.log('[LocalRoomStore] Room info saved to storage for reconnection:', roomInfo);
+            log.debug('Room info saved to storage for reconnection:', roomInfo);
         } catch (error) {
-            console.error('[LocalRoomStore] Failed to save room to storage:', error);
+            log.error('Failed to save room to storage:', error);
         }
     }
 
@@ -297,16 +300,16 @@ export class LocalRoomStore {
             // 检查保存时间，超过5分钟的数据视为过期
             const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
             if (Date.now() - roomInfo.savedAt > RECONNECT_TIMEOUT) {
-                console.log('[LocalRoomStore] Reconnect data expired, clearing...');
+                log.debug('Reconnect data expired, clearing...');
                 this.clearRoomFromStorage();
                 return;
             }
 
             // 只恢复基本信息，完整信息需要从服务器获取
-            console.log('[LocalRoomStore] Found reconnect data:', roomInfo);
+            log.debug('Found reconnect data:', roomInfo);
             // 注意：这里不直接设置currentRoom，而是在重连成功后由服务器返回完整数据
         } catch (error) {
-            console.error('[LocalRoomStore] Failed to load room from storage:', error);
+            log.error('Failed to load room from storage:', error);
         }
     }
 
@@ -316,9 +319,9 @@ export class LocalRoomStore {
     private clearRoomFromStorage(): void {
         try {
             localStorage.removeItem('poker_arena_reconnect_room');
-            console.log('[LocalRoomStore] Room info cleared from storage');
+            log.debug('Room info cleared from storage');
         } catch (error) {
-            console.error('[LocalRoomStore] Failed to clear room from storage:', error);
+            log.error('Failed to clear room from storage:', error);
         }
     }
 
@@ -336,7 +339,7 @@ export class LocalRoomStore {
             // 检查保存时间
             const RECONNECT_TIMEOUT = 5 * 60 * 1000; // 5分钟
             if (Date.now() - roomInfo.savedAt > RECONNECT_TIMEOUT) {
-                console.log('[LocalRoomStore] Reconnect data expired');
+                log.debug('Reconnect data expired');
                 this.clearRoomFromStorage();
                 return null;
             }
@@ -347,7 +350,7 @@ export class LocalRoomStore {
                 state: roomInfo.state
             };
         } catch (error) {
-            console.error('[LocalRoomStore] Failed to get reconnect info:', error);
+            log.error('Failed to get reconnect info:', error);
             return null;
         }
     }

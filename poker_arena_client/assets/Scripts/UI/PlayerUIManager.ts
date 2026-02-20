@@ -5,6 +5,9 @@ import { SelectionChangedCallback } from './PlayerHandDisplay';
 import { SeatPosition, StateLabelAlignment } from '../Config/SeatConfig';
 import { DealerIndicator } from './DealerIndicator';
 import { PlayerInfoPanel, InfoPanelMode } from './PlayerInfoPanel';
+import { logger } from '../Utils/Logger';
+
+const log = logger('PlayerUIManager');
 
 const { ccclass, property } = _decorator;
 
@@ -73,12 +76,12 @@ export class PlayerUIManager extends Component {
         glowMaterial?: Material
     ): void {
         if (this._initialized) {
-            console.warn('[PlayerUIManager] Already initialized! Skipping re-initialization.');
+            log.warn('Already initialized! Skipping re-initialization.');
             return;
         }
 
-        console.log('[PlayerUIManager] Initializing...');
-        console.log(`[PlayerUIManager] Players: ${players.length}, Layout configs: ${layoutConfig.length}`);
+        log.debug('Initializing...');
+        log.debug(`Players: ${players.length}, Layout configs: ${layoutConfig.length}`);
 
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
@@ -90,7 +93,7 @@ export class PlayerUIManager extends Component {
         this.createPlayerUINodes(players, layoutConfig);
 
         this._initialized = true;
-        console.log(`[PlayerUIManager] Initialized with ${this._playerUINodes.length} players`);
+        log.debug(`Initialized with ${this._playerUINodes.length} players`);
     }
 
     // ===== 两阶段初始化方法（Ready Stage → Playing Stage）=====
@@ -109,7 +112,7 @@ export class PlayerUIManager extends Component {
         mySeatIndex: number,
         layoutConfig: SeatPosition[]
     ): void {
-        console.log(`[PlayerUIManager] InitForReadyStage: maxPlayers=${maxPlayers}, mySeat=${mySeatIndex}`);
+        log.debug(`InitForReadyStage: maxPlayers=${maxPlayers}, mySeat=${mySeatIndex}`);
 
         this._maxSeats = maxPlayers;
         this._mySeatIndex = mySeatIndex;
@@ -125,18 +128,18 @@ export class PlayerUIManager extends Component {
             const config = layoutConfig[relativeSeat];
 
             if (!config) {
-                console.error(`[PlayerUIManager] No layout config for relative seat ${relativeSeat}`);
+                log.error(`No layout config for relative seat ${relativeSeat}`);
                 continue;
             }
 
             // 查找座位节点（必须已由 Game.ts 创建）
             const seatNode = this.node.getChildByName(config.name);
             if (!seatNode) {
-                console.error(`[PlayerUIManager] Seat node ${config.name} not found! Make sure Game.ts has created it.`);
+                log.error(`Seat node ${config.name} not found! Make sure Game.ts has created it.`);
                 continue;
             }
 
-            console.log(`[PlayerUIManager] Found seat node: ${config.name}`);
+            log.debug(`Found seat node: ${config.name}`);
             seatNode.active = config.active;
             this._seatNodes.set(relativeSeat, seatNode);
 
@@ -153,9 +156,9 @@ export class PlayerUIManager extends Component {
                 infoPanelNode.setPosition(offsetX, offsetY, 0);
 
                 seatNode.addChild(infoPanelNode);
-                console.log(`[PlayerUIManager] Created InfoPanel for ${config.name} at offset (${offsetX}, ${offsetY})`);
+                log.debug(`Created InfoPanel for ${config.name} at offset (${offsetX}, ${offsetY})`);
             } else {
-                console.log(`[PlayerUIManager] Found existing InfoPanel for ${config.name}`);
+                log.debug(`Found existing InfoPanel for ${config.name}`);
             }
 
             // 添加或获取 PlayerInfoPanel 组件
@@ -165,13 +168,13 @@ export class PlayerUIManager extends Component {
             }
             this._infoPanels.set(relativeSeat, infoPanel);
 
-            console.log(`[PlayerUIManager] Setup seat at relative seat ${relativeSeat} (absolute: ${absoluteSeat})`);
+            log.debug(`Setup seat at relative seat ${relativeSeat} (absolute: ${absoluteSeat})`);
         }
 
         // 更新座位显示
         this.updateSeats(playerInfos);
 
-        console.log(`[PlayerUIManager] Ready stage initialized with ${this._seatNodes.size} seats`);
+        log.debug(`Ready stage initialized with ${this._seatNodes.size} seats`);
     }
 
     /**
@@ -179,7 +182,7 @@ export class PlayerUIManager extends Component {
      * @param playerInfos 当前房间内的玩家信息列表
      */
     public updateSeats(playerInfos: PlayerInfo[]): void {
-        console.log(`[PlayerUIManager] UpdateSeats: ${playerInfos.length} players`);
+        log.debug(`UpdateSeats: ${playerInfos.length} players`);
 
         // 创建座位到玩家的映射
         const seatToPlayer = new Map<number, PlayerInfo>();
@@ -193,7 +196,7 @@ export class PlayerUIManager extends Component {
             const infoPanel = this._infoPanels.get(relativeSeat);
 
             if (!infoPanel) {
-                console.warn(`[PlayerUIManager] InfoPanel not found for relative seat ${relativeSeat}`);
+                log.warn(`InfoPanel not found for relative seat ${relativeSeat}`);
                 continue;
             }
 
@@ -209,11 +212,11 @@ export class PlayerUIManager extends Component {
                     // 已经初始化过，只更新数据
                     infoPanel.playerInfo = playerInfo;
                     infoPanel.refresh();
-                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Updated ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+                    log.debug(`Seat ${relativeSeat}: Updated ${playerInfo.name} (ready: ${playerInfo.isReady})`);
                 } else {
                     // 第一次初始化或玩家更换
                     infoPanel.init(playerInfo, isMyPlayer, InfoPanelMode.ROOM, stateLabelAlignment);
-                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Initialized ${playerInfo.name} (ready: ${playerInfo.isReady})`);
+                    log.debug(`Seat ${relativeSeat}: Initialized ${playerInfo.name} (ready: ${playerInfo.isReady})`);
                 }
             } else {
                 // 空座位：显示"等待玩家..."
@@ -229,11 +232,11 @@ export class PlayerUIManager extends Component {
                 // 检查是否已经是空座位状态
                 if (infoPanel.playerInfo && infoPanel.playerInfo.id === '') {
                     // 已经是空座位，不需要重新初始化
-                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Already empty`);
+                    log.debug(`Seat ${relativeSeat}: Already empty`);
                 } else {
                     // 设置为空座位
                     infoPanel.init(emptyPlayerInfo, false, InfoPanelMode.ROOM, stateLabelAlignment);
-                    console.log(`[PlayerUIManager] Seat ${relativeSeat}: Set to empty`);
+                    log.debug(`Seat ${relativeSeat}: Set to empty`);
                 }
             }
         }
@@ -256,7 +259,7 @@ export class PlayerUIManager extends Component {
         enableGrouping: boolean = true,
         glowMaterial?: Material
     ): void {
-        console.log('[PlayerUIManager] Upgrading to Playing mode...');
+        log.debug('Upgrading to Playing mode...');
 
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
@@ -282,7 +285,7 @@ export class PlayerUIManager extends Component {
             const infoPanel = this._infoPanels.get(relativeSeat);
 
             if (!seatNode || !infoPanel) {
-                console.error(`[PlayerUIManager] Seat node or InfoPanel not found for relative seat ${relativeSeat}`);
+                log.error(`Seat node or InfoPanel not found for relative seat ${relativeSeat}`);
                 continue;
             }
 
@@ -320,11 +323,11 @@ export class PlayerUIManager extends Component {
             // 这样可以确保 PlayerHandDisplay 组件被正确初始化
             playerUIController.updateHandDisplay();
 
-            console.log(`[PlayerUIManager] Upgraded seat ${relativeSeat} for player ${player.name}`);
+            log.debug(`Upgraded seat ${relativeSeat} for player ${player.name}`);
         }
 
         this._initialized = true;
-        console.log(`[PlayerUIManager] Playing mode initialized with ${this._playerUINodes.length} active players`);
+        log.debug(`Playing mode initialized with ${this._playerUINodes.length} active players`);
     }
 
     /**
@@ -353,11 +356,11 @@ export class PlayerUIManager extends Component {
             const config = layoutConfig[i];
 
             if (!config) {
-                console.error(`[PlayerUIManager] No layout config for player ${i}`);
+                log.error(`No layout config for player ${i}`);
                 continue;
             }
 
-            console.log(`[PlayerUIManager] Creating UI node for player ${i} (${player.name}) with widget config`);
+            log.debug(`Creating UI node for player ${i} (${player.name}) with widget config`);
 
             // 查找或创建节点
             let playerNode = this.node.getChildByName(config.name);
@@ -366,26 +369,26 @@ export class PlayerUIManager extends Component {
                 playerNode.addComponent(UITransform);
                 playerNode.layer = this.node.layer;
                 this.node.addChild(playerNode);
-                console.log(`[PlayerUIManager] Created new node: ${config.name}`);
+                log.debug(`Created new node: ${config.name}`);
             }
 
             // 如果节点已经有 Widget 组件，不要手动设置位置（让 Widget 自动管理）
             // 否则使用 fallback 坐标作为初始位置
             const existingWidget = playerNode.getComponent('cc.Widget') as any;
-            console.log(`[PlayerUIManager] ${config.name} checking Widget: ${!!existingWidget}`);
+            log.debug(`${config.name} checking Widget: ${!!existingWidget}`);
             if (!existingWidget) {
                 // 只有在没有 Widget 的情况下才使用 fallback 坐标
                 if (config.fallbackPosition) {
                     playerNode.setPosition(config.fallbackPosition.x, config.fallbackPosition.y, 0);
-                    console.log(`[PlayerUIManager] ${config.name} using fallback position (${config.fallbackPosition.x}, ${config.fallbackPosition.y})`);
+                    log.debug(`${config.name} using fallback position (${config.fallbackPosition.x}, ${config.fallbackPosition.y})`);
                 }
             } else {
-                console.log(`[PlayerUIManager] ${config.name} has Widget, position will be managed automatically`);
+                log.debug(`${config.name} has Widget, position will be managed automatically`);
                 // 强制更新一次 Widget
                 if (existingWidget.updateAlignment) {
                     existingWidget.updateAlignment();
                 }
-                console.log(`[PlayerUIManager] ${config.name} Widget updated, position: (${playerNode.position.x}, ${playerNode.position.y})`);
+                log.debug(`${config.name} Widget updated, position: (${playerNode.position.x}, ${playerNode.position.y})`);
             }
             playerNode.active = config.active;
 
@@ -405,7 +408,7 @@ export class PlayerUIManager extends Component {
             this._playerUINodes.push(playerUIController);
         }
 
-        console.log(`[PlayerUIManager] Created ${this._playerUINodes.length} PlayerUIController components`);
+        log.debug(`Created ${this._playerUINodes.length} PlayerUIController components`);
     }
 
     // ===== 批量操作接口 =====
@@ -413,7 +416,7 @@ export class PlayerUIManager extends Component {
      * 更新所有玩家手牌显示
      */
     public updateAllHands(): void {
-        console.log('[PlayerUIManager] Updating all hands...');
+        log.debug('Updating all hands...');
         this._playerUINodes.forEach(node => {
             node.updateHandDisplay();
         });
@@ -427,7 +430,7 @@ export class PlayerUIManager extends Component {
         if (node) {
             node.updateHandDisplay(playedCards);
         } else {
-            console.warn(`[PlayerUIManager] Player ${playerIndex} not found for hand update`);
+            log.warn(`Player ${playerIndex} not found for hand update`);
         }
     }
 
@@ -516,7 +519,7 @@ export class PlayerUIManager extends Component {
      */
     public showDealer(dealerIndex: number, immediate: boolean = false): void {
         if (!this.dealerIndicator) {
-            console.warn('[PlayerUIManager] DealerIndicator not configured! Please add a DealerIndicator component to the scene.');
+            log.warn('DealerIndicator not configured! Please add a DealerIndicator component to the scene.');
             return;
         }
 
@@ -526,15 +529,15 @@ export class PlayerUIManager extends Component {
             // 这样 dealer indicator 会显示在合适的位置
             const offsetConfig = this.getDealerIndicatorOffset(dealerIndex);
             this.dealerIndicator.setOffset(offsetConfig.x, offsetConfig.y);
-            console.log(`[PlayerUIManager] Set dealer indicator offset for player ${dealerIndex}: (${offsetConfig.x}, ${offsetConfig.y})`);
+            log.debug(`Set dealer indicator offset for player ${dealerIndex}: (${offsetConfig.x}, ${offsetConfig.y})`);
 
             // 获取 PlayerUIController 的世界坐标
             const worldPos = node.getWorldPosition();
-            console.log(`[PlayerUIManager] Player ${dealerIndex} node world position: (${worldPos.x}, ${worldPos.y})`);
+            log.debug(`Player ${dealerIndex} node world position: (${worldPos.x}, ${worldPos.y})`);
             this.dealerIndicator.moveToDealerPosition(dealerIndex, worldPos, immediate);
-            console.log(`[PlayerUIManager] DealerIndicator moved to player ${dealerIndex}`);
+            log.debug(`DealerIndicator moved to player ${dealerIndex}`);
         } else {
-            console.warn(`[PlayerUIManager] Player ${dealerIndex} not found for dealer indicator`);
+            log.warn(`Player ${dealerIndex} not found for dealer indicator`);
         }
     }
 
@@ -665,6 +668,6 @@ export class PlayerUIManager extends Component {
         });
         this._playerUINodes = [];
         this._initialized = false;
-        console.log('[PlayerUIManager] Reset complete');
+        log.debug('Reset complete');
     }
 }

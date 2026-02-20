@@ -1,4 +1,7 @@
 import { _decorator, Component, Node, Label, Sprite, UIOpacity, Color, ProgressBar } from 'cc';
+import { logger } from '../Utils/Logger';
+
+const log = logger('LoadingUI');
 
 const { ccclass, property } = _decorator;
 
@@ -60,7 +63,7 @@ export class LoadingUI extends Component {
         this.node.active = true;
         this.currentProgress = 0;
         this.updateDisplay();
-        console.log('[LoadingUI] show', {
+        log.debug('show', {
             node: this.node?.name,
             uuid: this.node?.uuid,
             scene: this.node?.scene?.name
@@ -79,7 +82,7 @@ export class LoadingUI extends Component {
     public hide(): void {
         this._isShowing = false;
         this.node.active = false;
-        console.log('[LoadingUI] hide', {
+        log.debug('hide', {
             node: this.node?.name,
             uuid: this.node?.uuid,
             scene: this.node?.scene?.name

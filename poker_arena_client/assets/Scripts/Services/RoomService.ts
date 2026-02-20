@@ -15,6 +15,9 @@ import {
 import { NetworkManager } from '../Network/NetworkManager';
 import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
+import { logger } from '../Utils/Logger';
+
+const log = logger('RoomService');
 
 export class RoomService {
     private static instance: RoomService;
@@ -42,7 +45,7 @@ export class RoomService {
     public tryAutoReconnect(): boolean {
         const reconnectInfo = this.localRoomStore.getReconnectInfo();
         if (reconnectInfo) {
-            console.log('[RoomService] Found reconnect info, attempting to reconnect:', reconnectInfo);
+            log.debug('Found reconnect info, attempting to reconnect:', reconnectInfo);
             this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
             return true;
         }
@@ -92,7 +95,7 @@ export class RoomService {
     // ==================== 具名处理器 (解决 off 参数匹配问题) ====================
 
     private onRoomJoined = (data: RoomJoinedEvent) => {
-        console.log('[RoomService] Self joined room:', data.roomId);
+        log.debug('Self joined room:', data.roomId);
 
         // 1. 存入 LocalRoomStore
         this.localRoomStore.setCurrentRoom({
@@ -135,13 +138,13 @@ export class RoomService {
     };
 
     private onHostChanged = (data: HostChangedEvent) => {
-        console.log('[RoomService] Host changed to:', data.newHostId);
+        log.debug('Host changed to:', data.newHostId);
         this.localRoomStore.updateHostId(data.newHostId);
         EventCenter.emit(GameEvents.UI_REFRESH_ROOM);
     };
 
     private onError = (data: any) => {
-        console.error('[RoomService] Error from server:', data);
+        log.error('Error from server:', data);
         alert(`服务器错误: ${data.message || data.code || '未知错误'}`);
     };
 
@@ -149,7 +152,7 @@ export class RoomService {
      * 重连成功处理
      */
     private onReconnectSuccess = (data: ReconnectSuccessEvent) => {
-        console.log('[RoomService] Reconnect success:', data.roomId);
+        log.debug('Reconnect success:', data.roomId);
 
         // 1. 存入 LocalRoomStore
         this.localRoomStore.setCurrentRoom({
@@ -209,7 +212,7 @@ export class RoomService {
     private handleSocketReconnect(): void {
         const reconnectInfo = this.localRoomStore.getReconnectInfo();
         if (reconnectInfo) {
-            console.log('[RoomService] Socket reconnected, attempting to rejoin room:', reconnectInfo);
+            log.debug('Socket reconnected, attempting to rejoin room:', reconnectInfo);
             this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
         }
     }
@@ -237,7 +240,7 @@ export class RoomService {
         const client = this.getNetworkClient();
         const playerName = this.localUserStore.getNickname();  // 使用昵称而不是用户名
         const guestId = this.localUserStore.getGuestId();  // 获取持久化的游客ID
-        console.log(`[RoomService] Creating room with playerName: ${playerName}, guestId: ${guestId}`);
+        log.debug(`Creating room with playerName: ${playerName}, guestId: ${guestId}`);
         if (client) client.send(ClientMessageType.CREATE_ROOM, {
             playerName: playerName,
             guestId: guestId || undefined,
@@ -260,7 +263,7 @@ export class RoomService {
         const client = this.getNetworkClient();
         const guestId = this.localUserStore.getGuestId();
         if (client) {
-            console.log(`[RoomService] Attempting to reconnect to room ${roomId} with guestId: ${guestId}, playerId: ${playerId}`);
+            log.debug(`Attempting to reconnect to room ${roomId} with guestId: ${guestId}, playerId: ${playerId}`);
             client.send(ClientMessageType.RECONNECT, {
                 roomId,
                 playerId,

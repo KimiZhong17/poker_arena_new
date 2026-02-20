@@ -3,6 +3,9 @@ import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { LocalUserStore } from './LocalStore/LocalUserStore';
 import { GameModeClientFactory } from './Core/GameMode/GameModeClientFactory';
+import { logger } from './Utils/Logger';
+
+const log = logger('Hall');
 
 const { ccclass, property } = _decorator;
 
@@ -64,7 +67,7 @@ export class Hall extends Component {
 
         // Check if user is logged in
         if (!this.authService.isLoggedIn()) {
-            console.warn('[Hall] User not logged in, redirecting to login');
+            log.warn('User not logged in, redirecting to login');
             this.sceneManager.goToLogin();
             return;
         }
@@ -108,7 +111,7 @@ export class Hall extends Component {
      * Handle The Decree game mode selection
      */
     private onTheDecreeClicked(): void {
-        console.log('[Hall] The Decree selected');
+        log.debug('The Decree selected');
         this.selectGameMode('the_decree');
     }
 
@@ -116,7 +119,7 @@ export class Hall extends Component {
      * Handle Guandan game mode selection
      */
     private onGuandanClicked(): void {
-        console.log('[Hall] Guandan selected');
+        log.debug('Guandan selected');
         this.selectGameMode('guandan');
     }
 
@@ -127,21 +130,21 @@ export class Hall extends Component {
         const modeInfo = this.gameModes.find(m => m.id === gameModeId);
 
         if (!modeInfo) {
-            console.error(`[Hall] Game mode not found: ${gameModeId}`);
+            log.error(`Game mode not found: ${gameModeId}`);
             return;
         }
 
         // Validate that the game mode exists in factory
         const factory = GameModeClientFactory.getInstance();
         if (!factory.hasMode(gameModeId)) {
-            console.error(`[Hall] Game mode not registered: ${gameModeId}`);
+            log.error(`Game mode not registered: ${gameModeId}`);
             return;
         }
 
         // Store selected game mode in LocalUserStore
         this.localUserStore.setSelectedGameMode(gameModeId);
 
-        console.log(`[Hall] Navigating to lobby for game mode: ${modeInfo.displayName}`);
+        log.debug(`Navigating to lobby for game mode: ${modeInfo.displayName}`);
 
         // Navigate to lobby with game mode info
         this.sceneManager.goToLobby({
@@ -155,7 +158,7 @@ export class Hall extends Component {
      * Handle logout
      */
     private onLogoutClicked(): void {
-        console.log('[Hall] Logout clicked');
+        log.debug('Logout clicked');
 
         // Clear user session via AuthService
         this.authService.logout();

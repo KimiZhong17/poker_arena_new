@@ -2,6 +2,9 @@ import { _decorator, Component, Node, Sprite, SpriteFrame, Vec3, UITransform, Wi
 import { DeckPileConfig } from '../Config/DealingAnimationConfig';
 import { CardScale, CardSpriteNames } from '../Config/CardDisplayConfig';
 import { Poker } from './Poker';
+import { logger } from '../Utils/Logger';
+
+const log = logger('DeckPile');
 
 const { ccclass, property } = _decorator;
 
@@ -29,7 +32,7 @@ export class DeckPile extends Component {
      * @param pokerPrefab 扑克牌预制体
      */
     public init(pokerSprites: Map<string, SpriteFrame>, pokerPrefab: Prefab): void {
-        console.log('[DeckPile] Initializing...');
+        log.debug('Initializing...');
 
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
@@ -44,7 +47,7 @@ export class DeckPile extends Component {
         this.setupWidget();
 
         this._isInitialized = true;
-        console.log('[DeckPile] Initialized with', CardScale.stackDisplay.maxCards, 'cards');
+        log.debug('Initialized with', CardScale.stackDisplay.maxCards, 'cards');
     }
 
     /**
@@ -53,7 +56,7 @@ export class DeckPile extends Component {
      */
     private createCardStack(): void {
         if (!this._pokerPrefab) {
-            console.warn('[DeckPile] No poker prefab set');
+            log.warn('No poker prefab set');
             return;
         }
 
@@ -61,7 +64,7 @@ export class DeckPile extends Component {
         const cardBack = this._pokerSprites.get(CardSpriteNames.backWithLogo) ||
                          this._pokerSprites.get(CardSpriteNames.back);
         if (!cardBack) {
-            console.warn('[DeckPile] No card back sprite found');
+            log.warn('No card back sprite found');
             return;
         }
 
@@ -99,7 +102,7 @@ export class DeckPile extends Component {
         const existingWidget = this.node.getComponent(Widget);
         if (existingWidget) {
             // 编辑器中已经设置了 Widget，不覆盖
-            console.log('[DeckPile] Using existing Widget from editor');
+            log.debug('Using existing Widget from editor');
             return;
         }
 
@@ -114,7 +117,7 @@ export class DeckPile extends Component {
         // 立即更新对齐
         widget.updateAlignment();
 
-        console.log('[DeckPile] Widget created with top:', config.top, 'right:', config.right);
+        log.debug('Widget created with top:', config.top, 'right:', config.right);
     }
 
     /**
@@ -183,7 +186,7 @@ export class DeckPile extends Component {
      */
     public show(): void {
         this.node.active = true;
-        console.log('[DeckPile] Shown');
+        log.debug('Shown');
     }
 
     /**
@@ -191,7 +194,7 @@ export class DeckPile extends Component {
      */
     public hide(): void {
         this.node.active = false;
-        console.log('[DeckPile] Hidden');
+        log.debug('Hidden');
     }
 
     /**
@@ -202,7 +205,7 @@ export class DeckPile extends Component {
         const maxDisplay = CardScale.stackDisplay.maxCards;
         const displayCount = Math.min(deckSize, maxDisplay);
 
-        console.log(`[DeckPile] Updating card count: deckSize=${deckSize}, displayCount=${displayCount}`);
+        log.debug(`Updating card count: deckSize=${deckSize}, displayCount=${displayCount}`);
 
         // 更新每张牌的可见性
         for (let i = 0; i < this._cardNodes.length; i++) {

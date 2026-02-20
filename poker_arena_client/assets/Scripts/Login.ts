@@ -2,19 +2,22 @@ import { _decorator, Component, Node, Button, Label, EditBox } from 'cc';
 import { SceneManager } from './SceneManager';
 import { AuthService } from './Services/AuthService';
 import { LocalUserStore } from './LocalStore/LocalUserStore';
+import { logger } from './Utils/Logger';
+
+const log = logger('Login');
 
 const { ccclass, property } = _decorator;
 
 // 暴露调试函数到全局作用域
 (window as any).clearPokerArenaCache = function() {
     LocalUserStore.clearAllCache();
-    console.log('[Debug] Cache cleared, reloading page...');
+    log.debug('[Debug] Cache cleared, reloading page...');
     location.reload();
 };
 
 (window as any).getUserData = function() {
     const userData = LocalUserStore.getInstance().getUserData();
-    console.log('[Debug] Current user data in memory:', userData);
+    log.debug('[Debug] Current user data in memory:', userData);
     return userData;
 };
 
@@ -77,7 +80,7 @@ export class Login extends Component {
      */
     private findNicknameInputComponents() {
         if (!this.nicknameInputPanel) {
-            console.warn('[Login] nicknameInputPanel not found');
+            log.warn('nicknameInputPanel not found');
             return;
         }
 
@@ -86,10 +89,10 @@ export class Login extends Component {
         if (inputNode) {
             this.nicknameEditBox = inputNode.getComponent(EditBox);
             if (!this.nicknameEditBox) {
-                console.warn('[Login] EditBox component not found on input_nick_name');
+                log.warn('EditBox component not found on input_nick_name');
             }
         } else {
-            console.warn('[Login] input_nick_name node not found');
+            log.warn('input_nick_name node not found');
         }
 
         // 查找 btn_close 节点及其 Button 组件
@@ -97,10 +100,10 @@ export class Login extends Component {
         if (closeButtonNode) {
             this.nicknameCloseButton = closeButtonNode.getComponent(Button);
             if (!this.nicknameCloseButton) {
-                console.warn('[Login] Button component not found on btn_close');
+                log.warn('Button component not found on btn_close');
             }
         } else {
-            console.warn('[Login] btn_close node not found');
+            log.warn('btn_close node not found');
         }
 
         // 查找 btn_confirm 节点及其 Button 组件
@@ -108,10 +111,10 @@ export class Login extends Component {
         if (confirmButtonNode) {
             this.nicknameConfirmButton = confirmButtonNode.getComponent(Button);
             if (!this.nicknameConfirmButton) {
-                console.warn('[Login] Button component not found on btn_confirm');
+                log.warn('Button component not found on btn_confirm');
             }
         } else {
-            console.warn('[Login] btn_confirm node not found');
+            log.warn('btn_confirm node not found');
         }
     }
 
@@ -136,7 +139,7 @@ export class Login extends Component {
      * 显示昵称输入面板
      */
     public async onGuestLoginButtonClicked() {
-        console.log("Guest login button clicked.");
+        log.debug("Guest login button clicked.");
 
         // 显示昵称输入面板
         if (this.nicknameInputPanel) {
@@ -154,7 +157,7 @@ export class Login extends Component {
      * 关闭昵称输入面板，不执行登录
      */
     public onNicknameCloseButtonClicked() {
-        console.log("Nickname close button clicked.");
+        log.debug("Nickname close button clicked.");
 
         // 隐藏昵称输入面板
         if (this.nicknameInputPanel) {
@@ -172,7 +175,7 @@ export class Login extends Component {
      * 确认昵称并执行登录
      */
     public async onNicknameConfirmButtonClicked() {
-        console.log("Nickname confirm button clicked.");
+        log.debug("Nickname confirm button clicked.");
 
         // 获取用户输入的昵称
         const nickname = this.nicknameEditBox?.string?.trim();
@@ -206,7 +209,7 @@ export class Login extends Component {
                 this.showError('游客登录失败，请稍后重试');
             }
         } catch (error) {
-            console.error('Guest login error:', error);
+            log.error('Guest login error:', error);
             this.showError('游客登录失败，请稍后重试');
         } finally {
             if (this.guestButton) {
@@ -219,7 +222,7 @@ export class Login extends Component {
      * Handle WeChat login button click
      */
     public onWeChatLoginButtonClicked(): void {
-        console.log("WeChat login button clicked.");
+        log.debug("WeChat login button clicked.");
         // TODO: Implement WeChat login
         this.showError('微信登录功能暂未实现');
     }

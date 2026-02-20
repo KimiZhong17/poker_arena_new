@@ -1,4 +1,7 @@
 import { director, Director } from "cc";
+import { logger } from './Utils/Logger';
+
+const log = logger('Scene');
 
 /**
  * Scene names enumeration
@@ -42,13 +45,13 @@ export class SceneManager {
     public loadScene(sceneName: SceneName, data?: SceneTransitionData): void {
         // 防止重复加载同一场景
         if (this.isLoadingScene && this.pendingSceneName === sceneName) {
-            console.warn(`Scene ${sceneName} is already being loaded, skipping duplicate request.`);
+            log.warn(`Scene ${sceneName} is already being loaded, skipping duplicate request.`);
             return;
         }
 
         // 如果正在加载其他场景，发出警告
         if (this.isLoadingScene) {
-            console.warn(`Scene ${this.pendingSceneName} is being loaded, but ${sceneName} was requested. Overriding.`);
+            log.warn(`Scene ${this.pendingSceneName} is being loaded, but ${sceneName} was requested. Overriding.`);
         }
 
         this.transitionData = data || {};
@@ -60,10 +63,10 @@ export class SceneManager {
             this.pendingSceneName = null;
 
             if (error) {
-                console.error(`Failed to load scene ${sceneName}:`, error);
+                log.error(`Failed to load scene ${sceneName}:`, error);
             } else {
                 this.currentScene = sceneName;
-                console.log(`Scene ${sceneName} loaded successfully`);
+                log.debug(`Scene ${sceneName} loaded successfully`);
             }
         });
     }

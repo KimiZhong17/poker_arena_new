@@ -7,6 +7,9 @@ import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
 import { EventCenter, GameEvents } from '../../Utils/EventCenter';
 import { SeatLayoutConfig } from '../../Config/SeatConfig';
+import { logger } from '../../Utils/Logger';
+
+const log = logger('ReadyStage');
 
 /**
  * 准备阶段
@@ -67,7 +70,7 @@ export class ReadyStage extends GameStageBase {
      * 进入准备阶段
      */
     public onEnter(): void {
-        console.log('[ReadyStage] Entering ready stage');
+        log.debug('Entering ready stage');
         this.isActive = true;
 
         // 0. 重置 TheDecreeUIController 状态（用于游戏重启）
@@ -94,8 +97,8 @@ export class ReadyStage extends GameStageBase {
         // 7. 更新按钮显示
         this.updateButtonDisplay();
 
-        console.log('[ReadyStage] Waiting for players to ready up...');
-        console.log(`[ReadyStage] Local player: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}`);
+        log.debug('Waiting for players to ready up...');
+        log.debug(`Local player: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}`);
     }
 
     /**
@@ -123,7 +126,7 @@ export class ReadyStage extends GameStageBase {
             this.totalPlayers = 4;
         }
 
-        console.log(`[ReadyStage] Local player initialized: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}, totalPlayers: ${this.totalPlayers}`);
+        log.debug(`Local player initialized: ${this.localPlayerId}, isHost: ${this.isLocalPlayerHost}, totalPlayers: ${this.totalPlayers}`);
     }
 
     /**
@@ -133,7 +136,7 @@ export class ReadyStage extends GameStageBase {
     private initPlayerUIManager(): void {
         const playerUIManager = this.game.playerUIManager;
         if (!playerUIManager) {
-            console.warn('[ReadyStage] PlayerUIManager not found on Game');
+            log.warn('PlayerUIManager not found on Game');
             return;
         }
 
@@ -141,7 +144,7 @@ export class ReadyStage extends GameStageBase {
 
         // 🚀 优化：如果没有房间数据，先显示空座位（提升响应速度）
         if (!currentRoom) {
-            console.log('[ReadyStage] 🚀 No room data yet, showing empty seats first for better UX');
+            log.debug('🚀 No room data yet, showing empty seats first for better UX');
             this.showEmptySeats(playerUIManager);
             return;
         }
@@ -149,7 +152,7 @@ export class ReadyStage extends GameStageBase {
         // 获取本地玩家信息
         const myPlayerInfo = this.localRoomStore.getMyPlayerInfo();
         if (!myPlayerInfo) {
-            console.warn('[ReadyStage] 🚀 Cannot find my player info yet, showing empty seats');
+            log.warn('🚀 Cannot find my player info yet, showing empty seats');
             this.showEmptySeats(playerUIManager);
             return;
         }
@@ -157,7 +160,7 @@ export class ReadyStage extends GameStageBase {
         // 有完整数据，正常初始化
         const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
 
-        console.log(`[ReadyStage] Initializing PlayerUIManager with ${currentRoom.players.length} players, maxPlayers: ${currentRoom.maxPlayers}, mySeat: ${myPlayerInfo.seatIndex}`);
+        log.debug(`Initializing PlayerUIManager with ${currentRoom.players.length} players, maxPlayers: ${currentRoom.maxPlayers}, mySeat: ${myPlayerInfo.seatIndex}`);
         playerUIManager.initForReadyStage(
             currentRoom.players,
             currentRoom.maxPlayers,
@@ -193,14 +196,14 @@ export class ReadyStage extends GameStageBase {
             layoutConfig
         );
 
-        console.log('[ReadyStage] ✅ Empty seats displayed, waiting for room data...');
+        log.debug('✅ Empty seats displayed, waiting for room data...');
     }
 
     /**
      * 离开准备阶段
      */
     public onExit(): void {
-        console.log('[ReadyStage] Exiting ready stage');
+        log.debug('Exiting ready stage');
 
         // 1. 清理按钮事件
         this.cleanupButtons();
@@ -216,7 +219,7 @@ export class ReadyStage extends GameStageBase {
      * 清理 EventCenter 事件监听
      */
     private cleanupEventListeners(): void {
-        console.log('[ReadyStage] Cleaning up EventCenter listeners');
+        log.debug('Cleaning up EventCenter listeners');
 
         if (this.onRoomRefreshHandler) {
             EventCenter.off(GameEvents.UI_REFRESH_ROOM, this.onRoomRefreshHandler, this);
@@ -230,9 +233,9 @@ export class ReadyStage extends GameStageBase {
     public showUI(): void {
         if (this.rootNode) {
             this.rootNode.active = true;
-            console.log('[ReadyStage] UI shown');
+            log.debug('UI shown');
         } else {
-            console.warn('[ReadyStage] Root node not set, cannot show UI');
+            log.warn('Root node not set, cannot show UI');
         }
     }
 
@@ -242,7 +245,7 @@ export class ReadyStage extends GameStageBase {
     public hideUI(): void {
         if (this.rootNode) {
             this.rootNode.active = false;
-            console.log('[ReadyStage] UI hidden');
+            log.debug('UI hidden');
         }
     }
 
@@ -250,7 +253,7 @@ export class ReadyStage extends GameStageBase {
      * 清理资源
      */
     public cleanup(): void {
-        console.log('[ReadyStage] Cleaning up');
+        log.debug('Cleaning up');
         this.cleanupButtons();
         this.playerReadyStates.clear();
     }
@@ -262,28 +265,28 @@ export class ReadyStage extends GameStageBase {
      * 用于游戏重启时清理上一局的状态
      */
     private resetTheDecreeUI(): void {
-        console.log('[ReadyStage] Attempting to reset TheDecreeUIController state');
+        log.debug('Attempting to reset TheDecreeUIController state');
 
         // TheDecree 在 Node_PlayStage 下
         const playStageNode = this.game.node.getChildByName('Node_PlayStage');
         if (!playStageNode) {
-            console.warn('[ReadyStage] Node_PlayStage not found');
+            log.warn('Node_PlayStage not found');
             return;
         }
 
         const theDecreeUINode = playStageNode.getChildByName('TheDecree');
         if (!theDecreeUINode) {
-            console.warn('[ReadyStage] TheDecree not found under Node_PlayStage');
+            log.warn('TheDecree not found under Node_PlayStage');
             return;
         }
 
         const theDecreeUIController = theDecreeUINode.getComponent('TheDecreeUIController') as any;
         if (theDecreeUIController && typeof theDecreeUIController.resetForRestart === 'function') {
-            console.log('[ReadyStage] Calling resetForRestart()...');
+            log.debug('Calling resetForRestart()...');
             theDecreeUIController.resetForRestart();
-            console.log('[ReadyStage] TheDecreeUIController reset complete');
+            log.debug('TheDecreeUIController reset complete');
         } else {
-            console.warn('[ReadyStage] TheDecreeUIController component not found or resetForRestart method missing');
+            log.warn('TheDecreeUIController component not found or resetForRestart method missing');
         }
 
         // 清理公牌节点的子元素（防止再来一局时看到上一局的公牌）
@@ -294,7 +297,7 @@ export class ReadyStage extends GameStageBase {
             communityCardsNode = this.game.node.getChildByName('CommunityCardsNode');
         }
         if (communityCardsNode) {
-            console.log('[ReadyStage] Clearing community cards node children');
+            log.debug('Clearing community cards node children');
             communityCardsNode.removeAllChildren();
         }
     }
@@ -310,15 +313,15 @@ export class ReadyStage extends GameStageBase {
 
         if (currentRoom) {
             // 多人模式：使用房间中的玩家ID和实际的准备状态
-            console.log('[ReadyStage] ========== resetReadyStates ==========');
-            console.log('[ReadyStage] Current room players:', currentRoom.players);
+            log.debug('========== resetReadyStates ==========');
+            log.debug('Current room players:', currentRoom.players);
             for (const player of currentRoom.players) {
                 // 使用玩家实际的准备状态，而不是强制设为 false
                 this.playerReadyStates.set(player.id, player.isReady);
-                console.log(`[ReadyStage] Player ${player.id} (${player.name}): isReady = ${player.isReady}, isHost = ${player.isHost}`);
+                log.debug(`Player ${player.id} (${player.name}): isReady = ${player.isReady}, isHost = ${player.isHost}`);
             }
-            console.log(`[ReadyStage] Reset ready states for ${currentRoom.players.length} players in room`);
-            console.log('[ReadyStage] =====================================');
+            log.debug(`Reset ready states for ${currentRoom.players.length} players in room`);
+            log.debug('=====================================');
         } else {
             // 单机模式：使用本地玩家ID和模拟玩家
             this.playerReadyStates.set(this.localPlayerId, false);
@@ -327,7 +330,7 @@ export class ReadyStage extends GameStageBase {
             for (let i = 1; i < this.totalPlayers; i++) {
                 this.playerReadyStates.set(`player_${i}`, false);
             }
-            console.log(`[ReadyStage] Reset ready states for ${this.totalPlayers} players (single player mode)`);
+            log.debug(`Reset ready states for ${this.totalPlayers} players (single player mode)`);
         }
     }
 
@@ -335,11 +338,11 @@ export class ReadyStage extends GameStageBase {
      * 设置 EventCenter 事件监听
      */
     private setupEventListeners(): void {
-        console.log('[ReadyStage] Setting up EventCenter listeners');
+        log.debug('Setting up EventCenter listeners');
 
         // 监听房间状态刷新事件
         this.onRoomRefreshHandler = () => {
-            console.log('[ReadyStage] Room refresh event received');
+            log.debug('Room refresh event received');
             this.refreshPlayerStates();
             this.updateButtonDisplay();
         };
@@ -358,7 +361,7 @@ export class ReadyStage extends GameStageBase {
         const localPlayer = currentRoom.players.find(p => p.id === this.localPlayerId);
         if (localPlayer) {
             this.isLocalPlayerHost = localPlayer.isHost;
-            console.log(`[ReadyStage] Local player host status updated: ${this.isLocalPlayerHost}`);
+            log.debug(`Local player host status updated: ${this.isLocalPlayerHost}`);
         }
 
         // 更新玩家准备状态
@@ -367,7 +370,7 @@ export class ReadyStage extends GameStageBase {
             this.playerReadyStates.set(player.id, player.isReady);
         }
 
-        console.log('[ReadyStage] Player states refreshed from LocalRoomStore');
+        log.debug('Player states refreshed from LocalRoomStore');
 
         // 🚀 优化：如果之前显示的是空座位，现在用真实数据更新
         const playerUIManager = this.game.playerUIManager;
@@ -376,7 +379,7 @@ export class ReadyStage extends GameStageBase {
 
             // 如果 PlayerUIManager 还没初始化（_maxSeats 为 0），尝试初始化
             if (playerUIManager.maxSeats === 0) {
-                console.log('[ReadyStage] PlayerUIManager not yet initialized, initializing now...');
+                log.debug('PlayerUIManager not yet initialized, initializing now...');
                 if (myPlayerInfo) {
                     const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
                     playerUIManager.initForReadyStage(
@@ -388,7 +391,7 @@ export class ReadyStage extends GameStageBase {
                 }
             } else {
                 // 已初始化，只需更新座位信息
-                console.log('[ReadyStage] 🔄 Updating seats with real player data');
+                log.debug('🔄 Updating seats with real player data');
                 playerUIManager.updateSeats(currentRoom.players);
             }
         }
@@ -399,7 +402,7 @@ export class ReadyStage extends GameStageBase {
      */
     private setupButtons(): void {
         if (!this.rootNode) {
-            console.warn('[ReadyStage] Cannot setup buttons: root node not set');
+            log.warn('Cannot setup buttons: root node not set');
             return;
         }
 
@@ -414,16 +417,16 @@ export class ReadyStage extends GameStageBase {
             this.btnLabel = this.btnStart.node.getComponentInChildren(Label);
 
             if (!this.btnLabel) {
-                console.warn('[ReadyStage] No label found on start button, text will not be updated');
+                log.warn('No label found on start button, text will not be updated');
             } else {
-                console.log('[ReadyStage] Found label on start button');
+                log.debug('Found label on start button');
             }
 
             // 注册点击事件
             this.btnStart.node.on(Button.EventType.CLICK, this.onStartButtonClicked, this);
-            console.log('[ReadyStage] Start button registered');
+            log.debug('Start button registered');
         } else {
-            console.warn('[ReadyStage] Start button not found');
+            log.warn('Start button not found');
         }
     }
 
@@ -449,10 +452,10 @@ export class ReadyStage extends GameStageBase {
             this.btnStart.interactable = allReady;
 
             if (allReady) {
-                console.log('[ReadyStage] All players ready! Host can start game');
+                log.debug('All players ready! Host can start game');
             } else {
                 const readyCount = this.getReadyPlayerCount();
-                console.log(`[ReadyStage] Waiting for players: ${readyCount}/${this.totalPlayers - 1} ready`);
+                log.debug(`Waiting for players: ${readyCount}/${this.totalPlayers - 1} ready`);
             }
         } else {
             // 非房主显示"准备"或"已准备"
@@ -479,7 +482,7 @@ export class ReadyStage extends GameStageBase {
         if (this.btnStart && this.btnStart.node) {
             this.btnStart.node.off(Button.EventType.CLICK, this.onStartButtonClicked, this);
             this.btnStart = null;
-            console.log('[ReadyStage] Start button unregistered');
+            log.debug('Start button unregistered');
         }
     }
 
@@ -497,7 +500,7 @@ export class ReadyStage extends GameStageBase {
         if (btnNode) {
             const button = btnNode.getComponent(Button);
             if (button) {
-                console.log('[ReadyStage] Found start button by name: btn_start');
+                log.debug('Found start button by name: btn_start');
                 return button;
             }
         }
@@ -506,7 +509,7 @@ export class ReadyStage extends GameStageBase {
         for (const child of this.rootNode.children) {
             const button = child.getComponent(Button);
             if (button) {
-                console.log(`[ReadyStage] Found start button by component: ${child.name}`);
+                log.debug(`Found start button by component: ${child.name}`);
                 return button;
             }
         }
@@ -521,20 +524,20 @@ export class ReadyStage extends GameStageBase {
         // 防抖：防止短时间内重复点击
         const now = Date.now();
         if (now - this.lastButtonClickTime < this.BUTTON_DEBOUNCE_MS) {
-            console.log('[ReadyStage] Button click ignored (debounce)');
+            log.debug('Button click ignored (debounce)');
             return;
         }
         this.lastButtonClickTime = now;
 
-        console.log('[ReadyStage] Start button clicked');
+        log.debug('Start button clicked');
 
         if (this.isLocalPlayerHost) {
             // 房主点击"开始游戏"
             if (this.allNonHostPlayersReady()) {
-                console.log('[ReadyStage] Host starting game...');
+                log.debug('Host starting game...');
                 this.startGame();
             } else {
-                console.warn('[ReadyStage] Cannot start: not all players are ready');
+                log.warn('Cannot start: not all players are ready');
             }
         } else {
             // 非房主点击"准备"
@@ -549,26 +552,26 @@ export class ReadyStage extends GameStageBase {
     private onPlayerReady(playerId: string): void {
         // 检查玩家是否存在
         if (!this.playerReadyStates.has(playerId)) {
-            console.warn(`[ReadyStage] Unknown player: ${playerId}`);
+            log.warn(`Unknown player: ${playerId}`);
             return;
         }
 
         // 房主不需要准备
         if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
-            console.warn('[ReadyStage] Host does not need to ready up');
+            log.warn('Host does not need to ready up');
             return;
         }
 
         // 防止重复点击：如果已经准备好了，不再发送请求
         if (this.playerReadyStates.get(playerId) === true) {
-            console.log(`[ReadyStage] Player ${playerId} already ready, ignoring duplicate click`);
+            log.debug(`Player ${playerId} already ready, ignoring duplicate click`);
             return;
         }
 
         // 发送准备请求到服务器
         const networkClient = this.game.networkClient;
         if (networkClient && networkClient.getIsConnected()) {
-            console.log(`[ReadyStage] Sending ready request to server for player ${playerId}`);
+            log.debug(`Sending ready request to server for player ${playerId}`);
 
             // 先更新本地状态，防止快速双击
             this.playerReadyStates.set(playerId, true);
@@ -577,7 +580,7 @@ export class ReadyStage extends GameStageBase {
             // 再发送请求到服务器
             this.roomService.toggleReady();
         } else {
-            console.warn('[ReadyStage] Not connected to server, cannot send ready request');
+            log.warn('Not connected to server, cannot send ready request');
         }
     }
 
@@ -590,28 +593,28 @@ export class ReadyStage extends GameStageBase {
             return true;
         }
 
-        console.log('[ReadyStage] ========== allNonHostPlayersReady ==========');
-        console.log('[ReadyStage] Local player:', this.localPlayerId, 'isHost:', this.isLocalPlayerHost);
-        console.log('[ReadyStage] Player ready states:', Array.from(this.playerReadyStates.entries()));
+        log.debug('========== allNonHostPlayersReady ==========');
+        log.debug('Local player:', this.localPlayerId, 'isHost:', this.isLocalPlayerHost);
+        log.debug('Player ready states:', Array.from(this.playerReadyStates.entries()));
 
         // 检查所有非房主玩家是否准备
         for (const [playerId, isReady] of this.playerReadyStates) {
             // 跳过房主
             if (playerId === this.localPlayerId && this.isLocalPlayerHost) {
-                console.log(`[ReadyStage] Skipping host player: ${playerId}`);
+                log.debug(`Skipping host player: ${playerId}`);
                 continue;
             }
 
-            console.log(`[ReadyStage] Checking player ${playerId}: isReady = ${isReady}`);
+            log.debug(`Checking player ${playerId}: isReady = ${isReady}`);
             if (!isReady) {
-                console.log('[ReadyStage] Not all non-host players ready');
-                console.log('[ReadyStage] =====================================');
+                log.debug('Not all non-host players ready');
+                log.debug('=====================================');
                 return false;
             }
         }
 
-        console.log('[ReadyStage] All non-host players ready!');
-        console.log('[ReadyStage] =====================================');
+        log.debug('All non-host players ready!');
+        log.debug('=====================================');
         return true;
     }
 
@@ -638,21 +641,21 @@ export class ReadyStage extends GameStageBase {
      * 房主发送开始游戏请求到服务器
      */
     private startGame(): void {
-        console.log('[ReadyStage] Starting game...');
+        log.debug('Starting game...');
 
         const networkClient = this.game.networkClient;
         if (networkClient && networkClient.getIsConnected()) {
             // 在线模式：发送开始游戏请求到服务器
-            console.log('[ReadyStage] Sending start game request to server');
+            log.debug('Sending start game request to server');
             this.roomService.startGame();
         } else {
             // 单机模式：直接切换到Playing阶段
-            console.log('[ReadyStage] Single player mode, switching to Playing stage directly');
+            log.debug('Single player mode, switching to Playing stage directly');
             const stageManager = this.game.stageManager;
             if (stageManager) {
                 stageManager.switchToStage(GameStage.PLAYING);
             } else {
-                console.error('[ReadyStage] StageManager not found on Game!');
+                log.error('StageManager not found on Game!');
             }
         }
     }
@@ -666,12 +669,12 @@ export class ReadyStage extends GameStageBase {
      */
     public setTotalPlayers(count: number): void {
         if (count < 1) {
-            console.warn('[ReadyStage] Total players must be at least 1');
+            log.warn('Total players must be at least 1');
             return;
         }
 
         this.totalPlayers = count;
-        console.log(`[ReadyStage] Total players set to ${count}`);
+        log.debug(`Total players set to ${count}`);
 
         // 如果已经进入阶段，重置状态
         if (this.isActive) {

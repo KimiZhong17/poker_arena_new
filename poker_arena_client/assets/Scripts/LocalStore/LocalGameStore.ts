@@ -2,6 +2,9 @@ import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 import { ShowdownResult } from '../Network/Messages';
 import { PlayerState } from './LocalPlayerStore';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
+import { logger } from '../Utils/Logger';
+
+const log = logger('LocalGameStore');
 
 /**
  * 玩家游戏数据
@@ -128,11 +131,11 @@ export class LocalGameStore {
         if (this.myPlayerId && this._pendingHandCards.length > 0) {
             this.setPlayerHandCards(this.myPlayerId, this._pendingHandCards);
             this.myHandCards = [...this._pendingHandCards];
-            console.log(`[LocalGameStore] Applied pending hand cards: ${this._pendingHandCards.length} cards`);
+            log.debug(`Applied pending hand cards: ${this._pendingHandCards.length} cards`);
             this._pendingHandCards = [];
         }
 
-        console.log(`[LocalGameStore] Initialized ${playerIds.length} players, myPlayerId: ${myPlayerId}`);
+        log.debug(`Initialized ${playerIds.length} players, myPlayerId: ${myPlayerId}`);
     }
 
     /**
@@ -173,9 +176,9 @@ export class LocalGameStore {
         if (player) {
             player.handCards = [...cards];
             player.cardCount = cards.length;
-            console.log(`[LocalGameStore] Player ${playerId} hand cards: ${cards.length} cards`);
+            log.debug(`Player ${playerId} hand cards: ${cards.length} cards`);
         } else {
-            console.warn(`[LocalGameStore] Player ${playerId} not found`);
+            log.warn(`Player ${playerId} not found`);
         }
     }
 
@@ -198,7 +201,7 @@ export class LocalGameStore {
             if (playerId !== this.myPlayerId) {
                 player.handCards = Array(count).fill(-1); // -1 表示未知牌
             }
-            console.log(`[LocalGameStore] Player ${playerId} card count: ${count}`);
+            log.debug(`Player ${playerId} card count: ${count}`);
         }
     }
 
@@ -217,7 +220,7 @@ export class LocalGameStore {
         const player = this.players.get(playerId);
         if (player) {
             player.score = score;
-            console.log(`[LocalGameStore] Player ${playerId} score: ${score}`);
+            log.debug(`Player ${playerId} score: ${score}`);
         }
     }
 
@@ -236,7 +239,7 @@ export class LocalGameStore {
         for (const [playerId, score] of Object.entries(scores)) {
             this.setPlayerScore(playerId, score);
         }
-        console.log(`[LocalGameStore] Scores updated for ${Object.keys(scores).length} players`);
+        log.debug(`Scores updated for ${Object.keys(scores).length} players`);
     }
 
     /**
@@ -257,7 +260,7 @@ export class LocalGameStore {
         const player = this.players.get(playerId);
         if (player) {
             player.state = state;
-            console.log(`[LocalGameStore] Player ${playerId} state: ${state}`);
+            log.debug(`Player ${playerId} state: ${state}`);
         }
     }
 
@@ -281,7 +284,7 @@ export class LocalGameStore {
         const player = this.players.get(playerId);
         if (player) {
             player.isDealer = isDealer;
-            console.log(`[LocalGameStore] Player ${playerId} is dealer: ${isDealer}`);
+            log.debug(`Player ${playerId} is dealer: ${isDealer}`);
         }
     }
 
@@ -300,7 +303,7 @@ export class LocalGameStore {
         const player = this.players.get(playerId);
         if (player) {
             player.isTurn = isTurn;
-            console.log(`[LocalGameStore] Player ${playerId} turn: ${isTurn}`);
+            log.debug(`Player ${playerId} turn: ${isTurn}`);
         }
     }
 
@@ -323,14 +326,14 @@ export class LocalGameStore {
     public setPlayerAuto(playerId: string, isAuto: boolean, reason?: 'manual' | 'timeout' | 'disconnect'): void {
         const player = this.players.get(playerId);
         if (!player) {
-            console.warn(`[LocalGameStore] Player ${playerId} not found for auto mode`);
+            log.warn(`Player ${playerId} not found for auto mode`);
             return;
         }
 
         player.isAuto = isAuto;
         player.autoReason = reason;
 
-        console.log(`[LocalGameStore] Player ${playerId} auto mode: ${isAuto} (${reason || 'manual'})`);
+        log.debug(`Player ${playerId} auto mode: ${isAuto} (${reason || 'manual'})`);
 
         // 触发事件通知UI更新
         EventCenter.emit(GameEvents.PLAYER_AUTO_CHANGED, {
@@ -377,7 +380,7 @@ export class LocalGameStore {
             this.myHandCards = [...cards];
         } else {
             // 如果 myPlayerId 还没设置，先临时保存
-            console.log(`[LocalGameStore] Hand cards set (myPlayerId not yet set): ${cards.length} cards`);
+            log.debug(`Hand cards set (myPlayerId not yet set): ${cards.length} cards`);
             // 创建一个临时存储
             this._pendingHandCards = [...cards];
             this.myHandCards = [...cards];
@@ -420,7 +423,7 @@ export class LocalGameStore {
                 player.autoReason = undefined;
             }
         }
-        console.log(`[LocalGameStore] Player ${playerId} game state restored: cardCount=${state.handCardCount}, hasPlayed=${state.hasPlayed}, isAuto=${state.isAuto}`);
+        log.debug(`Player ${playerId} game state restored: cardCount=${state.handCardCount}, hasPlayed=${state.hasPlayed}, isAuto=${state.isAuto}`);
     }
 
     // ==================== 游戏状态管理 ====================
@@ -434,7 +437,7 @@ export class LocalGameStore {
         } else {
             this.gameState = state;
         }
-        console.log(`[LocalGameStore] Game state updated: ${this.gameState}`);
+        log.debug(`Game state updated: ${this.gameState}`);
     }
 
     /**
@@ -449,7 +452,7 @@ export class LocalGameStore {
      */
     public setCurrentRound(round: number): void {
         this.currentRound = round;
-        console.log(`[LocalGameStore] Current round: ${round}`);
+        log.debug(`Current round: ${round}`);
     }
 
     /**
@@ -471,7 +474,7 @@ export class LocalGameStore {
      */
     public setGameActive(active: boolean): void {
         this.isGameActive = active;
-        console.log(`[LocalGameStore] Game active: ${active}`);
+        log.debug(`Game active: ${active}`);
     }
 
     /**
@@ -494,7 +497,7 @@ export class LocalGameStore {
         } else {
             this._pendingHandCards = [...cards];
         }
-        console.log(`[LocalGameStore] My hand cards updated: ${cards.length} cards`);
+        log.debug(`My hand cards updated: ${cards.length} cards`);
     }
 
     /**
@@ -523,7 +526,7 @@ export class LocalGameStore {
             }
         }
         this.setMyHandCards(myCards);
-        console.log(`[LocalGameStore] Removed ${cards.length} cards, remaining: ${myCards.length}`);
+        log.debug(`Removed ${cards.length} cards, remaining: ${myCards.length}`);
     }
 
     /**
@@ -533,7 +536,7 @@ export class LocalGameStore {
         const myCards = this.getMyHandCards();
         myCards.push(...cards);
         this.setMyHandCards(myCards);
-        console.log(`[LocalGameStore] Added ${cards.length} cards, total: ${myCards.length}`);
+        log.debug(`Added ${cards.length} cards, total: ${myCards.length}`);
     }
 
     /**
@@ -550,7 +553,7 @@ export class LocalGameStore {
      */
     public setCommunityCards(cards: number[]): void {
         this.communityCards = [...cards];
-        console.log(`[LocalGameStore] Community cards updated: ${cards.length} cards`);
+        log.debug(`Community cards updated: ${cards.length} cards`);
     }
 
     /**
@@ -565,7 +568,7 @@ export class LocalGameStore {
      */
     public setDeckSize(size: number): void {
         this.deckSize = size;
-        console.log(`[LocalGameStore] Deck size: ${size}`);
+        log.debug(`Deck size: ${size}`);
     }
 
     /**
@@ -582,7 +585,7 @@ export class LocalGameStore {
      */
     public setDealerId(dealerId: string): void {
         this.dealerId = dealerId;
-        console.log(`[LocalGameStore] Dealer ID: ${dealerId}`);
+        log.debug(`Dealer ID: ${dealerId}`);
     }
 
     /**
@@ -597,7 +600,7 @@ export class LocalGameStore {
      */
     public setCardsToPlay(count: number): void {
         this.cardsToPlay = count;
-        console.log(`[LocalGameStore] Cards to play: ${count}`);
+        log.debug(`Cards to play: ${count}`);
     }
 
     /**
@@ -622,7 +625,7 @@ export class LocalGameStore {
         this.currentRoundPlays.push(record);
         this.lastPlayedCards = [...cards];
         this.lastPlayerId = playerId;
-        console.log(`[LocalGameStore] Play record added: ${playerId} played ${cards.length} cards`);
+        log.debug(`Play record added: ${playerId} played ${cards.length} cards`);
     }
 
     /**
@@ -653,7 +656,7 @@ export class LocalGameStore {
         this.currentRoundPlays = [];
         this.lastPlayedCards = [];
         this.lastPlayerId = '';
-        console.log('[LocalGameStore] Current round plays cleared');
+        log.debug('Current round plays cleared');
     }
 
     // ==================== 回合历史管理 ====================
@@ -663,7 +666,7 @@ export class LocalGameStore {
      */
     public addRoundHistory(history: RoundHistory): void {
         this.roundHistory.push(history);
-        console.log(`[LocalGameStore] Round history added: Round ${history.roundNumber}`);
+        log.debug(`Round history added: Round ${history.roundNumber}`);
     }
 
     /**
@@ -693,7 +696,7 @@ export class LocalGameStore {
      * 重置游戏状态（新游戏开始时）
      */
     public resetGame(): void {
-        console.log('[LocalGameStore] Resetting game state...');
+        log.debug('Resetting game state...');
 
         this.gameState = TheDecreeGameState.SETUP;
         this.currentRound = 0;
@@ -714,28 +717,28 @@ export class LocalGameStore {
         this.lastPlayedCards = [];
         this.lastPlayerId = '';
 
-        console.log('[LocalGameStore] Game state reset complete');
+        log.debug('Game state reset complete');
     }
 
     /**
      * 重置回合状态（新回合开始时）
      */
     public resetRound(): void {
-        console.log('[LocalGameStore] Resetting round state...');
+        log.debug('Resetting round state...');
 
         this.clearCurrentRoundPlays();
         this.cardsToPlay = 0;
 
-        console.log('[LocalGameStore] Round state reset complete');
+        log.debug('Round state reset complete');
     }
 
     /**
      * 完全清空所有数据（离开房间时）
      */
     public clear(): void {
-        console.log('[LocalGameStore] Clearing all data...');
+        log.debug('Clearing all data...');
         this.resetGame();
-        console.log('[LocalGameStore] All data cleared');
+        log.debug('All data cleared');
     }
 
     // ==================== 调试和工具方法 ====================
@@ -767,16 +770,16 @@ export class LocalGameStore {
      * 打印当前状态（用于调试）
      */
     public printState(): void {
-        console.log('[LocalGameStore] ========== Current State ==========');
-        console.log('[LocalGameStore] Game State:', this.gameState);
-        console.log('[LocalGameStore] Round:', this.currentRound);
-        console.log('[LocalGameStore] Active:', this.isGameActive);
-        console.log('[LocalGameStore] My Hand:', this.myHandCards.length, 'cards');
-        console.log('[LocalGameStore] Community:', this.communityCards.length, 'cards');
-        console.log('[LocalGameStore] Dealer:', this.dealerId);
-        console.log('[LocalGameStore] Cards to Play:', this.cardsToPlay);
-        console.log('[LocalGameStore] Scores:', this.getScoresSnapshot());
-        console.log('[LocalGameStore] =====================================');
+        log.debug('========== Current State ==========');
+        log.debug('Game State:', this.gameState);
+        log.debug('Round:', this.currentRound);
+        log.debug('Active:', this.isGameActive);
+        log.debug('My Hand:', this.myHandCards.length, 'cards');
+        log.debug('Community:', this.communityCards.length, 'cards');
+        log.debug('Dealer:', this.dealerId);
+        log.debug('Cards to Play:', this.cardsToPlay);
+        log.debug('Scores:', this.getScoresSnapshot());
+        log.debug('=====================================');
     }
 
     private getScoresSnapshot(): { [playerId: string]: number } {

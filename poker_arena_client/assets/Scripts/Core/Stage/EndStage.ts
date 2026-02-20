@@ -3,6 +3,9 @@ import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Game';
 import { GameStage } from './StageManager';
 import { RoomService } from '../../Services/RoomService';
+import { logger } from '../../Utils/Logger';
+
+const log = logger('EndStage');
 
 /**
  * 结束阶段
@@ -43,7 +46,7 @@ export class EndStage extends GameStageBase {
      * 进入结束阶段
      */
     public onEnter(): void {
-        console.log('[EndStage] Entering end stage');
+        log.debug('Entering end stage');
         this.isActive = true;
 
         // 1. 显示UI
@@ -55,14 +58,14 @@ export class EndStage extends GameStageBase {
         // 3. 显示游戏结果
         this.displayResults();
 
-        console.log('[EndStage] Game ended, showing results');
+        log.debug('Game ended, showing results');
     }
 
     /**
      * 离开结束阶段
      */
     public onExit(): void {
-        console.log('[EndStage] Exiting end stage');
+        log.debug('Exiting end stage');
 
         // 1. 清理按钮事件
         this.cleanupButtons();
@@ -80,9 +83,9 @@ export class EndStage extends GameStageBase {
     public showUI(): void {
         if (this.rootNode) {
             this.rootNode.active = true;
-            console.log('[EndStage] UI shown');
+            log.debug('UI shown');
         } else {
-            console.warn('[EndStage] Root node not set, cannot show UI');
+            log.warn('Root node not set, cannot show UI');
         }
     }
 
@@ -92,7 +95,7 @@ export class EndStage extends GameStageBase {
     public hideUI(): void {
         if (this.rootNode) {
             this.rootNode.active = false;
-            console.log('[EndStage] UI hidden');
+            log.debug('UI hidden');
         }
     }
 
@@ -100,7 +103,7 @@ export class EndStage extends GameStageBase {
      * 清理资源
      */
     public cleanup(): void {
-        console.log('[EndStage] Cleaning up');
+        log.debug('Cleaning up');
         this.cleanupButtons();
         this.gameResult = null;
     }
@@ -112,19 +115,19 @@ export class EndStage extends GameStageBase {
      */
     private setupButtons(): void {
         if (!this.rootNode) {
-            console.warn('[EndStage] Cannot setup buttons: root node not set');
+            log.warn('Cannot setup buttons: root node not set');
             return;
         }
 
-        console.log('[EndStage] Setting up buttons...');
-        console.log('[EndStage] rootNode:', this.rootNode.name);
-        console.log('[EndStage] rootNode children:', this.rootNode.children.map(c => c.name).join(', '));
+        log.debug('Setting up buttons...');
+        log.debug('rootNode:', this.rootNode.name);
+        log.debug('rootNode children:', this.rootNode.children.map(c => c.name).join(', '));
 
         // 先尝试在 ResultPanel 子节点中查找按钮
         const resultPanel = this.rootNode.getChildByName('ResultPanel');
         if (resultPanel) {
-            console.log('[EndStage] Found ResultPanel, searching buttons inside it');
-            console.log('[EndStage] ResultPanel children:', resultPanel.children.map(c => c.name).join(', '));
+            log.debug('Found ResultPanel, searching buttons inside it');
+            log.debug('ResultPanel children:', resultPanel.children.map(c => c.name).join(', '));
         }
 
         // 查找按钮（支持 btn_restart 作为主要名称）
@@ -134,16 +137,16 @@ export class EndStage extends GameStageBase {
         // 注册事件
         if (this.btnPlayAgain) {
             this.btnPlayAgain.node.on(Button.EventType.CLICK, this.onPlayAgainClicked, this);
-            console.log('[EndStage] ✓ Play again button registered');
+            log.debug('✓ Play again button registered');
         } else {
-            console.warn('[EndStage] ✗ Play again button not found');
+            log.warn('✗ Play again button not found');
         }
 
         if (this.btnReturnLobby) {
             this.btnReturnLobby.node.on(Button.EventType.CLICK, this.onReturnLobbyClicked, this);
-            console.log('[EndStage] ✓ Return lobby button registered');
+            log.debug('✓ Return lobby button registered');
         } else {
-            console.warn('[EndStage] ✗ Return lobby button not found (optional)');
+            log.warn('✗ Return lobby button not found (optional)');
         }
 
         // 查找结果Label（旧版兼容）
@@ -171,7 +174,7 @@ export class EndStage extends GameStageBase {
         this.nameLabels = [null, null, null, null];
         this.scoreLabels = [null, null, null, null];
 
-        console.log('[EndStage] Buttons cleaned up');
+        log.debug('Buttons cleaned up');
     }
 
     /**
@@ -191,7 +194,7 @@ export class EndStage extends GameStageBase {
         if (btnNode) {
             const button = btnNode.getComponent(Button);
             if (button) {
-                console.log(`[EndStage] ✓ Found button: ${primaryName}`);
+                log.debug(`✓ Found button: ${primaryName}`);
                 return button;
             }
         }
@@ -201,7 +204,7 @@ export class EndStage extends GameStageBase {
         if (btnNode) {
             const button = btnNode.getComponent(Button);
             if (button) {
-                console.log(`[EndStage] ✓ Found button: ${fallbackName}`);
+                log.debug(`✓ Found button: ${fallbackName}`);
                 return button;
             }
         }
@@ -212,7 +215,7 @@ export class EndStage extends GameStageBase {
             if (btnNode) {
                 const button = btnNode.getComponent(Button);
                 if (button) {
-                    console.log(`[EndStage] ✓ Found button in rootNode: ${primaryName}`);
+                    log.debug(`✓ Found button in rootNode: ${primaryName}`);
                     return button;
                 }
             }
@@ -221,13 +224,13 @@ export class EndStage extends GameStageBase {
             if (btnNode) {
                 const button = btnNode.getComponent(Button);
                 if (button) {
-                    console.log(`[EndStage] ✓ Found button in rootNode: ${fallbackName}`);
+                    log.debug(`✓ Found button in rootNode: ${fallbackName}`);
                     return button;
                 }
             }
         }
 
-        console.warn(`[EndStage] ✗ Button not found: ${primaryName} or ${fallbackName}`);
+        log.warn(`✗ Button not found: ${primaryName} or ${fallbackName}`);
         return null;
     }
 
@@ -242,7 +245,7 @@ export class EndStage extends GameStageBase {
         if (labelNode) {
             const label = labelNode.getComponent(Label);
             if (label) {
-                console.log(`[EndStage] Found label: ${primaryName}`);
+                log.debug(`Found label: ${primaryName}`);
                 return label;
             }
         }
@@ -252,12 +255,12 @@ export class EndStage extends GameStageBase {
         if (labelNode) {
             const label = labelNode.getComponent(Label);
             if (label) {
-                console.log(`[EndStage] Found label: ${fallbackName}`);
+                log.debug(`Found label: ${fallbackName}`);
                 return label;
             }
         }
 
-        console.warn(`[EndStage] Label not found: ${primaryName} or ${fallbackName}`);
+        log.warn(`Label not found: ${primaryName} or ${fallbackName}`);
         return null;
     }
 
@@ -271,9 +274,9 @@ export class EndStage extends GameStageBase {
         const resultPanel = this.rootNode.getChildByName('ResultPanel');
         const searchRoot = resultPanel || this.rootNode;
 
-        console.log(`[EndStage] Searching for labels in: ${searchRoot.name}`);
-        console.log(`[EndStage] Children count: ${searchRoot.children.length}`);
-        console.log(`[EndStage] Children names:`, searchRoot.children.map(c => c.name).join(', '));
+        log.debug(`Searching for labels in: ${searchRoot.name}`);
+        log.debug(`Children count: ${searchRoot.children.length}`);
+        log.debug(`Children names:`, searchRoot.children.map(c => c.name).join(', '));
 
         // 查找 text_name_0/1/2/3 和 text_score_0/1/2/3
         for (let i = 0; i < 4; i++) {
@@ -282,12 +285,12 @@ export class EndStage extends GameStageBase {
             if (nameNode) {
                 this.nameLabels[i] = nameNode.getComponent(Label);
                 if (this.nameLabels[i]) {
-                    console.log(`[EndStage] ✓ Found name label: text_name_${i}`);
+                    log.debug(`✓ Found name label: text_name_${i}`);
                 } else {
-                    console.warn(`[EndStage] ✗ Node text_name_${i} found but has no Label component`);
+                    log.warn(`✗ Node text_name_${i} found but has no Label component`);
                 }
             } else {
-                console.warn(`[EndStage] ✗ Node text_name_${i} not found`);
+                log.warn(`✗ Node text_name_${i} not found`);
             }
 
             // 查找分数标签
@@ -295,12 +298,12 @@ export class EndStage extends GameStageBase {
             if (scoreNode) {
                 this.scoreLabels[i] = scoreNode.getComponent(Label);
                 if (this.scoreLabels[i]) {
-                    console.log(`[EndStage] ✓ Found score label: text_score_${i}`);
+                    log.debug(`✓ Found score label: text_score_${i}`);
                 } else {
-                    console.warn(`[EndStage] ✗ Node text_score_${i} found but has no Label component`);
+                    log.warn(`✗ Node text_score_${i} found but has no Label component`);
                 }
             } else {
-                console.warn(`[EndStage] ✗ Node text_score_${i} not found`);
+                log.warn(`✗ Node text_score_${i} not found`);
             }
         }
     }
@@ -310,7 +313,7 @@ export class EndStage extends GameStageBase {
      */
     private displayResults(): void {
         if (!this.gameResult) {
-            console.log('[EndStage] No game result data, showing default message');
+            log.debug('No game result data, showing default message');
             this.setResultText('游戏结束');
             this.clearPlayerLabels();
             return;
@@ -325,7 +328,7 @@ export class EndStage extends GameStageBase {
             this.setResultText(resultText);
         }
 
-        console.log('[EndStage] Game results displayed');
+        log.debug('Game results displayed');
     }
 
     /**
@@ -352,8 +355,8 @@ export class EndStage extends GameStageBase {
      * 在玩家标签中显示结果
      */
     private displayResultsInPlayerLabels(result: any): void {
-        console.log('[EndStage] ========== displayResultsInPlayerLabels ==========');
-        console.log('[EndStage] Input result:', result);
+        log.debug('========== displayResultsInPlayerLabels ==========');
+        log.debug('Input result:', result);
 
         // 清空所有标签
         this.clearPlayerLabels();
@@ -365,48 +368,48 @@ export class EndStage extends GameStageBase {
         if (Array.isArray(result.rankings)) {
             // 格式1: { rankings: [{ name: "玩家A", score: 100 }, ...] }
             rankings = result.rankings;
-            console.log('[EndStage] Using format 1: result.rankings');
+            log.debug('Using format 1: result.rankings');
         } else if (result.scores) {
             // 格式2: { scores: { "player1": 100, "player2": 80 } }
             rankings = Object.entries(result.scores)
                 .map(([name, score]) => ({ name, score: score as number }))
                 .sort((a, b) => b.score - a.score); // 按分数降序排序
-            console.log('[EndStage] Using format 2: result.scores');
+            log.debug('Using format 2: result.scores');
         } else if (result.players) {
             // 格式3: { players: [{ name: "玩家A", score: 100 }, ...] }
             rankings = [...result.players].sort((a, b) => b.score - a.score);
-            console.log('[EndStage] Using format 3: result.players');
+            log.debug('Using format 3: result.players');
         }
 
-        console.log('[EndStage] Parsed rankings:', rankings);
-        console.log('[EndStage] Rankings count:', rankings.length);
+        log.debug('Parsed rankings:', rankings);
+        log.debug('Rankings count:', rankings.length);
 
         // 显示排名（最多4个玩家）
         for (let i = 0; i < Math.min(rankings.length, 4); i++) {
             const player = rankings[i];
-            console.log(`[EndStage] Setting player ${i}:`, player);
+            log.debug(`Setting player ${i}:`, player);
 
             // 设置名字（限制名字长度）
             if (this.nameLabels[i]) {
                 const truncatedName = this.truncatePlayerName(player.name);
                 this.nameLabels[i]!.string = truncatedName;
-                console.log(`[EndStage] Set nameLabel[${i}] to: "${truncatedName}"`);
+                log.debug(`Set nameLabel[${i}] to: "${truncatedName}"`);
             } else {
-                console.warn(`[EndStage] nameLabel[${i}] is null!`);
+                log.warn(`nameLabel[${i}] is null!`);
             }
 
             // 设置分数
             if (this.scoreLabels[i]) {
                 const scoreText = `${player.score}`;
                 this.scoreLabels[i]!.string = scoreText;
-                console.log(`[EndStage] Set scoreLabel[${i}] to: "${scoreText}"`);
+                log.debug(`Set scoreLabel[${i}] to: "${scoreText}"`);
             } else {
-                console.warn(`[EndStage] scoreLabel[${i}] is null!`);
+                log.warn(`scoreLabel[${i}] is null!`);
             }
         }
 
-        console.log(`[EndStage] Displayed ${rankings.length} player results`);
-        console.log('[EndStage] =====================================');
+        log.debug(`Displayed ${rankings.length} player results`);
+        log.debug('=====================================');
     }
 
     /**
@@ -456,7 +459,7 @@ export class EndStage extends GameStageBase {
         if (this.labelResult) {
             this.labelResult.string = text;
         } else {
-            console.log(`[EndStage] Result text (label not found): ${text}`);
+            log.debug(`Result text (label not found): ${text}`);
         }
     }
 
@@ -464,32 +467,32 @@ export class EndStage extends GameStageBase {
      * "再来一局"按钮点击回调
      */
     private onPlayAgainClicked(): void {
-        console.log('[EndStage] Play again clicked');
+        log.debug('Play again clicked');
 
         // 检查是否在线模式
         const networkClient = this.game.networkClient;
         if (networkClient && networkClient.getIsConnected()) {
             // 在线模式：先发送重启请求到服务器，然后立即切换到ReadyStage
-            console.log('[EndStage] Sending restart game request to server');
+            log.debug('Sending restart game request to server');
             const roomService = RoomService.getInstance();
             roomService.restartGame();
 
             // 立即切换到ReadyStage（不等服务器响应）
-            console.log('[EndStage] Immediately switching to Ready stage');
+            log.debug('Immediately switching to Ready stage');
             const stageManager = this.game.stageManager;
             if (stageManager) {
                 stageManager.switchToStage(GameStage.READY);
             } else {
-                console.error('[EndStage] StageManager not found on Game!');
+                log.error('StageManager not found on Game!');
             }
         } else {
             // 单机模式：直接切换回准备阶段
-            console.log('[EndStage] Single player mode, switching to Ready stage directly');
+            log.debug('Single player mode, switching to Ready stage directly');
             const stageManager = this.game.stageManager;
             if (stageManager) {
                 stageManager.switchToStage(GameStage.READY);
             } else {
-                console.error('[EndStage] StageManager not found on Game!');
+                log.error('StageManager not found on Game!');
             }
         }
     }
@@ -498,11 +501,11 @@ export class EndStage extends GameStageBase {
      * "返回大厅"按钮点击回调
      */
     private onReturnLobbyClicked(): void {
-        console.log('[EndStage] Return to lobby clicked');
+        log.debug('Return to lobby clicked');
 
         // TODO: 实现返回大厅的逻辑
         // 通常是切换场景
-        console.warn('[EndStage] Return to lobby not implemented yet');
+        log.warn('Return to lobby not implemented yet');
 
         // 临时实现：切换回准备阶段
         this.onPlayAgainClicked();
@@ -517,11 +520,11 @@ export class EndStage extends GameStageBase {
      */
     public setGameResult(result: any): void {
         this.gameResult = result;
-        console.log('[EndStage] ========== Game result set ==========');
-        console.log('[EndStage] Result data:', JSON.stringify(result, null, 2));
-        console.log('[EndStage] Has rankings:', Array.isArray(result?.rankings));
-        console.log('[EndStage] Rankings length:', result?.rankings?.length);
-        console.log('[EndStage] =====================================');
+        log.debug('========== Game result set ==========');
+        log.debug('Result data:', JSON.stringify(result, null, 2));
+        log.debug('Has rankings:', Array.isArray(result?.rankings));
+        log.debug('Rankings length:', result?.rankings?.length);
+        log.debug('=====================================');
 
         // 如果已经在显示UI，立即更新
         if (this.isActive) {

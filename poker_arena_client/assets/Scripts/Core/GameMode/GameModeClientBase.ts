@@ -3,6 +3,9 @@ import { SeatLayoutConfig, SeatPosition } from "../../Config/SeatConfig";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
+import { logger } from '../../Utils/Logger';
+
+const log = logger('GameMode');
 
 /**
  * Game mode configuration
@@ -65,7 +68,7 @@ export abstract class GameModeClientBase {
      * 4. 调用 dealCards()
      */
     public onEnter(): void {
-        console.log(`[${this.config.name}] Entering game mode`);
+        log.debug(`[${this.config.name}] Entering game mode`);
         this.isActive = true;
         this.showUI();
     }
@@ -74,7 +77,7 @@ export abstract class GameModeClientBase {
      * 离开此游戏模式时调用
      */
     public onExit(): void {
-        console.log(`[${this.config.name}] Exiting game mode`);
+        log.debug(`[${this.config.name}] Exiting game mode`);
         this.isActive = false;
         this.hideUI();
     }
@@ -88,7 +91,7 @@ export abstract class GameModeClientBase {
      * 清理资源
      */
     public cleanup(): void {
-        console.log(`[${this.config.name}] Cleaning up`);
+        log.debug(`[${this.config.name}] Cleaning up`);
         this.isActive = false;
     }
 
@@ -117,11 +120,11 @@ export abstract class GameModeClientBase {
      * @protected
      */
     protected initializePlayerUIManager(players: Player[], enableGrouping: boolean = true): void {
-        console.log(`[${this.config.name}] initializePlayerUIManager() - Starting...`);
+        log.debug(`[${this.config.name}] initializePlayerUIManager() - Starting...`);
 
         const playerUIManager = this.game.playerUIManager;
         if (!playerUIManager) {
-            console.error(`[${this.config.name}] PlayerUIManager not found!`);
+            log.error(`[${this.config.name}] PlayerUIManager not found!`);
             return;
         }
 
@@ -129,20 +132,20 @@ export abstract class GameModeClientBase {
         const pokerSprites = this.game.pokerSprites;
         const pokerPrefab = this.game.pokerPrefab;
         const glowMaterial = this.game.glowMaterial;
-        console.log(`[${this.config.name}] glowMaterial loaded:`, !!glowMaterial);
+        log.debug(`[${this.config.name}] glowMaterial loaded:`, !!glowMaterial);
 
         if (!pokerSprites || !pokerPrefab) {
-            console.error(`[${this.config.name}] Poker resources not loaded!`);
+            log.error(`[${this.config.name}] Poker resources not loaded!`);
             return;
         }
 
         // 获取布局配置
         const layoutConfig = SeatLayoutConfig.getLayout(players.length);
 
-        console.log(`[${this.config.name}] Initializing PlayerUIManager with ${players.length} players`);
+        log.debug(`[${this.config.name}] Initializing PlayerUIManager with ${players.length} players`);
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
-            console.log(`  - Player ${i}: ${player.name}, cards: ${player.handCards.length}`);
+            log.debug(`  - Player ${i}: ${player.name}, cards: ${player.handCards.length}`);
         }
 
         // 初始化 PlayerUIManager（新接口）
@@ -156,7 +159,7 @@ export abstract class GameModeClientBase {
             glowMaterial                  // 边缘光材质（可选）
         );
 
-        console.log(`[${this.config.name}] PlayerUIManager initialized`);
+        log.debug(`[${this.config.name}] PlayerUIManager initialized`);
     }
 
     /**
@@ -217,13 +220,13 @@ export abstract class GameModeClientBase {
      */
     public adjustPlayerLayout(): void {
         const playerCount = this.config.maxPlayers;
-        console.log(`[${this.config.name}] Adjusting player layout for ${playerCount} players`);
+        log.debug(`[${this.config.name}] Adjusting player layout for ${playerCount} players`);
 
         const positions = SeatLayoutConfig.getLayout(playerCount);
         this.applyPlayerLayout(positions);
 
         const layoutName = SeatLayoutConfig.getLayoutName(playerCount);
-        console.log(`[${this.config.name}] Player layout adjusted: ${playerCount} players in ${layoutName} formation`);
+        log.debug(`[${this.config.name}] Player layout adjusted: ${playerCount} players in ${layoutName} formation`);
     }
 
     /**
@@ -236,7 +239,7 @@ export abstract class GameModeClientBase {
     protected applyPlayerLayout(positions: SeatPosition[]): void {
         const handsManagerNode = this.game.playerUIManagerNode;
         if (!handsManagerNode) {
-            console.warn(`[${this.config.name}] PlayerUIManagerNode not found`);
+            log.warn(`[${this.config.name}] PlayerUIManagerNode not found`);
             return;
         }
 
@@ -252,11 +255,11 @@ export abstract class GameModeClientBase {
                         // 如果有 Widget，让 Widget 自己管理位置，不要手动 setPosition
                         // 强制更新一次 Widget 对齐以确保位置正确
                         widget.updateAlignment();
-                        console.log(`[${this.config.name}] ${config.name} has Widget, position managed by Widget`);
+                        log.debug(`[${this.config.name}] ${config.name} has Widget, position managed by Widget`);
                     } else if (config.fallbackX !== undefined && config.fallbackY !== undefined) {
                         // 只有在没有 Widget 的情况下才使用 fallback 坐标
                         handNode.setPosition(config.fallbackX, config.fallbackY, 0);
-                        console.log(`[${this.config.name}] ${config.name} no Widget, using fallback position (${config.fallbackX}, ${config.fallbackY})`);
+                        log.debug(`[${this.config.name}] ${config.name} no Widget, using fallback position (${config.fallbackX}, ${config.fallbackY})`);
                     }
                 }
             }
@@ -325,11 +328,11 @@ export abstract class GameModeClientBase {
     protected getNetworkClient() {
         const network = this.game.networkClient;
         if (!network) {
-            console.error(`[${this.config.name}] Network client not available`);
+            log.error(`[${this.config.name}] Network client not available`);
             return null;
         }
         if (!network.getIsConnected()) {
-            console.error(`[${this.config.name}] Network client not connected`);
+            log.error(`[${this.config.name}] Network client not connected`);
             return null;
         }
         return network;
@@ -342,7 +345,7 @@ export abstract class GameModeClientBase {
     protected registerNetworkEvent(eventName: string, handler: Function): void {
         const network = this.game.networkClient;
         if (!network) {
-            console.warn(`[${this.config.name}] Cannot register event '${eventName}': Network client not available`);
+            log.warn(`[${this.config.name}] Cannot register event '${eventName}': Network client not available`);
             return;
         }
 
@@ -355,7 +358,7 @@ export abstract class GameModeClientBase {
         // 注册到网络客户端
         network.on(eventName, boundHandler);
 
-        console.log(`[${this.config.name}] Registered network event: ${eventName}`);
+        log.debug(`[${this.config.name}] Registered network event: ${eventName}`);
     }
 
     /**
@@ -377,7 +380,7 @@ export abstract class GameModeClientBase {
 
         for (const [eventName, handler] of this.networkEventHandlers) {
             network.off(eventName, handler);
-            console.log(`[${this.config.name}] Unregistered network event: ${eventName}`);
+            log.debug(`[${this.config.name}] Unregistered network event: ${eventName}`);
         }
 
         this.networkEventHandlers.clear();
@@ -392,7 +395,7 @@ export abstract class GameModeClientBase {
         for (const playerInfo of playerInfos) {
             this.playerIdToIndexMap.set(playerInfo.id, playerInfo.seatIndex);
         }
-        console.log(`[${this.config.name}] Player ID mapping setup:`, Array.from(this.playerIdToIndexMap.entries()));
+        log.debug(`[${this.config.name}] Player ID mapping setup:`, Array.from(this.playerIdToIndexMap.entries()));
     }
 
     /**
@@ -401,7 +404,7 @@ export abstract class GameModeClientBase {
     protected getPlayerIndex(playerId: string): number {
         const index = this.playerIdToIndexMap.get(playerId);
         if (index === undefined) {
-            console.warn(`[${this.config.name}] Player ID not found in mapping: ${playerId}`);
+            log.warn(`[${this.config.name}] Player ID not found in mapping: ${playerId}`);
             return -1;
         }
         return index;
@@ -417,7 +420,7 @@ export abstract class GameModeClientBase {
             return false;
         }
 
-        console.log(`[${this.config.name}] Sending network request: ${eventName}`, data);
+        log.debug(`[${this.config.name}] Sending network request: ${eventName}`, data);
         return network.send(eventName, data);
     }
 
@@ -428,13 +431,13 @@ export abstract class GameModeClientBase {
      * @param cardsToPlay 要出的牌数（1、2或3）
      */
     protected sendDealerCallRequest(cardsToPlay: 1 | 2 | 3): boolean {
-        console.log(`[${this.config.name}] sendDealerCallRequest called, cardsToPlay:`, cardsToPlay);
+        log.debug(`[${this.config.name}] sendDealerCallRequest called, cardsToPlay:`, cardsToPlay);
 
         const network = this.getNetworkClient();
-        console.log(`[${this.config.name}] Network client:`, !!network);
+        log.debug(`[${this.config.name}] Network client:`, !!network);
 
         if (!network) {
-            console.error(`[${this.config.name}] No network client available`);
+            log.error(`[${this.config.name}] No network client available`);
             return false;
         }
 
@@ -443,13 +446,13 @@ export abstract class GameModeClientBase {
         const playerId = localRoomStore.getMyPlayerId();
         const currentRoom = localRoomStore.getCurrentRoom();
 
-        console.log(`[${this.config.name}] Player ID:`, playerId);
-        console.log(`[${this.config.name}] Current room:`, currentRoom?.id);
+        log.debug(`[${this.config.name}] Player ID:`, playerId);
+        log.debug(`[${this.config.name}] Current room:`, currentRoom?.id);
 
         if (!playerId || !currentRoom) {
-            console.error(`[${this.config.name}] Cannot send dealer call: missing player or room info`);
-            console.error(`[${this.config.name}]   playerId:`, playerId);
-            console.error(`[${this.config.name}]   currentRoom:`, currentRoom);
+            log.error(`[${this.config.name}] Cannot send dealer call: missing player or room info`);
+            log.error(`[${this.config.name}]   playerId:`, playerId);
+            log.error(`[${this.config.name}]   currentRoom:`, currentRoom);
             return false;
         }
 
@@ -459,9 +462,9 @@ export abstract class GameModeClientBase {
             cardsToPlay
         };
 
-        console.log(`[${this.config.name}] Sending dealer call request:`, request);
+        log.debug(`[${this.config.name}] Sending dealer call request:`, request);
         const result = network.send(ClientMessageType.DEALER_CALL, request);
-        console.log(`[${this.config.name}] Send result:`, result);
+        log.debug(`[${this.config.name}] Send result:`, result);
 
         return result;
     }
@@ -482,7 +485,7 @@ export abstract class GameModeClientBase {
         const currentRoom = localRoomStore.getCurrentRoom();
 
         if (!playerId || !currentRoom) {
-            console.error(`[${this.config.name}] Cannot send play cards: missing player or room info`);
+            log.error(`[${this.config.name}] Cannot send play cards: missing player or room info`);
             return false;
         }
 
@@ -492,7 +495,7 @@ export abstract class GameModeClientBase {
             cards
         };
 
-        console.log(`[${this.config.name}] Playing cards:`, cards);
+        log.debug(`[${this.config.name}] Playing cards:`, cards);
         return network.send(ClientMessageType.PLAY_CARDS, request);
     }
 }

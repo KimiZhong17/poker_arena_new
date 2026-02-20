@@ -18,6 +18,9 @@ import { EventCenter, GameEvents } from '../Utils/EventCenter';
 import { LocalGameStore } from '../LocalStore/LocalGameStore';
 import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
 import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
+import { logger } from '../Utils/Logger';
+
+const log = logger('GameService');
 
 /**
  * GameService - 游戏服务
@@ -83,7 +86,7 @@ export class GameService {
      * 游戏开始事件
      */
     private onGameStart = (data: any) => {
-        console.log('[GameService] Game started! Switching to Playing stage...', data);
+        log.debug('Game started! Switching to Playing stage...', data);
 
         // 重置游戏状态
         const gameStore = LocalGameStore.getInstance();
@@ -99,7 +102,7 @@ export class GameService {
         if (currentRoom && myPlayerId) {
             const playerIds = currentRoom.players.map(p => p.id);
             gameStore.initializePlayers(playerIds, myPlayerId);
-            console.log(`[GameService] Initialized ${playerIds.length} players in LocalGameStore`);
+            log.debug(`Initialized ${playerIds.length} players in LocalGameStore`);
         }
 
         // 更新房间状态为 PLAYING（触发保存重连信息到 localStorage）
@@ -113,11 +116,11 @@ export class GameService {
      * 发牌事件
      */
     private onDealCards = (data: DealCardsEvent) => {
-        console.log('[GameService] ========== DEAL_CARDS EVENT ==========');
-        console.log('[GameService] Deal cards:', data);
-        console.log('[GameService] Player ID:', data.playerId);
-        console.log('[GameService] Cards:', data.handCards);
-        console.log('[GameService] ===========================================');
+        log.debug('========== DEAL_CARDS EVENT ==========');
+        log.debug('Deal cards:', data);
+        log.debug('Player ID:', data.playerId);
+        log.debug('Cards:', data.handCards);
+        log.debug('===========================================');
 
         // 存储到 LocalGameStore（使用新方法）
         const gameStore = LocalGameStore.getInstance();
@@ -130,7 +133,7 @@ export class GameService {
      * 公共牌事件
      */
     private onCommunityCards = (data: CommunityCardsEvent) => {
-        console.log('[GameService] Community cards:', data);
+        log.debug('Community cards:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -144,7 +147,7 @@ export class GameService {
      * 选庄事件
      */
     private onDealerSelected = (data: DealerSelectedEvent) => {
-        console.log('[GameService] Dealer selected:', data);
+        log.debug('Dealer selected:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -160,7 +163,7 @@ export class GameService {
      * 庄家叫牌事件
      */
     private onDealerCalled = (data: DealerCalledEvent) => {
-        console.log('[GameService] Dealer called:', data);
+        log.debug('Dealer called:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -174,7 +177,7 @@ export class GameService {
      * 玩家出牌事件
      */
     private onPlayerPlayed = (data: PlayerPlayedEvent) => {
-        console.log('[GameService] Player played:', data);
+        log.debug('Player played:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -187,7 +190,7 @@ export class GameService {
      * 摊牌事件
      */
     private onShowdown = (data: ShowdownEvent) => {
-        console.log('[GameService] Showdown:', data);
+        log.debug('Showdown:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -200,7 +203,7 @@ export class GameService {
      * 回合结束事件
      */
     private onRoundEnd = (data: RoundEndEvent) => {
-        console.log('[GameService] Round end:', data);
+        log.debug('Round end:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -227,7 +230,7 @@ export class GameService {
      * 游戏结束事件
      */
     private onGameOver = (data: GameOverEvent) => {
-        console.log('[GameService] Game over:', data);
+        log.debug('Game over:', data);
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
@@ -242,7 +245,7 @@ export class GameService {
      * 游戏状态更新事件
      */
     private onGameStateUpdate = (data: GameStateUpdateEvent) => {
-        console.log('[GameService] Game state update:', data);
+        log.debug('Game state update:', data);
 
         // 存储到 LocalGameStore（全量同步）
         const gameStore = LocalGameStore.getInstance();
@@ -290,11 +293,11 @@ export class GameService {
     public dealerCall(cardsToPlay: 1 | 2 | 3): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot dealer call: not connected');
+            log.error('Cannot dealer call: not connected');
             return;
         }
 
-        console.log('[GameService] Dealer call:', cardsToPlay);
+        log.debug('Dealer call:', cardsToPlay);
         // TODO: 添加 roomId 和 playerId
         // client.send(ClientMessageType.DEALER_CALL, { roomId, playerId, cardsToPlay });
     }
@@ -306,11 +309,11 @@ export class GameService {
     public playCards(cards: number[]): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot play cards: not connected');
+            log.error('Cannot play cards: not connected');
             return;
         }
 
-        console.log('[GameService] Play cards:', cards);
+        log.debug('Play cards:', cards);
         // TODO: 添加 roomId 和 playerId
         // client.send(ClientMessageType.PLAY_CARDS, { roomId, playerId, cards });
     }
@@ -324,11 +327,11 @@ export class GameService {
     public pass(): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot pass: not connected');
+            log.error('Cannot pass: not connected');
             return;
         }
 
-        console.log('[GameService] Pass');
+        log.debug('Pass');
         // TODO: 添加 PASS 消息类型
         // client.send(ClientMessageType.PASS, {});
     }
@@ -341,11 +344,11 @@ export class GameService {
     public surrender(): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot surrender: not connected');
+            log.error('Cannot surrender: not connected');
             return;
         }
 
-        console.log('[GameService] Surrender');
+        log.debug('Surrender');
         // TODO: 添加 SURRENDER 消息类型
         // client.send(ClientMessageType.SURRENDER, {});
     }
@@ -357,11 +360,11 @@ export class GameService {
     public requestHint(): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot request hint: not connected');
+            log.error('Cannot request hint: not connected');
             return;
         }
 
-        console.log('[GameService] Request hint');
+        log.debug('Request hint');
         // TODO: 添加 REQUEST_HINT 消息类型
         // client.send(ClientMessageType.REQUEST_HINT, {});
     }
@@ -373,11 +376,11 @@ export class GameService {
     public readyForNextRound(): void {
         const client = this.getNetworkClient();
         if (!client) {
-            console.error('[GameService] Cannot ready for next round: not connected');
+            log.error('Cannot ready for next round: not connected');
             return;
         }
 
-        console.log('[GameService] Ready for next round');
+        log.debug('Ready for next round');
         // TODO: 添加消息类型
         // client.send(ClientMessageType.READY_NEXT_ROUND, {});
     }

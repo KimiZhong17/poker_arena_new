@@ -1,5 +1,8 @@
 import { _decorator, Component, Node, Label, UITransform, tween, Vec3, Tween } from 'cc';
 import { UIAnimations, UIFonts, UIColors } from '../Config/UIConfig';
+import { logger } from '../Utils/Logger';
+
+const log = logger('CardsToPlayHint');
 
 const { ccclass, property } = _decorator;
 
@@ -48,7 +51,7 @@ export class CardsToPlayHint extends Component {
         this.hintLabel.lineHeight = UIFonts.cardsToPlayHint.lineHeight;
         this.hintLabel.color = UIColors.text.hint.clone();
         this.node.addChild(labelNode);
-        console.log('[CardsToPlayHint] Created default label');
+        log.debug('Created default label');
     }
 
     /**
@@ -57,7 +60,7 @@ export class CardsToPlayHint extends Component {
      */
     public show(cardsToPlay: number): void {
         if (!this.hintLabel) {
-            console.error('[CardsToPlayHint] Hint label not found!');
+            log.error('Hint label not found!');
             return;
         }
 
@@ -76,7 +79,7 @@ export class CardsToPlayHint extends Component {
         // 启动呼吸动画
         this.startBreathAnimation();
 
-        console.log(`[CardsToPlayHint] Showing hint: ${cardsToPlay} cards`);
+        log.debug(`Showing hint: ${cardsToPlay} cards`);
     }
 
     /**

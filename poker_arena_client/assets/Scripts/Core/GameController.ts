@@ -4,6 +4,9 @@ import { _decorator, Component } from 'cc';
 import { Player, PlayerState } from '../LocalStore/LocalPlayerStore';
 import { Dealer } from '../Card/Dealer';
 import { HandEvaluator, HandResult, HandType } from '../Card/HandEvaluator';
+import { logger } from '../Utils/Logger';
+
+const log = logger('GameController');
 
 const { ccclass, property } = _decorator;
 
@@ -83,7 +86,7 @@ export class GameController extends Component {
     }
 
     start() {
-        console.log("GameController initialized");
+        log.debug("GameController initialized");
     }
 
     // ========== Game initialization ==========
@@ -96,7 +99,7 @@ export class GameController extends Component {
         this._gameState = GameState.IDLE;
         this._gamePhase = GamePhase.WAITING;
 
-        console.log("Game initialized with config:", this._config);
+        log.debug("Game initialized with config:", this._config);
     }
 
     /**
@@ -117,7 +120,7 @@ export class GameController extends Component {
             this._players.push(player);
         }
 
-        console.log(`Created ${count} players`);
+        log.debug(`Created ${count} players`);
     }
 
     /**
@@ -125,11 +128,11 @@ export class GameController extends Component {
      */
     public startGame(): void {
         if (this._players.length < 2) {
-            console.error("Not enough players to start game");
+            log.error("Not enough players to start game");
             return;
         }
 
-        console.log("Starting new game...");
+        log.debug("Starting new game...");
 
         // Reset all players
         this._players.forEach(p => p.reset());
@@ -145,7 +148,7 @@ export class GameController extends Component {
 
         // Phase 2: Enter Boss collect phase
         this._gamePhase = GamePhase.BOSS_COLLECT;
-        console.log("Entering BOSS_COLLECT phase. Call bossCollectCards() to continue.");
+        log.debug("Entering BOSS_COLLECT phase. Call bossCollectCards() to continue.");
 
         // Note: The game will move to PLAYING phase after bossCollectCards() is called
         // At that point, we'll initialize the playing state
@@ -163,7 +166,7 @@ export class GameController extends Component {
 
         this._players[this._currentPlayerIndex].state = PlayerState.THINKING;
 
-        console.log("Playing phase started! Boss starts first:", this._players[this._currentPlayerIndex].name);
+        log.debug("Playing phase started! Boss starts first:", this._players[this._currentPlayerIndex].name);
     }
 
     /**
@@ -180,16 +183,16 @@ export class GameController extends Component {
         for (let i = 0; i < this._players.length; i++) {
             this._players[i].setHandCards(dealResult.hands[i]);
             this._players[i].sortCards(this._config.levelRank);
-            console.log(`Dealt ${dealResult.hands[i].length} cards to ${this._players[i].name}`);
+            log.debug(`Dealt ${dealResult.hands[i].length} cards to ${this._players[i].name}`);
         }
 
         // Store remaining cards
         this._remainingCards = dealResult.remaining;
-        console.log(`Remaining cards: ${this._remainingCards.length}`);
+        log.debug(`Remaining cards: ${this._remainingCards.length}`);
 
         // Validate remaining cards count
         if (this._remainingCards.length < this._players.length) {
-            console.error(`Not enough remaining cards! Need at least ${this._players.length}, got ${this._remainingCards.length}`);
+            log.error(`Not enough remaining cards! Need at least ${this._players.length}, got ${this._remainingCards.length}`);
         }
     }
 
@@ -199,12 +202,12 @@ export class GameController extends Component {
      */
     public bossCollectCards(): void {
         if (this._gamePhase !== GamePhase.BOSS_COLLECT) {
-            console.error("Cannot collect cards - not in BOSS_COLLECT phase");
+            log.error("Cannot collect cards - not in BOSS_COLLECT phase");
             return;
         }
 
         if (this._remainingCards.length < this._players.length) {
-            console.error("Not enough remaining cards for boss to collect");
+            log.error("Not enough remaining cards for boss to collect");
             return;
         }
 
@@ -225,9 +228,9 @@ export class GameController extends Component {
         boss.addCards(this._bossCollectedCards);
         boss.sortCards(this._config.levelRank);
 
-        console.log(`Boss (${boss.name}) collected ${this._bossCollectedCards.length} cards`);
-        console.log(`Burned cards (shown to all): ${this._burnedCards.length} cards`);
-        console.log(`Boss now has ${boss.handCards.length} cards total`);
+        log.debug(`Boss (${boss.name}) collected ${this._bossCollectedCards.length} cards`);
+        log.debug(`Burned cards (shown to all): ${this._burnedCards.length} cards`);
+        log.debug(`Boss now has ${boss.handCards.length} cards total`);
 
         // Clear remaining cards as they've been distributed
         this._remainingCards = [];
@@ -252,27 +255,27 @@ export class GameController extends Component {
 
         // Validate it's player's turn
         if (playerIndex !== this._currentPlayerIndex) {
-            console.error("Not player's turn");
+            log.error("Not player's turn");
             return false;
         }
 
         // Validate player has these cards
         if (!player.hasCards(cards)) {
-            console.error("Player doesn't have these cards");
+            log.error("Player doesn't have these cards");
             return false;
         }
 
         // Evaluate the hand
         const handResult = HandEvaluator.evaluate(cards, this._config.levelRank);
         if (handResult.type === HandType.INVALID) {
-            console.error("Invalid hand type");
+            log.error("Invalid hand type");
             return false;
         }
 
         // Validate can beat last hand (if any)
         if (this._lastPlayedHand !== null) {
             if (!HandEvaluator.canBeat(handResult, this._lastPlayedHand)) {
-                console.error("Cannot beat last played hand");
+                log.error("Cannot beat last played hand");
                 return false;
             }
         }
@@ -284,12 +287,12 @@ export class GameController extends Component {
         this._lastPlayerIndex = playerIndex;
         this._passedPlayers.clear(); // Reset passed players
 
-        console.log(`${player.name} played ${cards.length} cards (${HandType[handResult.type]})`);
+        log.debug(`${player.name} played ${cards.length} cards (${HandType[handResult.type]})`);
 
         // Check if player finished
         if (player.isFinished()) {
             player.state = PlayerState.FINISHED;
-            console.log(`${player.name} finished!`);
+            log.debug(`${player.name} finished!`);
             this.checkGameEnd();
             return true;
         }
@@ -307,30 +310,30 @@ export class GameController extends Component {
 
         // Validate it's player's turn
         if (playerIndex !== this._currentPlayerIndex) {
-            console.error("Not player's turn");
+            log.error("Not player's turn");
             return false;
         }
 
         // Cannot pass if no one has played yet
         if (this._lastPlayerIndex === -1) {
-            console.error("Cannot pass on first play");
+            log.error("Cannot pass on first play");
             return false;
         }
 
         // Cannot pass if you were the last to play
         if (playerIndex === this._lastPlayerIndex) {
-            console.error("Cannot pass if you played last");
+            log.error("Cannot pass if you played last");
             return false;
         }
 
         player.state = PlayerState.PASSED;
         this._passedPlayers.add(playerIndex);
 
-        console.log(`${player.name} passed`);
+        log.debug(`${player.name} passed`);
 
         // Check if all other players passed (new round starts)
         if (this.checkAllOthersPassed()) {
-            console.log("New round started!");
+            log.debug("New round started!");
             this._lastPlayedCards = [];
             this._lastPlayedHand = null;
             this._passedPlayers.clear();
@@ -355,7 +358,7 @@ export class GameController extends Component {
 
         this._players[this._currentPlayerIndex].state = PlayerState.THINKING;
 
-        console.log("Next player:", this._players[this._currentPlayerIndex].name);
+        log.debug("Next player:", this._players[this._currentPlayerIndex].name);
     }
 
     /**
@@ -382,7 +385,7 @@ export class GameController extends Component {
         if (activePlayers.length <= 1) {
             this._gameState = GameState.GAME_END;
             this._gamePhase = GamePhase.SETTLING;
-            console.log("Game ended!");
+            log.debug("Game ended!");
             // TODO: Calculate scores and rankings
         }
     }

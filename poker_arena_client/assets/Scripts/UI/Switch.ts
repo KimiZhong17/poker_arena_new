@@ -1,4 +1,7 @@
 import { _decorator, Component, Node, Sprite, Vec3, tween, UITransform, EventHandler, Color } from 'cc';
+import { logger } from '../Utils/Logger';
+const log = logger('Switch');
+
 const { ccclass, property } = _decorator;
 
 /**
@@ -60,7 +63,7 @@ export class Switch extends Component {
      */
     private initializePositions(): void {
         if (!this.trackBg || !this.handle) {
-            console.error('[Switch] Track or Handle not assigned!');
+            log.error('Track or Handle not assigned!');
             return;
         }
 
@@ -68,7 +71,7 @@ export class Switch extends Component {
         const handleTransform = this.handle.node.getComponent(UITransform);
 
         if (!trackTransform || !handleTransform) {
-            console.error('[Switch] UITransform not found!');
+            log.error('UITransform not found!');
             return;
         }
 
@@ -84,7 +87,7 @@ export class Switch extends Component {
         this._handleOffPosition.set(leftX, 0, 0);
         this._handleOnPosition.set(rightX, 0, 0);
 
-        console.log('[Switch] Initialized positions:', {
+        log.debug('Initialized positions:', {
             trackWidth: this._trackWidth,
             handleWidth: this._handleWidth,
             offPosition: this._handleOffPosition.clone(),
@@ -130,7 +133,7 @@ export class Switch extends Component {
         const oldValue = this.isOn;
         this.isOn = value;
 
-        console.log(`[Switch] Value changed: ${oldValue} -> ${this.isOn}`);
+        log.debug(`Value changed: ${oldValue} -> ${this.isOn}`);
 
         // Update visual state with animation
         this.updateVisualState(true);
@@ -191,13 +194,13 @@ export class Switch extends Component {
      * Trigger value changed event
      */
     private triggerValueChangedEvent(): void {
-        console.log('[Switch] ========== triggerValueChangedEvent ==========');
-        console.log('[Switch] isOn:', this.isOn);
-        console.log('[Switch] onValueChanged handlers count:', this.onValueChanged.length);
+        log.debug('========== triggerValueChangedEvent ==========');
+        log.debug('isOn:', this.isOn);
+        log.debug('onValueChanged handlers count:', this.onValueChanged.length);
 
         // 打印每个 handler 的详细信息
         this.onValueChanged.forEach((handler, index) => {
-            console.log(`[Switch] Handler[${index}]:`, {
+            log.debug(`Handler[${index}]:`, {
                 target: handler.target?.name || 'null',
                 component: handler.component,
                 handler: handler.handler,
@@ -206,15 +209,15 @@ export class Switch extends Component {
         });
 
         if (this.onValueChanged.length === 0) {
-            console.warn('[Switch] WARNING: No handlers registered! Check editor configuration.');
+            log.warn('WARNING: No handlers registered! Check editor configuration.');
         }
 
         // Trigger EventHandler callbacks
         // 第一个参数是事件数组，第二个参数会作为 event 传递给回调函数
         EventHandler.emitEvents(this.onValueChanged, this);
 
-        console.log('[Switch] EventHandler.emitEvents called');
-        console.log('[Switch] ================================================');
+        log.debug('EventHandler.emitEvents called');
+        log.debug('================================================');
     }
 
     /**
@@ -231,7 +234,7 @@ export class Switch extends Component {
 
         this.onValueChanged.push(handler);
 
-        console.log('[Switch] Callback registered');
+        log.debug('Callback registered');
     }
 
     /**

@@ -4,6 +4,9 @@ import { Poker } from './Poker';
 import { PokerFactory } from './PokerFactory';
 import { DealingDuration, DealingEasing, CommunityCardsConfig } from '../Config/DealingAnimationConfig';
 import { CardSpriteNames, CardScale } from '../Config/CardDisplayConfig';
+import { logger } from '../Utils/Logger';
+
+const log = logger('DealingAnimator');
 
 const { ccclass, property } = _decorator;
 
@@ -58,7 +61,7 @@ export class DealingAnimator extends Component {
         getPlayerHandPosition: (playerIndex: number) => Vec3,
         getPlayerCount: () => number
     ): void {
-        console.log('[DealingAnimator] Initializing...');
+        log.debug('Initializing...');
 
         this._pokerSprites = pokerSprites;
         this._pokerPrefab = pokerPrefab;
@@ -68,7 +71,7 @@ export class DealingAnimator extends Component {
         // 创建动画层（如果不存在）
         this.setupAnimationLayer();
 
-        console.log('[DealingAnimator] Initialized');
+        log.debug('Initialized');
     }
 
     /**
@@ -118,12 +121,12 @@ export class DealingAnimator extends Component {
         onAllFlipped?: () => void
     ): Promise<void> {
         if (!this.deckPile || !this.communityCardsNode) {
-            console.warn('[DealingAnimator] DeckPile or CommunityCardsNode not set');
+            log.warn('DeckPile or CommunityCardsNode not set');
             onAllFlipped?.();
             return;
         }
 
-        console.log('[DealingAnimator] Dealing', cards.length, 'community cards (all face-down, then flip together)');
+        log.debug('Dealing', cards.length, 'community cards (all face-down, then flip together)');
 
         this._isAnimating = true;
 
@@ -173,13 +176,13 @@ export class DealingAnimator extends Component {
             }
         }
 
-        console.log('[DealingAnimator] All community cards dealt face-down');
+        log.debug('All community cards dealt face-down');
 
         // 短暂停顿后一起翻牌
         await this.delay(0.2);
 
         // 阶段2：通知外部翻牌（由外部处理实际的翻牌动画）
-        console.log('[DealingAnimator] Community cards ready to flip');
+        log.debug('Community cards ready to flip');
 
         this._isAnimating = false;
         onAllFlipped?.();
@@ -199,12 +202,12 @@ export class DealingAnimator extends Component {
         onEachCardDealt?: (cardIndex: number) => void
     ): Promise<void> {
         if (!this.deckPile || !this._getPlayerHandPosition) {
-            console.warn('[DealingAnimator] Not properly initialized');
+            log.warn('Not properly initialized');
             onComplete?.();
             return;
         }
 
-        console.log(`[DealingAnimator] Dealing ${cardCount} cards to other player ${playerIndex}`);
+        log.debug(`Dealing ${cardCount} cards to other player ${playerIndex}`);
 
         this._isAnimating = true;
 
@@ -268,11 +271,11 @@ export class DealingAnimator extends Component {
         onFlipComplete?: () => void
     ): Promise<DealingResult> {
         if (!this.deckPile || !this._getPlayerHandPosition) {
-            console.warn('[DealingAnimator] Not properly initialized');
+            log.warn('Not properly initialized');
             return { cardNodes: [], cardValues: [] };
         }
 
-        console.log(`[DealingAnimator] Dealing ${cards.length} cards to main player (stack → spread → flip)`);
+        log.debug(`Dealing ${cards.length} cards to main player (stack → spread → flip)`);
 
         this._isAnimating = true;
 
@@ -281,7 +284,7 @@ export class DealingAnimator extends Component {
         const cardNodes: Node[] = [];
 
         // ===== 阶段1：堆叠发牌（牌飞到手牌区中央，堆叠）=====
-        console.log('[DealingAnimator] Phase 1: Stack dealing');
+        log.debug('Phase 1: Stack dealing');
         for (let i = 0; i < cards.length; i++) {
             const cardValue = cards[i];
 
@@ -317,13 +320,13 @@ export class DealingAnimator extends Component {
         }
 
         onStackComplete?.();
-        console.log('[DealingAnimator] Phase 1 complete: Cards stacked');
+        log.debug('Phase 1 complete: Cards stacked');
 
         // 短暂停顿
         await this.delay(0.2);
 
         // ===== 阶段2：展开动画 =====
-        console.log('[DealingAnimator] Phase 2: Spread cards');
+        log.debug('Phase 2: Spread cards');
         const cardSpacing = 100;  // 手牌间距
         const totalWidth = (cards.length - 1) * cardSpacing;
         const spreadStartX = handPos.x - totalWidth / 2;
@@ -344,13 +347,13 @@ export class DealingAnimator extends Component {
         await Promise.all(spreadPromises);
 
         onSpreadComplete?.();
-        console.log('[DealingAnimator] Phase 2 complete: Cards spread');
+        log.debug('Phase 2 complete: Cards spread');
 
         // 短暂停顿
         await this.delay(0.1);
 
         // ===== 阶段3：翻牌动画 =====
-        console.log('[DealingAnimator] Phase 3: Flip cards');
+        log.debug('Phase 3: Flip cards');
         const flipPromises: Promise<void>[] = [];
         for (let i = 0; i < cardNodes.length; i++) {
             const poker = cardNodes[i].getComponent(Poker);
@@ -374,7 +377,7 @@ export class DealingAnimator extends Component {
         await Promise.all(flipPromises);
 
         onFlipComplete?.();
-        console.log('[DealingAnimator] Phase 3 complete: Cards flipped');
+        log.debug('Phase 3 complete: Cards flipped');
 
         this._isAnimating = false;
 
@@ -399,7 +402,7 @@ export class DealingAnimator extends Component {
             return;
         }
 
-        console.log('[DealingAnimator] Animating card sorting');
+        log.debug('Animating card sorting');
 
         // 创建牌值到节点的映射
         const cardValueToNode = new Map<number, Node>();
@@ -426,7 +429,7 @@ export class DealingAnimator extends Component {
 
         await Promise.all(sortPromises);
 
-        console.log('[DealingAnimator] Sorting animation complete');
+        log.debug('Sorting animation complete');
         onComplete?.();
     }
 
@@ -443,12 +446,12 @@ export class DealingAnimator extends Component {
         onComplete?: () => void
     ): Promise<DealingResult> {
         if (!this.deckPile || newCards.length === 0) {
-            console.warn('[DealingAnimator] DeckPile not set or no cards to refill');
+            log.warn('DeckPile not set or no cards to refill');
             onComplete?.();
             return { cardNodes: [], cardValues: [] };
         }
 
-        console.log(`[DealingAnimator] Refilling ${newCards.length} cards to main player`);
+        log.debug(`Refilling ${newCards.length} cards to main player`);
 
         this._isAnimating = true;
 
@@ -483,7 +486,7 @@ export class DealingAnimator extends Component {
             }
         }
 
-        console.log('[DealingAnimator] Refill cards dealt, now flipping...');
+        log.debug('Refill cards dealt, now flipping...');
 
         // 短暂停顿
         await this.delay(0.1);
@@ -511,7 +514,7 @@ export class DealingAnimator extends Component {
         }
         await Promise.all(flipPromises);
 
-        console.log('[DealingAnimator] Refill animation complete');
+        log.debug('Refill animation complete');
 
         this._isAnimating = false;
         onComplete?.();
@@ -537,19 +540,19 @@ export class DealingAnimator extends Component {
             return;
         }
 
-        console.log('[DealingAnimator] Animating sort cards from handDisplay');
+        log.debug('Animating sort cards from handDisplay');
 
         // 获取手牌容器中的卡牌节点
         const handContainer = handDisplay.getHandContainer();
         if (!handContainer) {
-            console.warn('[DealingAnimator] Hand container not found');
+            log.warn('Hand container not found');
             onComplete?.();
             return;
         }
 
         const cardNodes: Node[] = handContainer.children.slice();
         if (cardNodes.length === 0) {
-            console.warn('[DealingAnimator] No card nodes in hand container');
+            log.warn('No card nodes in hand container');
             onComplete?.();
             return;
         }

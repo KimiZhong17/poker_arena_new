@@ -5,6 +5,9 @@ import { GameStage } from './StageManager';
 import { GameModeClientBase } from '../GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';
 import { EndStage } from './EndStage';
+import { logger } from '../../Utils/Logger';
+
+const log = logger('PlayingStage');
 
 /**
  * 游玩阶段
@@ -45,14 +48,14 @@ export class PlayingStage extends GameStageBase {
      * 进入游玩阶段
      */
     public onEnter(): void {
-        console.log(`[PlayingStage] Entering playing stage (mode: ${this.gameModeName})`);
+        log.debug(`Entering playing stage (mode: ${this.gameModeName})`);
         this.isActive = true;
 
         // 1. 创建游戏模式
         this.createGameMode();
 
         if (!this.currentGameMode) {
-            console.error('[PlayingStage] Failed to create game mode!');
+            log.error('Failed to create game mode!');
             return;
         }
 
@@ -62,14 +65,14 @@ export class PlayingStage extends GameStageBase {
         // 3. 显示Playing阶段的UI（如果有）
         this.showUI();
 
-        console.log('[PlayingStage] Game started');
+        log.debug('Game started');
     }
 
     /**
      * 离开游玩阶段
      */
     public onExit(): void {
-        console.log('[PlayingStage] Exiting playing stage');
+        log.debug('Exiting playing stage');
 
         // 1. 退出游戏模式
         if (this.currentGameMode) {
@@ -104,7 +107,7 @@ export class PlayingStage extends GameStageBase {
             this.currentGameMode.showUI();
         }
 
-        console.log('[PlayingStage] UI shown');
+        log.debug('UI shown');
     }
 
     /**
@@ -120,14 +123,14 @@ export class PlayingStage extends GameStageBase {
             this.rootNode.active = false;
         }
 
-        console.log('[PlayingStage] UI hidden');
+        log.debug('UI hidden');
     }
 
     /**
      * 清理资源
      */
     public cleanup(): void {
-        console.log('[PlayingStage] Cleaning up');
+        log.debug('Cleaning up');
 
         if (this.currentGameMode) {
             this.currentGameMode.cleanup();
@@ -142,7 +145,7 @@ export class PlayingStage extends GameStageBase {
      * 根据gameModeName创建对应的GameMode实例
      */
     private createGameMode(): void {
-        console.log(`[PlayingStage] Creating game mode: ${this.gameModeName}`);
+        log.debug(`Creating game mode: ${this.gameModeName}`);
 
         // 动态导入并创建游戏模式
         // 注意：这里需要根据实际的游戏模式类来实现
@@ -151,13 +154,13 @@ export class PlayingStage extends GameStageBase {
         // } else if (this.gameModeName === 'guandan') {
         //     this.currentGameMode = this.createGuandanMode();
         } else {
-            console.error(`[PlayingStage] Unknown game mode: ${this.gameModeName}`);
+            log.error(`Unknown game mode: ${this.gameModeName}`);
             // 默认使用TheDecree
             this.currentGameMode = this.createTheDecreeMode();
         }
 
         if (this.currentGameMode) {
-            console.log(`[PlayingStage] Game mode created: ${this.currentGameMode.getConfig().name}`);
+            log.debug(`Game mode created: ${this.currentGameMode.getConfig().name}`);
         }
     }
 
@@ -186,7 +189,7 @@ export class PlayingStage extends GameStageBase {
 
             return mode;
         } catch (error) {
-            console.error('[PlayingStage] Failed to create TheDecreeModeClient:', error);
+            log.error('Failed to create TheDecreeModeClient:', error);
             return null;
         }
     }
@@ -212,8 +215,8 @@ export class PlayingStage extends GameStageBase {
     //         const mode = new GuandanMode(this.game, config);
     //         return mode;
     //     } catch (error) {
-    //         console.error('[PlayingStage] Failed to create GuandanMode:', error);
-    //         console.warn('[PlayingStage] GuandanMode not implemented yet, using TheDecree as fallback');
+    //         log.error('Failed to create GuandanMode:', error);
+    //         log.warn('GuandanMode not implemented yet, using TheDecree as fallback');
     //         return this.createTheDecreeMode();
     //     }
     // }
@@ -226,7 +229,7 @@ export class PlayingStage extends GameStageBase {
      * @param gameResult 游戏结果数据（可选）
      */
     public onGameFinished(gameResult?: any): void {
-        console.log('[PlayingStage] Game finished', gameResult);
+        log.debug('Game finished', gameResult);
 
         // 切换到结束阶段
         const stageManager = this.game.stageManager;
@@ -236,14 +239,14 @@ export class PlayingStage extends GameStageBase {
 
             // 如果有游戏结果，先设置给 EndStage
             if (gameResult && endStage) {
-                console.log('[PlayingStage] Setting game result to EndStage:', gameResult);
+                log.debug('Setting game result to EndStage:', gameResult);
                 endStage.setGameResult(gameResult);
             }
 
             // 切换到 EndStage
             stageManager.switchToStage(GameStage.END);
         } else {
-            console.error('[PlayingStage] StageManager not found on Game!');
+            log.error('StageManager not found on Game!');
         }
     }
 
@@ -260,11 +263,11 @@ export class PlayingStage extends GameStageBase {
      */
     public setGameModeName(name: string): void {
         if (this.isActive) {
-            console.warn('[PlayingStage] Cannot change game mode while stage is active');
+            log.warn('Cannot change game mode while stage is active');
             return;
         }
 
         this.gameModeName = name;
-        console.log(`[PlayingStage] Game mode set to: ${name}`);
+        log.debug(`Game mode set to: ${name}`);
     }
 }

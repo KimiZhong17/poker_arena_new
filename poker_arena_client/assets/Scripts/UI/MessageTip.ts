@@ -1,4 +1,7 @@
 import { _decorator, Component, Node, Label, UITransform, Color, tween, Vec3, Tween, Sprite } from 'cc';
+import { logger } from '../Utils/Logger';
+
+const log = logger('MessageTip');
 
 const { ccclass, property } = _decorator;
 
@@ -65,7 +68,7 @@ export class MessageTip extends Component {
         // 添加到当前节点
         this.node.addChild(labelNode);
 
-        console.log('[MessageTip] Created default label');
+        log.debug('Created default label');
     }
 
     /**
@@ -76,7 +79,7 @@ export class MessageTip extends Component {
      */
     public showMessage(message: string, duration: number = 0, color?: Color): void {
         if (!this.messageLabel) {
-            console.error('[MessageTip] Message label not found!');
+            log.error('Message label not found!');
             return;
         }
 
@@ -99,7 +102,7 @@ export class MessageTip extends Component {
         // 使用默认时长
         const displayDuration = duration > 0 ? duration : this.defaultDuration;
 
-        console.log(`[MessageTip] Showing message: "${message}" for ${displayDuration}s`);
+        log.debug(`Showing message: "${message}" for ${displayDuration}s`);
 
         // 标记为正在显示
         this.isShowing = true;

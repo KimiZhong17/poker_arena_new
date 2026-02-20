@@ -2,6 +2,9 @@ import { _decorator, Component, Node, Button, Label, UITransform, Color, Sprite,
 import { SceneManager } from '../SceneManager';
 import { EventCenter } from '../Utils/EventCenter';
 import { RoomService } from '../Services/RoomService';
+import { logger } from '../Utils/Logger';
+
+const log = logger('SceneUI');
 
 const { ccclass, property } = _decorator;
 
@@ -60,7 +63,7 @@ export class SceneUIController extends Component {
      * @param isOnlineMode 是否在线模式
      */
     public init(roomId: string, isOnlineMode: boolean = false): void {
-        console.log(`[SceneUIController] Initializing with roomId: ${roomId}, online: ${isOnlineMode}`);
+        log.debug(`[SceneUIController] Initializing with roomId: ${roomId}, online: ${isOnlineMode}`);
 
         this._roomId = roomId;
         this._isOnlineMode = isOnlineMode;
@@ -73,34 +76,34 @@ export class SceneUIController extends Component {
      * 自动设置UI元素（查找或创建）
      */
     private autoSetupUI(): void {
-        console.log('[SceneUIController] Auto-setting up UI elements...');
+        log.debug('[SceneUIController] Auto-setting up UI elements...');
 
         // 查找或创建退出按钮
         if (this.showExitButton) {
             if (!this.exitButton) {
-                console.log('[SceneUIController] Exit button not manually assigned, searching or creating...');
+                log.debug('[SceneUIController] Exit button not manually assigned, searching or creating...');
                 this.exitButton = this.findOrCreateButton('btn_exit', '退出房间', { x: -500, y: 300 });
             } else {
-                console.log('[SceneUIController] Using manually assigned exit button');
+                log.debug('[SceneUIController] Using manually assigned exit button');
             }
             if (this.exitButton) {
-                console.log('[SceneUIController] Exit button found/created, binding click event');
-                console.log('[SceneUIController] Exit button node:', this.exitButton.node);
-                console.log('[SceneUIController] Exit button node name:', this.exitButton.node?.name);
+                log.debug('[SceneUIController] Exit button found/created, binding click event');
+                log.debug('[SceneUIController] Exit button node:', this.exitButton.node);
+                log.debug('[SceneUIController] Exit button node name:', this.exitButton.node?.name);
                 this.exitButton.node.on(Button.EventType.CLICK, this.onExitButtonClicked, this);
-                console.log('[SceneUIController] Exit button click event bound successfully');
+                log.debug('[SceneUIController] Exit button click event bound successfully');
             } else {
-                console.error('[SceneUIController] Failed to find or create exit button!');
+                log.error('[SceneUIController] Failed to find or create exit button!');
             }
         }
 
         // 查找或创建设置按钮
         if (this.showSettingsButton) {
             if (!this.settingsButton) {
-                console.log('[SceneUIController] Settings button not manually assigned, searching or creating...');
+                log.debug('[SceneUIController] Settings button not manually assigned, searching or creating...');
                 this.settingsButton = this.findOrCreateButton('btn_settings', '设置', { x: -400, y: 300 });
             } else {
-                console.log('[SceneUIController] Using manually assigned settings button');
+                log.debug('[SceneUIController] Using manually assigned settings button');
             }
             if (this.settingsButton) {
                 this.settingsButton.node.on(Button.EventType.CLICK, this.onSettingsButtonClicked, this);
@@ -110,14 +113,14 @@ export class SceneUIController extends Component {
         // 查找或创建房间号标签
         if (this.showRoomId) {
             if (!this.roomIdLabel) {
-                console.log('[SceneUIController] Room ID label not manually assigned, searching or creating...');
+                log.debug('[SceneUIController] Room ID label not manually assigned, searching or creating...');
                 this.roomIdLabel = this.findOrCreateLabel('label_room_id', '房间号: ', { x: 0, y: 300 });
             } else {
-                console.log('[SceneUIController] Using manually assigned room ID label');
+                log.debug('[SceneUIController] Using manually assigned room ID label');
             }
         }
 
-        console.log('[SceneUIController] UI setup complete');
+        log.debug('[SceneUIController] UI setup complete');
     }
 
     /**
@@ -159,16 +162,16 @@ export class SceneUIController extends Component {
             label.verticalAlign = Label.VerticalAlign.CENTER;
             buttonNode.addChild(labelNode);
 
-            console.log(`[SceneUIController] Created button: ${name}`);
+            log.debug(`[SceneUIController] Created button: ${name}`);
             return button;
         } else {
             // 返回现有按钮的 Button 组件
             const button = buttonNode.getComponent(Button);
             if (!button) {
-                console.warn(`[SceneUIController] Node ${name} exists but has no Button component`);
+                log.warn(`[SceneUIController] Node ${name} exists but has no Button component`);
                 return null;
             }
-            console.log(`[SceneUIController] Found existing button: ${name}`);
+            log.debug(`[SceneUIController] Found existing button: ${name}`);
             return button;
         }
     }
@@ -196,16 +199,16 @@ export class SceneUIController extends Component {
             label.horizontalAlign = Label.HorizontalAlign.CENTER;
             label.verticalAlign = Label.VerticalAlign.CENTER;
 
-            console.log(`[SceneUIController] Created label: ${name}`);
+            log.debug(`[SceneUIController] Created label: ${name}`);
             return label;
         } else {
             // 返回现有标签的 Label 组件
             const label = labelNode.getComponent(Label);
             if (!label) {
-                console.warn(`[SceneUIController] Node ${name} exists but has no Label component`);
+                log.warn(`[SceneUIController] Node ${name} exists but has no Label component`);
                 return null;
             }
-            console.log(`[SceneUIController] Found existing label: ${name}`);
+            log.debug(`[SceneUIController] Found existing label: ${name}`);
             return label;
         }
     }
@@ -261,26 +264,26 @@ export class SceneUIController extends Component {
      * 退出按钮点击事件
      */
     private onExitButtonClicked(): void {
-        console.log('[SceneUIController] ========== EXIT BUTTON CLICKED ==========');
-        console.log('[SceneUIController] isOnlineMode:', this._isOnlineMode);
-        console.log('[SceneUIController] roomId:', this._roomId);
+        log.debug('[SceneUIController] ========== EXIT BUTTON CLICKED ==========');
+        log.debug('[SceneUIController] isOnlineMode:', this._isOnlineMode);
+        log.debug('[SceneUIController] roomId:', this._roomId);
 
         // 发送退出房间事件
         EventCenter.emit('EXIT_ROOM_REQUESTED');
-        console.log('[SceneUIController] EXIT_ROOM_REQUESTED event emitted');
+        log.debug('[SceneUIController] EXIT_ROOM_REQUESTED event emitted');
 
         // 延迟场景切换，避免在事件处理过程中销毁组件导致错误
         this.scheduleOnce(() => {
-            console.log('[SceneUIController] Executing delayed scene transition...');
+            log.debug('[SceneUIController] Executing delayed scene transition...');
             // 根据模式返回不同场景
             if (this._isOnlineMode) {
                 // 在线模式：通知服务器离开房间，然后返回大厅
-                console.log('[SceneUIController] Leaving room (online mode)');
+                log.debug('[SceneUIController] Leaving room (online mode)');
                 const roomService = RoomService.getInstance();
                 roomService.leaveRoom();
 
                 // 返回大厅（需要传递游戏模式参数）
-                console.log('[SceneUIController] Navigating to Lobby...');
+                log.debug('[SceneUIController] Navigating to Lobby...');
                 this._sceneManager.goToLobby({
                     gameMode: 'the_decree',
                     minPlayers: 4,
@@ -288,26 +291,26 @@ export class SceneUIController extends Component {
                 });
             } else {
                 // 离线模式：直接返回大厅
-                console.log('[SceneUIController] Returning to Hall (offline mode)');
+                log.debug('[SceneUIController] Returning to Hall (offline mode)');
                 this._sceneManager.goToHall();
             }
-            console.log('[SceneUIController] Scene transition initiated');
+            log.debug('[SceneUIController] Scene transition initiated');
         }, 0);
 
-        console.log('[SceneUIController] ========== EXIT BUTTON HANDLER END ==========');
+        log.debug('[SceneUIController] ========== EXIT BUTTON HANDLER END ==========');
     }
 
     /**
      * 设置按钮点击事件
      */
     private onSettingsButtonClicked(): void {
-        console.log('[SceneUIController] Settings button clicked');
+        log.debug('[SceneUIController] Settings button clicked');
 
         // 发送打开设置事件
         EventCenter.emit('OPEN_SETTINGS_REQUESTED');
 
         // TODO: 实现设置面板
-        console.log('[SceneUIController] Settings panel not implemented yet');
+        log.debug('[SceneUIController] Settings panel not implemented yet');
     }
 
     /**

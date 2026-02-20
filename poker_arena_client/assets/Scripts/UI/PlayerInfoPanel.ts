@@ -2,6 +2,9 @@ import { _decorator, Component, Node, Label, Sprite, SpriteFrame, Color, Prefab,
 import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
 import { StateLabelAlignment } from '../Config/SeatConfig';
 import { UIColors, StateLabelOffsets, PlayerNameConfig } from '../Config/UIConfig';
+import { logger } from '../Utils/Logger';
+
+const log = logger('InfoPanel');
 
 const { ccclass, property } = _decorator;
 
@@ -93,19 +96,19 @@ export class PlayerInfoPanel extends Component {
         // 2. 指定 Bundle 名称
         const bundleName = 'UI_Presets';
 
-        console.log(`[PlayerInfoPanel] Start loading prefab: ${prefabName} from bundle: ${bundleName}`);
+        log.debug(`[PlayerInfoPanel] Start loading prefab: ${prefabName} from bundle: ${bundleName}`);
 
         // 3. 先获取或加载 Bundle
         assetManager.loadBundle(bundleName, (err, bundle) => {
             if (err) {
-                console.error(`[PlayerInfoPanel] Failed to load Bundle: ${bundleName}`, err);
+                log.error(`[PlayerInfoPanel] Failed to load Bundle: ${bundleName}`, err);
                 return;
             }
 
             // 4. 从 Bundle 中加载特定的 Prefab
             bundle.load(prefabName, Prefab, (err, prefab) => {
                 if (err) {
-                    console.error(`[PlayerInfoPanel] Failed to load prefab: ${prefabName} in bundle: ${bundleName}`, err);
+                    log.error(`[PlayerInfoPanel] Failed to load prefab: ${prefabName} in bundle: ${bundleName}`, err);
                     return;
                 }
 
@@ -127,7 +130,7 @@ export class PlayerInfoPanel extends Component {
                 // 更新显示
                 this.refresh();
 
-                console.log(`[PlayerInfoPanel] Prefab loaded successfully from ${bundleName}: ${prefabName}`);
+                log.debug(`[PlayerInfoPanel] Prefab loaded successfully from ${bundleName}: ${prefabName}`);
             });
         });
     }
@@ -141,7 +144,7 @@ export class PlayerInfoPanel extends Component {
         if (nameNode) {
             this.nameLabel = nameNode.getComponent(Label);
         } else {
-            console.warn('[PlayerInfoPanel] Label_PlayerName not found in prefab');
+            log.warn('[PlayerInfoPanel] Label_PlayerName not found in prefab');
         }
 
         // 查找分数标签
@@ -149,7 +152,7 @@ export class PlayerInfoPanel extends Component {
         if (scoreNode) {
             this.scoreLabel = scoreNode.getComponent(Label);
         } else {
-            console.warn('[PlayerInfoPanel] Label_PlayerScore not found in prefab');
+            log.warn('[PlayerInfoPanel] Label_PlayerScore not found in prefab');
         }
 
         // 查找状态标签（注意：Prefab 中的名称是 Label_PlayerState）
@@ -159,7 +162,7 @@ export class PlayerInfoPanel extends Component {
             // 应用 state label 的对齐方式
             this.applyStateLabelAlignment(stateNode);
         } else {
-            console.warn('[PlayerInfoPanel] Label_PlayerState or Label_State not found in prefab');
+            log.warn('[PlayerInfoPanel] Label_PlayerState or Label_State not found in prefab');
         }
 
         // 查找头像精灵
@@ -167,7 +170,7 @@ export class PlayerInfoPanel extends Component {
         if (avatarNode) {
             this.avatarSprite = avatarNode.getComponent(Sprite);
         } else {
-            console.warn('[PlayerInfoPanel] Sprite_PlayerImage not found in prefab');
+            log.warn('[PlayerInfoPanel] Sprite_PlayerImage not found in prefab');
         }
     }
 
@@ -217,7 +220,7 @@ export class PlayerInfoPanel extends Component {
         // 强制更新 Widget
         widget.updateAlignment();
 
-        console.log(`[PlayerInfoPanel] Applied state label alignment: ${this.stateLabelAlignment}`);
+        log.debug(`[PlayerInfoPanel] Applied state label alignment: ${this.stateLabelAlignment}`);
     }
 
     /**
@@ -396,7 +399,7 @@ export class PlayerInfoPanel extends Component {
      */
     public updateCardCount(count: number): void {
         // 暂时不实现，后续扩展
-        console.log(`[PlayerInfoPanel] TODO: updateCardCount(${count})`);
+        log.debug(`[PlayerInfoPanel] TODO: updateCardCount(${count})`);
     }
 
     /**

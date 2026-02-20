@@ -1,3 +1,6 @@
+import { logger } from '../Utils/Logger';
+
+const log = logger('NetworkConfig');
 /**
  * 网络配置
  *
@@ -30,7 +33,7 @@ export class NetworkConfig {
      */
     public static setServerIP(ip: string): void {
         this.SERVER_IP = ip;
-        console.log(`[NetworkConfig] Server IP set to: ${ip}`);
+        log.debug(`Server IP set to: ${ip}`);
     }
 
     /**

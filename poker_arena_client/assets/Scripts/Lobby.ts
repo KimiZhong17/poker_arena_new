@@ -9,6 +9,9 @@ import { NetworkClient } from './Network/NetworkClient';
 import { ErrorEvent, RoomJoinedEvent, RoomCreatedEvent } from './Network/Messages';
 import { LocalRoomStore, RoomData, RoomState } from './LocalStore/LocalRoomStore';
 import { EventCenter, GameEvents } from './Utils/EventCenter';
+import { logger } from './Utils/Logger';
+
+const log = logger('Lobby');
 
 const { ccclass, property } = _decorator;
 
@@ -70,31 +73,31 @@ export class Lobby extends Component {
      * 这样当用户点击"加入房间"或"创建房间"时，资源已经在内存中了
      */
     private preloadGameAssets(): void {
-        console.log('[Lobby] 🚀 Starting to preload game assets...');
+        log.debug('🚀 Starting to preload game assets...');
 
         assetManager.loadBundle("Pokers", (err, bundle) => {
             if (err) {
-                console.error('[Lobby] ❌ Failed to preload Poker bundle:', err);
+                log.error('❌ Failed to preload Poker bundle:', err);
                 return;
             }
 
-            console.log('[Lobby] ✅ Poker bundle preloaded successfully');
+            log.debug('✅ Poker bundle preloaded successfully');
 
             // 预加载所有扑克牌精灵
             bundle.loadDir("", SpriteFrame, (err, sprites) => {
                 if (!err) {
-                    console.log(`[Lobby] ✅ Preloaded ${sprites.length} poker sprites`);
+                    log.debug(`✅ Preloaded ${sprites.length} poker sprites`);
                 } else {
-                    console.error('[Lobby] ❌ Failed to preload sprites:', err);
+                    log.error('❌ Failed to preload sprites:', err);
                 }
             });
 
             // 预加载扑克牌预制体
             bundle.load("PokerPrefab", Prefab, (err, prefab) => {
                 if (!err) {
-                    console.log('[Lobby] ✅ Preloaded poker prefab');
+                    log.debug('✅ Preloaded poker prefab');
                 } else {
-                    console.error('[Lobby] ❌ Failed to preload prefab:', err);
+                    log.error('❌ Failed to preload prefab:', err);
                 }
             });
         });
@@ -120,7 +123,7 @@ export class Lobby extends Component {
 
         // Check if user is logged in
         if (!this.authService.isLoggedIn()) {
-            console.warn('[Lobby] User not logged in, redirecting to login');
+            log.warn('User not logged in, redirecting to login');
             this.sceneManager.goToLogin();
             return;
         }
@@ -134,12 +137,12 @@ export class Lobby extends Component {
         this.currentGameMode = transitionData.gameMode || this.localUserStore.getSelectedGameMode() || '';
 
         if (!this.currentGameMode) {
-            console.error('[Lobby] No game mode selected');
+            log.error('No game mode selected');
             this.sceneManager.goToHall();
             return;
         }
 
-        console.log(`[Lobby] Game mode: ${this.currentGameMode}`);
+        log.debug(`Game mode: ${this.currentGameMode}`);
 
         // 监听 UI_NAVIGATE_TO_GAME 事件（用于重连成功后跳转）
         EventCenter.on(GameEvents.UI_NAVIGATE_TO_GAME, this.onNavigateToGame, this);
@@ -169,7 +172,7 @@ export class Lobby extends Component {
      */
     private initNetworkClient(): void {
         const serverUrl = NetworkConfig.getServerUrl();
-        console.log(`[Lobby] Connecting to server: ${serverUrl}`);
+        log.debug(`Connecting to server: ${serverUrl}`);
 
         // 使用 NetworkManager 获取全局单例 NetworkClient
         const networkManager = NetworkManager.getInstance();
@@ -179,7 +182,7 @@ export class Lobby extends Component {
 
         // 如果已经连接，直接设置事件监听
         if (this.networkClient.getIsConnected()) {
-            console.log('[Lobby] Already connected to server');
+            log.debug('Already connected to server');
             this.setupNetworkEvents();
             this.checkAutoReconnect();
             return;
@@ -188,12 +191,12 @@ export class Lobby extends Component {
         // 连接到服务器
         this.networkClient.connect()
             .then(() => {
-                console.log('[Lobby] Connected to server');
+                log.debug('Connected to server');
                 this.setupNetworkEvents();
                 this.checkAutoReconnect();
             })
             .catch((error) => {
-                console.error('[Lobby] Failed to connect to server:', error);
+                log.error('Failed to connect to server:', error);
                 this.showStatus('连接服务器失败');
             });
     }
@@ -203,7 +206,7 @@ export class Lobby extends Component {
      */
     private checkAutoReconnect(): void {
         if (this.roomService.hasPendingReconnect()) {
-            console.log('[Lobby] Found pending reconnect, attempting to reconnect...');
+            log.debug('Found pending reconnect, attempting to reconnect...');
             this.showStatus('正在重连到游戏...');
             this.roomService.tryAutoReconnect();
         }
@@ -230,7 +233,7 @@ export class Lobby extends Component {
      */
     private autoFindRoomPanelElements(): void {
         if (!this.roomPanel) {
-            console.error('[Lobby] roomPanel not assigned!');
+            log.error('roomPanel not assigned!');
             return;
         }
 
@@ -261,7 +264,7 @@ export class Lobby extends Component {
             this.toggle4 = toggle4Node?.getComponent(Toggle) || null;
         }
 
-        console.log('[Lobby] RoomPanel elements found:', {
+        log.debug('RoomPanel elements found:', {
             roomPanelInput: !!this.roomPanelInput,
             btnConfirm: !!this.btnConfirm,
             btnClose: !!this.btnClose,
@@ -303,10 +306,10 @@ export class Lobby extends Component {
      * Show room panel to select player count
      */
     private onCreateRoomClicked(): void {
-        console.log('[Lobby] Create room clicked');
+        log.debug('Create room clicked');
 
         if (!this.authService.isLoggedIn()) {
-            console.error('[Lobby] No user logged in');
+            log.error('No user logged in');
             this.showStatus('Error: User not logged in');
             return;
         }
@@ -321,10 +324,10 @@ export class Lobby extends Component {
      * Show room panel to enter room ID
      */
     private onJoinRoomClicked(): void {
-        console.log('[Lobby] Join room button clicked');
+        log.debug('Join room button clicked');
 
         if (!this.authService.isLoggedIn()) {
-            console.error('[Lobby] No user logged in');
+            log.error('No user logged in');
             this.showStatus('Error: User not logged in');
             return;
         }
@@ -338,7 +341,7 @@ export class Lobby extends Component {
      * Handle back button
      */
     private onBackClicked(): void {
-        console.log('[Lobby] Back clicked');
+        log.debug('Back clicked');
         this.sceneManager.goToHall();
     }
 
@@ -377,7 +380,7 @@ export class Lobby extends Component {
             // 禁用后面的按钮，防止点击穿透
             this.setMainButtonsEnabled(false);
 
-            console.log(`[Lobby] RoomPanel shown in ${this.roomPanelMode} mode`);
+            log.debug(`RoomPanel shown in ${this.roomPanelMode} mode`);
         }
     }
 
@@ -391,7 +394,7 @@ export class Lobby extends Component {
             // 重新启用后面的按钮
             this.setMainButtonsEnabled(true);
 
-            console.log('[Lobby] RoomPanel hidden');
+            log.debug('RoomPanel hidden');
         }
     }
 
@@ -414,7 +417,7 @@ export class Lobby extends Component {
      * RoomPanel 确认按钮点击
      */
     private onRoomPanelConfirmClicked(): void {
-        console.log('[Lobby] RoomPanel confirm clicked');
+        log.debug('RoomPanel confirm clicked');
 
         if (this.roomPanelMode === 'join') {
             // 加入房间模式
@@ -423,20 +426,20 @@ export class Lobby extends Component {
 
             // 验证房间号格式（4位数字）
             if (!this.validateRoomId(roomId)) {
-                console.error('[Lobby] Invalid room ID format');
+                log.error('Invalid room ID format');
                 this.showStatus('请输入4位数字房间号');
                 return;
             }
 
             // 检查是否已登录
             if (!this.authService.isLoggedIn()) {
-                console.error('[Lobby] No user logged in');
+                log.error('No user logged in');
                 this.showStatus('用户未登录');
                 return;
             }
 
             // 通过 RoomService 加入房间
-            console.log(`[Lobby] Joining room: ${roomId}`);
+            log.debug(`Joining room: ${roomId}`);
             this.roomService.joinRoom(roomId);
         } else {
             // 创建房间模式
@@ -445,7 +448,7 @@ export class Lobby extends Component {
 
             // 检查是否已登录
             if (!this.authService.isLoggedIn()) {
-                console.error('[Lobby] No user logged in');
+                log.error('No user logged in');
                 this.showStatus('用户未登录');
                 return;
             }
@@ -454,7 +457,7 @@ export class Lobby extends Component {
             this.selectedPlayerCount = playerCount;
 
             // 通过 RoomService 创建房间
-            console.log(`[Lobby] Creating room with ${playerCount} players`);
+            log.debug(`Creating room with ${playerCount} players`);
             this.roomService.createRoom(this.currentGameMode, playerCount);
         }
     }
@@ -463,7 +466,7 @@ export class Lobby extends Component {
      * RoomPanel 关闭按钮点击
      */
     private onRoomPanelCloseClicked(): void {
-        console.log('[Lobby] RoomPanel close clicked');
+        log.debug('RoomPanel close clicked');
         this.hideRoomPanel();
     }
 
@@ -496,7 +499,7 @@ export class Lobby extends Component {
      * 房间创建成功
      */
     private onRoomCreated = (data: RoomCreatedEvent) => {
-        console.log('[Lobby] Room created successfully:', data);
+        log.debug('Room created successfully:', data);
 
         // 保存房间信息到 LocalRoomStore
         const localRoomStore = LocalRoomStore.getInstance();
@@ -521,12 +524,12 @@ export class Lobby extends Component {
         localRoomStore.setCurrentRoom(roomData);
         // 保存服务器分配的玩家ID到 LocalRoomStore
         localRoomStore.setMyPlayerId(data.playerId);
-        console.log('[Lobby] Room data saved to LocalRoomStore:', roomData);
-        console.log('[Lobby] Player ID saved to LocalRoomStore:', data.playerId);
+        log.debug('Room data saved to LocalRoomStore:', roomData);
+        log.debug('Player ID saved to LocalRoomStore:', data.playerId);
 
         // 确保 sceneManager 已初始化
         if (!this.sceneManager) {
-            console.error('[Lobby] SceneManager is null, reinitializing...');
+            log.error('SceneManager is null, reinitializing...');
             this.sceneManager = SceneManager.getInstance();
         }
 
@@ -542,7 +545,7 @@ export class Lobby extends Component {
      * 房间加入成功
      */
     private onRoomJoined = (data: RoomJoinedEvent) => {
-        console.log('[Lobby] Successfully joined room:', data);
+        log.debug('Successfully joined room:', data);
 
         // 保存房间信息到 LocalRoomStore
         const localRoomStore = LocalRoomStore.getInstance();
@@ -562,15 +565,15 @@ export class Lobby extends Component {
         localRoomStore.setCurrentRoom(roomData);
         // 保存服务器分配的玩家ID到 LocalRoomStore
         localRoomStore.setMyPlayerId(data.playerId);
-        console.log('[Lobby] Room data saved to LocalRoomStore:', roomData);
-        console.log('[Lobby] Player ID saved to LocalRoomStore:', { id: data.playerId, isHost: myPlayerInfo?.isHost });
+        log.debug('Room data saved to LocalRoomStore:', roomData);
+        log.debug('Player ID saved to LocalRoomStore:', { id: data.playerId, isHost: myPlayerInfo?.isHost });
 
         // 隐藏面板
         this.hideRoomPanel();
 
         // 确保 sceneManager 已初始化
         if (!this.sceneManager) {
-            console.error('[Lobby] SceneManager is null, reinitializing...');
+            log.error('SceneManager is null, reinitializing...');
             this.sceneManager = SceneManager.getInstance();
         }
 
@@ -586,7 +589,7 @@ export class Lobby extends Component {
      * 网络错误处理
      */
     private onNetworkError = (error: ErrorEvent) => {
-        console.error('[Lobby] Network error:', error);
+        log.error('Network error:', error);
 
         // 根据错误码显示友好提示
         let errorMessage = '操作失败';
@@ -628,7 +631,7 @@ export class Lobby extends Component {
      * 处理 UI_NAVIGATE_TO_GAME 事件（重连成功后跳转到游戏场景）
      */
     private onNavigateToGame = () => {
-        console.log('[Lobby] Navigating to game scene (reconnect or join)');
+        log.debug('Navigating to game scene (reconnect or join)');
 
         // 确保 sceneManager 已初始化
         if (!this.sceneManager) {
@@ -647,7 +650,7 @@ export class Lobby extends Component {
                 isOnlineMode: true
             });
         } else {
-            console.error('[Lobby] No room data found for navigation');
+            log.error('No room data found for navigation');
         }
     };
 

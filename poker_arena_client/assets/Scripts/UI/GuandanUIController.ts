@@ -1,5 +1,8 @@
 import { _decorator, Component, Node, Button, Label } from 'cc';
 import { Game } from '../Game';
+import { logger } from '../Utils/Logger';
+const log = logger('GuandanUI');
+
 const { ccclass, property } = _decorator;
 
 /**
@@ -35,7 +38,7 @@ export class GuandanUIController extends Component {
         this._game = this.findGameComponent();
 
         if (!this._game) {
-            console.error('[GuandanUI] Game component not found!');
+            log.error('Game component not found!');
             return;
         }
 
@@ -69,7 +72,7 @@ export class GuandanUIController extends Component {
             node = node.parent;
         }
 
-        console.error('[GuandanUI] Could not find Game component');
+        log.error('Could not find Game component');
         return null!;
     }
 
@@ -97,7 +100,7 @@ export class GuandanUIController extends Component {
             this.statusLabel = labelNode?.getComponent(Label) || null;
         }
 
-        console.log('[GuandanUI] UI elements found:', {
+        log.debug('UI elements found:', {
             playButton: !!this.playButton,
             passButton: !!this.passButton,
             clearSelectionButton: !!this.clearSelectionButton,
@@ -127,7 +130,7 @@ export class GuandanUIController extends Component {
      */
     private enableCardSelection(): void {
         if (!this._game || !this._game.handsManager) {
-            console.error('[GuandanUI] Cannot enable card selection - game not ready');
+            log.error('Cannot enable card selection - game not ready');
             return;
         }
 
@@ -136,14 +139,14 @@ export class GuandanUIController extends Component {
             this.onSelectionChanged(selectedIndices);
         });
 
-        console.log('[GuandanUI] Card selection enabled');
+        log.debug('Card selection enabled');
     }
 
     /**
      * Handle card selection changes
      */
     private onSelectionChanged(selectedIndices: number[]): void {
-        console.log(`[GuandanUI] Selected cards: [${selectedIndices.join(', ')}]`);
+        log.debug(`Selected cards: [${selectedIndices.join(', ')}]`);
 
         // Update UI based on selection
         this.updateUIState();
@@ -186,10 +189,10 @@ export class GuandanUIController extends Component {
      * Handle "Play" button clicked
      */
     private onPlayButtonClicked(): void {
-        console.log('[GuandanUI] Play button clicked');
+        log.debug('Play button clicked');
 
         if (this._selectedCardIndices.length === 0) {
-            console.warn('[GuandanUI] No cards selected');
+            log.warn('No cards selected');
             this.updateStatusLabel('请先选择牌！', 'warning');
             return;
         }
@@ -198,7 +201,7 @@ export class GuandanUIController extends Component {
         const success = this._game.playerSelectCards('0', this._selectedCardIndices);
 
         if (success) {
-            console.log('[GuandanUI] Cards played successfully');
+            log.debug('Cards played successfully');
             this.updateStatusLabel('出牌成功！', 'success');
 
             // Clear selection
@@ -206,7 +209,7 @@ export class GuandanUIController extends Component {
             this._selectedCardIndices = [];
             this.updateUIState();
         } else {
-            console.error('[GuandanUI] Failed to play cards');
+            log.error('Failed to play cards');
             this.updateStatusLabel('出牌失败！无法压过上家', 'error');
         }
     }
@@ -215,13 +218,13 @@ export class GuandanUIController extends Component {
      * Handle "Pass" button clicked
      */
     private onPassButtonClicked(): void {
-        console.log('[GuandanUI] Pass button clicked');
+        log.debug('Pass button clicked');
 
         // Call game interface to pass
         const success = this._game.playerPass('0');
 
         if (success) {
-            console.log('[GuandanUI] Passed successfully');
+            log.debug('Passed successfully');
             this.updateStatusLabel('不出', 'info');
 
             // Clear selection
@@ -229,7 +232,7 @@ export class GuandanUIController extends Component {
             this._selectedCardIndices = [];
             this.updateUIState();
         } else {
-            console.error('[GuandanUI] Cannot pass');
+            log.error('Cannot pass');
             this.updateStatusLabel('不能不出！', 'error');
         }
     }
@@ -238,7 +241,7 @@ export class GuandanUIController extends Component {
      * Handle "Clear Selection" button clicked
      */
     private onClearSelectionClicked(): void {
-        console.log('[GuandanUI] Clear selection button clicked');
+        log.debug('Clear selection button clicked');
 
         this._game.handsManager.clearSelection(0);
         this._selectedCardIndices = [];
