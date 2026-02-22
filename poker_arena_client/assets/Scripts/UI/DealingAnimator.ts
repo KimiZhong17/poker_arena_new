@@ -565,6 +565,37 @@ export class DealingAnimator extends Component {
     }
 
     /**
+     * 对 animationLayer 上的飞行节点执行翻牌动画
+     * @param cardValues 牌值数组（与 animationLayer 子节点一一对应）
+     */
+    public async flipAnimationCards(cardValues: number[]): Promise<void> {
+        if (!this.animationLayer) return;
+
+        const children = this.animationLayer.children;
+        const flipPromises: Promise<void>[] = [];
+
+        for (let i = 0; i < children.length && i < cardValues.length; i++) {
+            const poker = children[i].getComponent(Poker);
+            if (poker) {
+                const cardBack = this._pokerSprites.get(CardSpriteNames.backWithLogo) ||
+                                 this._pokerSprites.get(CardSpriteNames.back);
+                const spriteName = PokerFactory.getCardSpriteName(cardValues[i]);
+                const cardFront = this._pokerSprites.get(spriteName);
+                if (cardFront && cardBack) {
+                    poker.init(cardValues[i], cardBack, cardFront);
+                }
+                flipPromises.push(this.animateCardFlipWithDelay(
+                    children[i],
+                    poker,
+                    i * DealingDuration.spreadInterval
+                ));
+            }
+        }
+
+        await Promise.all(flipPromises);
+    }
+
+    /**
      * 清理动画层中的卡牌节点
      */
     public clearAnimationCards(): void {
@@ -592,6 +623,140 @@ export class DealingAnimator extends Component {
      */
     public isAnimating(): boolean {
         return this._isAnimating;
+    }
+
+    /**
+     * 从牌堆发一张牌到指定位置（用于轮流发牌）
+     * @param cardValue 牌值（-1 表示背面）
+     * @param targetPos 目标世界坐标
+     * @param scaleMultiplier 目标缩放倍数
+     * @param keepAlive 是否保留节点不销毁（用于主玩家堆叠显示）
+     * @returns 如果 keepAlive 为 true，返回牌节点；否则返回 null
+     */
+    public async dealSingleCardToPosition(
+        cardValue: number,
+        targetPos: Vec3,
+        scaleMultiplier: number,
+        keepAlive: boolean = false
+    ): Promise<Node | null> {
+        if (!this.deckPile) return null;
+
+        const startPos = this.deckPile.getTopCardWorldPosition();
+        const flyingCard = this.createFlyingCard(cardValue, false);
+
+        this.deckPile.playDealFeedback();
+
+        await this.animateCardFlight(
+            flyingCard,
+            startPos,
+            targetPos,
+            DealingDuration.dealToPlayer,
+            DealingEasing.dealToPlayer,
+            scaleMultiplier
+        );
+
+        if (keepAlive) {
+            return flyingCard;
+        }
+        flyingCard.destroy();
+        return null;
+    }
+
+    /**
+     * 在堆叠位置创建牌节点，然后展开+翻牌（用于轮流发牌完成后的揭牌）
+     * 跳过飞行阶段，因为轮流发牌阶段已经把牌飞到手牌区了
+     * @param cards 牌值数组
+     * @param onSpreadComplete 展开完成回调
+     * @param onFlipComplete 翻牌完成回调
+     * @returns 返回创建的卡牌节点
+     */
+    public async spreadAndFlipMainPlayer(
+        cards: number[],
+        onSpreadComplete?: () => void,
+        onFlipComplete?: () => void
+    ): Promise<DealingResult> {
+        if (!this._getPlayerHandPosition) {
+            log.warn('Not properly initialized');
+            return { cardNodes: [], cardValues: [] };
+        }
+
+        log.debug(`Spread and flip ${cards.length} cards for main player`);
+
+        this._isAnimating = true;
+        const handPos = this._getPlayerHandPosition(0);
+        const cardNodes: Node[] = [];
+
+        // 在堆叠位置创建牌节点（模拟刚到达的状态）
+        for (let i = 0; i < cards.length; i++) {
+            const flyingCard = this.createFlyingCard(cards[i], false);
+            const stackOffset = i * DealingDuration.stackOffset;
+            flyingCard.setWorldPosition(new Vec3(
+                handPos.x + stackOffset,
+                handPos.y + stackOffset,
+                handPos.z
+            ));
+            // 设置为玩家手牌缩放
+            const prefabScale = flyingCard.scale.clone();
+            flyingCard.setScale(
+                prefabScale.x * CardScale.dealing.playerCard,
+                prefabScale.y * CardScale.dealing.playerCard,
+                prefabScale.z
+            );
+            cardNodes.push(flyingCard);
+        }
+
+        // 短暂停顿
+        await this.delay(0.15);
+
+        // ===== 展开阶段 =====
+        log.debug('Phase: Spread cards');
+        const cardSpacing = 100;
+        const totalWidth = (cards.length - 1) * cardSpacing;
+        const spreadStartX = handPos.x - totalWidth / 2;
+
+        const spreadPromises: Promise<void>[] = [];
+        for (let i = 0; i < cardNodes.length; i++) {
+            const targetX = spreadStartX + i * cardSpacing;
+            const targetPos = new Vec3(targetX, handPos.y, handPos.z);
+            spreadPromises.push(this.animateCardSpread(
+                cardNodes[i],
+                targetPos,
+                DealingDuration.spreadDuration,
+                i * DealingDuration.spreadInterval
+            ));
+        }
+        await Promise.all(spreadPromises);
+        onSpreadComplete?.();
+        log.debug('Spread complete');
+
+        await this.delay(0.1);
+
+        // ===== 翻牌阶段 =====
+        log.debug('Phase: Flip cards');
+        const flipPromises: Promise<void>[] = [];
+        for (let i = 0; i < cardNodes.length; i++) {
+            const poker = cardNodes[i].getComponent(Poker);
+            if (poker) {
+                const cardBack = this._pokerSprites.get(CardSpriteNames.back) ||
+                                 this._pokerSprites.get(CardSpriteNames.backWithLogo);
+                const spriteName = PokerFactory.getCardSpriteName(cards[i]);
+                const cardFront = this._pokerSprites.get(spriteName);
+                if (cardFront && cardBack) {
+                    poker.init(cards[i], cardBack, cardFront);
+                }
+                flipPromises.push(this.animateCardFlipWithDelay(
+                    cardNodes[i],
+                    poker,
+                    i * DealingDuration.spreadInterval
+                ));
+            }
+        }
+        await Promise.all(flipPromises);
+        onFlipComplete?.();
+        log.debug('Flip complete');
+
+        this._isAnimating = false;
+        return { cardNodes, cardValues: cards };
     }
 
     // ==================== 旧版API（保持兼容）====================
@@ -630,7 +795,7 @@ export class DealingAnimator extends Component {
     /**
      * 创建飞行中的卡牌节点
      */
-    private createFlyingCard(cardValue: number, showFront: boolean): Node {
+    public createFlyingCard(cardValue: number, showFront: boolean): Node {
         if (!this._pokerPrefab) {
             throw new Error('[DealingAnimator] Poker prefab not set');
         }
@@ -669,7 +834,7 @@ export class DealingAnimator extends Component {
      * 执行单张牌的飞行动画
      * 注意：缩放是相对于预制体原始缩放的倍数
      */
-    private animateCardFlight(
+    public animateCardFlight(
         cardNode: Node,
         startPos: Vec3,
         endPos: Vec3,

@@ -3,7 +3,13 @@ import { SeatLayoutConfig, SeatPosition } from "../../Config/SeatConfig";
 import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
+import { Node } from "cc";
 import { logger } from '../../Utils/Logger';
+
+// Forward declarations for handler types (avoid circular imports)
+import type { DealingHandler } from "./Handlers/DealingHandler";
+import type { ShowdownHandler } from "./Handlers/ShowdownHandler";
+import type { ReconnectHandler } from "./Handlers/ReconnectHandler";
 
 const log = logger('GameMode');
 
@@ -24,18 +30,13 @@ export interface GameModeConfig {
 /**
  * Base class for all client-side game modes
  *
- * 重构后的职责：
- * - 定义游戏模式的生命周期接口
- * - 提供 PlayerUIManager 初始化的通用方法
- * - 提供网络事件管理的通用框架（注册/注销/处理）
- * - 子类负责创建和管理 PlayerManager（数据层）
- * - 通过 Game 访问 PlayerUIManager（UI层）
- *
  * 架构：
- * GameModeClientBase (协调者)
- * ├── PlayerManager (数据层，子类管理)
- * ├── PlayerUIManager (UI层，从 Game 访问)
- * └── NetworkClient (网络层，从 Game 访问)
+ * GameModeClientBase (协调者 + 通用工具)
+ * ├── DealingHandler   (发牌动画，子类初始化)
+ * ├── ShowdownHandler  (摊牌展示，子类初始化)
+ * ├── ReconnectHandler (重连恢复，子类初始化)
+ * ├── PlayerUIManager  (UI层，从 Game 访问)
+ * └── NetworkClient    (网络层，从 Game 访问)
  */
 export abstract class GameModeClientBase {
     protected game: Game;
@@ -47,6 +48,20 @@ export abstract class GameModeClientBase {
 
     // 玩家 ID 映射 (playerId -> playerIndex)
     protected playerIdToIndexMap: Map<string, number> = new Map();
+
+    // ---- 通用游戏状态（子类可读写）----
+    protected communityCards: number[] = [];
+    protected dealerId: string = '';
+    protected currentRoundNumber: number = 0;
+    protected cardsToPlay: number = 0;
+
+    // ---- 定时器管理 ----
+    protected _pendingTimeouts: number[] = [];
+
+    // ---- Handler 引用（子类在 onEnter 中初始化）----
+    protected dealingHandler: DealingHandler | null = null;
+    protected showdownHandler: ShowdownHandler | null = null;
+    protected reconnectHandler: ReconnectHandler | null = null;
 
     constructor(game: Game, config: GameModeConfig) {
         this.game = game;
@@ -498,4 +513,186 @@ export abstract class GameModeClientBase {
         log.debug(`[${this.config.name}] Playing cards:`, cards);
         return network.send(ClientMessageType.PLAY_CARDS, request);
     }
+
+    // ==================== 通用工具方法 ====================
+
+    /**
+     * 递归查找节点
+     */
+    protected findNodeByName(root: Node, name: string): Node | null {
+        if (root.name === name) return root;
+        for (const child of root.children) {
+            const found = this.findNodeByName(child, name);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    /**
+     * 根据 playerId 获取玩家名字
+     */
+    public getPlayerName(playerId: string): string {
+        const room = LocalRoomStore.getInstance().getCurrentRoom();
+        if (room) {
+            const playerInfo = room.players.find(p => p.id === playerId);
+            if (playerInfo) return playerInfo.name;
+        }
+        return 'Unknown';
+    }
+
+    /**
+     * 根据卡牌编码获取卡牌名称
+     * Guandan 编码: A=14, 2=15, 3-13 标准
+     */
+    protected getCardName(card: number): string {
+        const suits = ['♦', '♣', '♥', '♠'];
+        const pointMap: Record<number, string> = {
+            3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
+            10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A', 15: '2',
+        };
+        const suit = (card & 0xF0) >> 4;
+        const point = card & 0x0F;
+        const suitStr = suits[suit];
+        const pointStr = pointMap[point];
+        return (suitStr && pointStr) ? suitStr + pointStr : '未知牌';
+    }
+
+    // ==================== 定时器管理 ====================
+
+    public registerTimeout(callback: () => void, delayMs: number): void {
+        const timerId = setTimeout(callback, delayMs) as unknown as number;
+        this._pendingTimeouts.push(timerId);
+    }
+
+    protected clearPendingTimeouts(): void {
+        for (const timerId of this._pendingTimeouts) {
+            clearTimeout(timerId);
+        }
+        this._pendingTimeouts = [];
+    }
+
+    // ==================== 座位映射 ====================
+
+    /**
+     * 刷新玩家 ID → 相对座位索引映射
+     * 当前玩家始终映射到 index 0
+     */
+    protected refreshPlayerIdMapping(): void {
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            log.warn(`[${this.config.name}] No current room for player mapping`);
+            return;
+        }
+
+        const myPlayerId = localRoomStore.getMyPlayerId();
+        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
+        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
+        const totalSeats = currentRoom.maxPlayers;
+
+        this.playerIdToIndexMap.clear();
+        for (const playerInfo of currentRoom.players) {
+            const relativeIndex = (playerInfo.seatIndex - mySeatIndex + totalSeats) % totalSeats;
+            this.playerIdToIndexMap.set(playerInfo.id, relativeIndex);
+        }
+
+        log.debug(`[${this.config.name}] Player ID mapping refreshed:`, Array.from(this.playerIdToIndexMap.entries()));
+    }
+
+    /**
+     * 升级 PlayerUIManager 到游戏模式（ROOM → GAME）
+     */
+    public upgradePlayerUIToPlayingMode(): void {
+        log.debug(`[${this.config.name}] Upgrading PlayerUIManager to Playing mode...`);
+
+        const playerUIManager = this.game.playerUIManager;
+        if (!playerUIManager) {
+            log.error(`[${this.config.name}] PlayerUIManager not found!`);
+            return;
+        }
+
+        const localRoomStore = LocalRoomStore.getInstance();
+        const currentRoom = localRoomStore.getCurrentRoom();
+        if (!currentRoom) {
+            log.error(`[${this.config.name}] No current room found!`);
+            return;
+        }
+
+        const myPlayerId = localRoomStore.getMyPlayerId();
+        const myPlayerInfo = currentRoom.players.find(p => p.id === myPlayerId);
+        const mySeatIndex = myPlayerInfo?.seatIndex ?? 0;
+
+        // 如果 PlayerUIManager 未初始化（重连跳过 ReadyStage 的场景）
+        if (playerUIManager.maxSeats === 0) {
+            log.debug(`[${this.config.name}] PlayerUIManager not initialized, calling initForReadyStage first...`);
+            const layoutConfig = SeatLayoutConfig.getLayout(currentRoom.maxPlayers);
+            playerUIManager.initForReadyStage(
+                currentRoom.players,
+                currentRoom.maxPlayers,
+                mySeatIndex,
+                layoutConfig
+            );
+        }
+
+        // 重新映射玩家位置：当前玩家 → index 0
+        const totalSeats = currentRoom.maxPlayers;
+        const remappedPlayers = [];
+        for (let i = 0; i < totalSeats; i++) {
+            const actualSeatIndex = (mySeatIndex + i) % totalSeats;
+            const playerInfo = currentRoom.players.find(p => p.seatIndex === actualSeatIndex);
+            if (playerInfo) {
+                remappedPlayers.push({ ...playerInfo, displayIndex: i });
+            }
+        }
+
+        // 设置映射：playerId -> displayIndex
+        this.playerIdToIndexMap.clear();
+        for (const player of remappedPlayers) {
+            this.playerIdToIndexMap.set(player.id, player.displayIndex);
+        }
+
+        log.debug(`[${this.config.name}] Player ID mapping:`, Array.from(this.playerIdToIndexMap.entries()));
+
+        // 转换为 Player 对象
+        const players = remappedPlayers.map(playerInfo => new Player(playerInfo));
+
+        const pokerSprites = this.game.pokerSprites;
+        const pokerPrefab = this.game.pokerPrefab;
+        const glowMaterial = this.game.glowMaterial;
+
+        if (!pokerSprites || !pokerPrefab) {
+            log.error(`[${this.config.name}] Poker resources not loaded!`);
+            return;
+        }
+
+        playerUIManager.upgradeToPlayingMode(
+            players,
+            pokerSprites,
+            pokerPrefab,
+            this.getCurrentLevelRank(),
+            this.getEnableGrouping(),
+            glowMaterial
+        );
+
+        log.debug(`[${this.config.name}] PlayerUIManager upgraded to Playing mode`);
+    }
+
+    // ==================== 钩子方法（子类覆盖）====================
+
+    /** 发牌动画完成后回调，子类覆盖以启用选牌等 */
+    public onDealAnimationComplete(): void {}
+
+    /** 显示消息提示，子类覆盖以使用自己的 UIController */
+    public showMessage(msg: string, duration: number): void {}
+
+    /** 是否启用同数字纵向堆叠（Guandan: true, TheDecree: false） */
+    protected getEnableGrouping(): boolean { return false; }
+
+    // ==================== Handler 访问 getter ====================
+
+    public getGame(): Game { return this.game; }
+    public getPlayerIndexByPlayerId(playerId: string): number { return this.getPlayerIndex(playerId); }
+    public getPlayerIdToIndexMap(): Map<string, number> { return this.playerIdToIndexMap; }
+    public getConfigRef(): GameModeConfig { return this.config; }
+    public getDealerId(): string { return this.dealerId; }
 }

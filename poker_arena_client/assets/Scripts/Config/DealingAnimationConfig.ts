@@ -71,8 +71,12 @@ export const CommunityCardsConfig = {
  * 发牌顺序配置
  */
 export const DealingOrderConfig = {
+    /** 发牌模式：'sequential' 轮流发牌（像真实荷官），'simultaneous' 同时发牌 */
+    mode: 'sequential' as 'sequential' | 'simultaneous',
     startFromDealerLeft: true,  // 从庄家左边第一个玩家开始
     clockwise: true,            // 顺时针发牌
     cardsPerRound: 1,           // 每轮每人发几张
-    totalCardsPerPlayer: 5      // 每个玩家总共发几张（TheDecree）
+    totalCardsPerPlayer: 5,     // 每个玩家总共发几张（TheDecree）
+    /** 轮流发牌时每张牌之间的间隔（秒） */
+    sequentialCardInterval: 0.04,
 };
