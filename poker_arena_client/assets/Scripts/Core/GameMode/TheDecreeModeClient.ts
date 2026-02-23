@@ -150,6 +150,31 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
         this.unregisterAllNetworkEvents();
         this.cleanupLocalEvents();
+
+        // 清理发牌动画（停止飞行动画、清除动画层残留节点）
+        if (this.dealingHandler instanceof DealingHandler) {
+            const animator = this.dealingHandler.getDealingAnimator();
+            if (animator) {
+                animator.stopAllAnimations();
+            }
+        }
+
+        // 清理所有玩家手牌显示
+        const playerUIManager = this.game.playerUIManager;
+        if (playerUIManager) {
+            const playerCount = playerUIManager.getPlayerCount();
+            for (let i = 0; i < playerCount; i++) {
+                const ctrl = playerUIManager.getPlayerUINode(i);
+                if (ctrl) {
+                    const handDisplay = ctrl.getHandDisplay();
+                    if (handDisplay) {
+                        handDisplay.updateDisplay([]);
+                    }
+                }
+            }
+            playerUIManager.clearAllHandTypes();
+        }
+
         this.hideUI();
 
         // 清理公牌节点
@@ -428,9 +453,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
         this.showMessage(message, 2.5);
 
         if (this.theDecreeUIController) {
-            if (!isDealer) {
-                this.theDecreeUIController.updateCallButtonsVisibility();
-            }
+            this.theDecreeUIController.updateCallButtonsVisibility();
             this.theDecreeUIController.updateUIState();
             this.theDecreeUIController.showCardsToPlayHint(data.cardsToPlay);
         }

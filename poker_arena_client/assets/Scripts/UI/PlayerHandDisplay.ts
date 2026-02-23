@@ -533,15 +533,25 @@ export class PlayerHandDisplay extends Component {
         this.clearCards();
 
         const baseOffset = this.getHandPileBaseOffset();
+        const stackOffset = CardScale.stackDisplay.offset;
 
-        // 创建一张牌背作为堆叠底（startCount=0 时隐藏，等第一张牌到达时再显示）
-        const cardNode = this.createCardNode(0, false);
-        cardNode.setPosition(baseOffset.x, baseOffset.y, 0);
-        if (startCount === 0) {
+        if (startCount > 0) {
+            // 补牌场景：创建与 displayStack 一致的堆叠牌背
+            const maxStackDisplay = Math.min(CardScale.stackDisplay.maxCards, startCount);
+            for (let i = 0; i < maxStackDisplay; i++) {
+                const cardNode = this.createCardNode(0, false);
+                cardNode.setPosition(baseOffset.x + i * stackOffset, baseOffset.y + i * stackOffset, 0);
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+            }
+        } else {
+            // 初始发牌：创建一张隐藏的牌背，等第一张牌到达时再显示
+            const cardNode = this.createCardNode(0, false);
+            cardNode.setPosition(baseOffset.x, baseOffset.y, 0);
             cardNode.active = false;
+            this.handContainer.addChild(cardNode);
+            this._pokerNodes.push(cardNode);
         }
-        this.handContainer.addChild(cardNode);
-        this._pokerNodes.push(cardNode);
 
         // 创建数字标签（startCount > 0 时显示数字，0 时创建但不可见）
         if (this._showCardCount) {
@@ -557,6 +567,7 @@ export class PlayerHandDisplay extends Component {
     /**
      * Update the card count label without re-rendering the entire display
      * Used during dealing animation to increment the count
+     * Also grows the visual stack thickness
      * @param newCount New card count to display
      */
     public updateCardCountLabel(newCount: number): void {
@@ -564,7 +575,6 @@ export class PlayerHandDisplay extends Component {
             // 首次更新时激活隐藏的标签和牌背（初始发牌 startCount=0 的场景）
             if (!this._cardCountLabel.active) {
                 this._cardCountLabel.active = true;
-                // 同时激活隐藏的牌背节点
                 for (const node of this._pokerNodes) {
                     if (!node.active) {
                         node.active = true;
@@ -574,7 +584,26 @@ export class PlayerHandDisplay extends Component {
             const label = this._cardCountLabel.getComponent(Label);
             if (label) {
                 label.string = newCount.toString();
-                log.debug(`[PlayerHandDisplay] Updated card count label to ${newCount}`);
+            }
+        }
+
+        // 增加堆叠牌背节点以体现厚度变化
+        const maxStackDisplay = CardScale.stackDisplay.maxCards;
+        const currentStackNodes = this._pokerNodes.length;
+        const targetStackNodes = Math.min(maxStackDisplay, newCount);
+        if (targetStackNodes > currentStackNodes) {
+            const baseOffset = this.getHandPileBaseOffset();
+            const stackOffset = CardScale.stackDisplay.offset;
+            for (let i = currentStackNodes; i < targetStackNodes; i++) {
+                const cardNode = this.createCardNode(0, false);
+                cardNode.setPosition(baseOffset.x + i * stackOffset, baseOffset.y + i * stackOffset, 0);
+                this.handContainer.addChild(cardNode);
+                this._pokerNodes.push(cardNode);
+            }
+
+            // 确保数字标签始终在最上层（牌背节点之上）
+            if (this._cardCountLabel && this._cardCountLabel.parent) {
+                this._cardCountLabel.setSiblingIndex(this._cardCountLabel.parent.children.length - 1);
             }
         }
     }
@@ -808,6 +837,16 @@ export class PlayerHandDisplay extends Component {
         });
 
         log.debug(`[PlayerHandDisplay] Locked ${this._pokerComponents.length} cards`);
+    }
+
+    /**
+     * Unlock all cards: restore normal opacity and clear selection
+     */
+    public unlockCards(): void {
+        this._pokerComponents.forEach(poker => {
+            poker.setOpacity(CardOpacity.normal);
+        });
+        this._selectedIndices.clear();
     }
 
     // ==================== Sorting Animation Support ====================

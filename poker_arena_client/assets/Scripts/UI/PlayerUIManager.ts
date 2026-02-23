@@ -610,6 +610,13 @@ export class PlayerUIManager extends Component {
         }
     }
 
+    public unlockCards(playerIndex: number): void {
+        const node = this._playerUINodes[playerIndex];
+        if (node) {
+            node.unlockCards();
+        }
+    }
+
     // ===== 访问器接口 =====
     /**
      * 获取 PlayerUIController

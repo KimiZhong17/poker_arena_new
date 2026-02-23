@@ -498,6 +498,17 @@ export class DealingHandler {
         const playedCards = displayedCards.filter((c: number) => !allCards.includes(c));
         const remainingCards = displayedCards.filter((c: number) => allCards.includes(c));
 
+        // 记录出掉的牌在原始显示中的索引（用于后续插入新牌）
+        const playedIndices: number[] = [];
+        const playedCopy = [...playedCards];
+        for (let i = 0; i < displayedCards.length && playedCopy.length > 0; i++) {
+            const idx = playedCopy.indexOf(displayedCards[i]);
+            if (idx !== -1) {
+                playedIndices.push(i);
+                playedCopy.splice(idx, 1);
+            }
+        }
+
         const hiddenPositions = handDisplay.hideCardsWithoutRelayout(playedCards);
 
         const targetPositions: Vec3[] = [];
@@ -517,7 +528,14 @@ export class DealingHandler {
 
         this.dealingAnimator.clearAnimationCards();
 
-        const unsortedAllCards = [...remainingCards, ...newCards];
+        // 将新牌插入到出掉的牌的原始位置，排序动画更自然
+        const unsortedAllCards: number[] = [...remainingCards];
+        const newCardsToInsert = [...newCards];
+        for (let i = 0; i < playedIndices.length && newCardsToInsert.length > 0; i++) {
+            const insertIdx = Math.min(playedIndices[i], unsortedAllCards.length);
+            unsortedAllCards.splice(insertIdx, 0, newCardsToInsert.shift()!);
+        }
+        unsortedAllCards.push(...newCardsToInsert);
         player.setHandCards(unsortedAllCards);
         playerUIManager.updatePlayerHand(0);
 
@@ -600,22 +618,36 @@ export class DealingHandler {
             playerDeals.set(playerIndex, { data: pending.data, newCards, oldHandCount });
         }
 
-        // 2. 初始发牌时，队列里只有主玩家事件，需要推断其他玩家的发牌数据
+        // 2. 推断其他玩家的发牌数据（初始发牌或补牌时）
         const playerCount = playerUIManager.getPlayerCount();
-        if (!isRefill && playerDeals.has(0) && playerDeals.size === 1) {
+        if (playerDeals.has(0) && playerDeals.size === 1) {
             const mainEntry = playerDeals.get(0)!;
             const mainCardCount = mainEntry.data.handCards.length;
 
+            // 从 allHandCounts 获取其他玩家的手牌数量（补牌时）
+            // 如果没有 allHandCounts，则假设所有玩家手牌数量相同（初始发牌时）
             for (let i = 1; i < playerCount; i++) {
                 const ctrl = playerUIManager.getPlayerUINode(i);
                 const player = ctrl?.getPlayer();
                 const oldHandCount = player ? player.handCards.length : 0;
-                const dealCount = mainCardCount - oldHandCount;
 
+                // 获取该玩家的新手牌数量
+                let newHandCount = mainCardCount; // 默认与主玩家相同
+                if (mainEntry.data.allHandCounts) {
+                    // 从 allHandCounts 中查找该玩家的手牌数量
+                    for (const [playerId, count] of Object.entries(mainEntry.data.allHandCounts)) {
+                        if (this.mode.getPlayerIndexByPlayerId(playerId) === i) {
+                            newHandCount = count;
+                            break;
+                        }
+                    }
+                }
+
+                const dealCount = newHandCount - oldHandCount;
                 if (dealCount > 0) {
                     // 其他玩家的牌值未知，用 -1 填充
                     const fakeNewCards = Array(dealCount).fill(-1);
-                    const fakeHandCards = Array(mainCardCount).fill(-1);
+                    const fakeHandCards = Array(newHandCount).fill(-1);
                     playerDeals.set(i, {
                         data: { playerId: '', handCards: fakeHandCards } as DealCardsEvent,
                         newCards: fakeNewCards,
@@ -645,8 +677,9 @@ export class DealingHandler {
             }
         }
 
-        // 6. 主玩家补牌：隐藏出掉的牌，获取空位
+        // 6. 主玩家补牌：隐藏出掉的牌，获取空位，记录出牌位置索引
         let mainPlayerTargetPositions: Vec3[] = [];
+        let mainPlayerPlayedIndices: number[] = [];  // 出掉的牌在原始显示中的索引
         const mainPlayerEntry = playerDeals.get(0);
         if (isRefill && mainPlayerEntry) {
             const ctrl = playerUIManager.getPlayerUINode(0);
@@ -654,6 +687,17 @@ export class DealingHandler {
             if (handDisplay) {
                 const displayedCards = handDisplay.getDisplayedCardValues();
                 const playedCards = displayedCards.filter((c: number) => !mainPlayerEntry.data.handCards.includes(c));
+
+                // 记录出掉的牌在原始显示中的索引（用于后续插入新牌）
+                const playedCopy = [...playedCards];
+                for (let i = 0; i < displayedCards.length && playedCopy.length > 0; i++) {
+                    const idx = playedCopy.indexOf(displayedCards[i]);
+                    if (idx !== -1) {
+                        mainPlayerPlayedIndices.push(i);
+                        playedCopy.splice(idx, 1);
+                    }
+                }
+
                 const hiddenPositions = handDisplay.hideCardsWithoutRelayout(playedCards);
                 mainPlayerTargetPositions = hiddenPositions;
             }
@@ -708,18 +752,19 @@ export class DealingHandler {
                         handPos.y + stackOff,
                         handPos.z
                     );
-                    await this.dealingAnimator.dealSingleCardToPosition(
-                        -1,
-                        targetPos,
-                        CardScale.dealing.otherPlayerCard
-                    );
 
-                    // 更新计数标签
+                    // 先更新计数标签（在飞行动画之前，避免飞行牌遮挡数字）
                     const ctrl = playerUIManager.getPlayerUINode(playerIndex);
                     const handDisplay = ctrl?.getHandDisplay();
                     if (handDisplay) {
                         handDisplay.updateCardCountLabel(currentCount + 1);
                     }
+
+                    await this.dealingAnimator.dealSingleCardToPosition(
+                        -1,
+                        targetPos,
+                        CardScale.dealing.otherPlayerCard
+                    );
                 }
 
                 cardCounters.set(playerIndex, currentCount + 1);
@@ -743,9 +788,18 @@ export class DealingHandler {
                 await this.delay(0.15);
                 this.dealingAnimator.clearAnimationCards();
 
+                // 构建 unsortedAllCards：将新牌插入到出掉的牌的原始位置
+                // 这样 updatePlayerHand 后新牌在视觉上出现在原来出牌的位置，排序动画更自然
                 const displayedCards = handDisplay?.getDisplayedCardValues() || [];
                 const remainingCards = displayedCards.filter((c: number) => mainPlayerEntry.data.handCards.includes(c));
-                const unsortedAllCards = [...remainingCards, ...mainPlayerDealtCards];
+                const unsortedAllCards: number[] = [...remainingCards];
+                const newCardsToInsert = [...mainPlayerDealtCards];
+                for (let i = 0; i < mainPlayerPlayedIndices.length && newCardsToInsert.length > 0; i++) {
+                    const insertIdx = Math.min(mainPlayerPlayedIndices[i], unsortedAllCards.length);
+                    unsortedAllCards.splice(insertIdx, 0, newCardsToInsert.shift()!);
+                }
+                // 如果还有剩余新牌（新牌比出牌多），追加到末尾
+                unsortedAllCards.push(...newCardsToInsert);
 
                 if (player) {
                     player.setHandCards(unsortedAllCards);
@@ -807,6 +861,14 @@ export class DealingHandler {
                 this._initialDealAnimationComplete = true;
                 this.showPendingMessageIfReady();
             }
+        } else if (mainPlayerEntry) {
+            // 无新牌（牌堆已空）：直接更新主玩家手牌显示（重新居中布局）
+            const ctrl = playerUIManager.getPlayerUINode(0);
+            const player = ctrl?.getPlayer();
+            if (player) {
+                player.setHandCards(mainPlayerEntry.data.handCards);
+            }
+            playerUIManager.updatePlayerHand(0);
         }
 
         // 9. 更新所有其他玩家的手牌数据
@@ -849,9 +911,14 @@ export class DealingHandler {
             }
         }
 
+        // 从庄家左边第一个玩家开始（标准发牌规则）
+        const firstPlayer = DealingOrderConfig.startFromDealerLeft
+            ? (startIndex + 1) % playerCount
+            : startIndex;
+
         const order: number[] = [];
         for (let i = 0; i < playerCount; i++) {
-            order.push((startIndex + i) % playerCount);
+            order.push((firstPlayer + i) % playerCount);
         }
         return order;
     }

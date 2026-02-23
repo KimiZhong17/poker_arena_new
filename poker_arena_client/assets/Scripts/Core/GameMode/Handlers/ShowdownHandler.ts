@@ -90,8 +90,16 @@ export class ShowdownHandler {
 
             const player = playerUINode.getPlayer();
             if (player) {
-                const remainingCards = player.handCards.filter(card => !result.cards.includes(card));
-                player.setHandCards(remainingCards);
+                if (playerIndex === 0) {
+                    // 主玩家：按牌值过滤（有真实牌值）
+                    const remainingCards = player.handCards.filter(card => !result.cards.includes(card));
+                    player.setHandCards(remainingCards);
+                } else {
+                    // 其他玩家：handCards 是 [-1, -1, ...] 无法按牌值匹配，直接按出牌数量截断
+                    const removeCount = result.cards.length;
+                    const remaining = player.handCards.slice(0, Math.max(0, player.handCards.length - removeCount));
+                    player.setHandCards(remaining);
+                }
             }
         }
 
@@ -179,6 +187,10 @@ export class ShowdownHandler {
 
         const playerCount = playerUIManager.getPlayerCount();
         playerUIManager.clearAllHandTypes();
+
+        // 恢复主玩家手牌透明度（不重新布局，避免补牌前提前居中）
+        // 实际的重新布局由后续的 deal_cards 事件触发
+        playerUIManager.unlockCards(0);
 
         for (let i = 1; i < playerCount; i++) {
             const playerUINode = playerUIManager.getPlayerUINode(i);

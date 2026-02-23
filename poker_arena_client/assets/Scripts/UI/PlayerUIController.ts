@@ -266,6 +266,12 @@ export class PlayerUIController extends Component {
         }
     }
 
+    public unlockCards(): void {
+        if (this._handDisplay) {
+            this._handDisplay.unlockCards();
+        }
+    }
+
     // ===== Getters =====
     public getPlayer(): Player {
         return this._player;
