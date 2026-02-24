@@ -601,8 +601,12 @@ export class PlayerHandDisplay extends Component {
                 this._pokerNodes.push(cardNode);
             }
 
-            // 确保数字标签始终在最上层（牌背节点之上）
+            // 更新标签位置到新的顶牌位置，并确保在最上层
             if (this._cardCountLabel && this._cardCountLabel.parent) {
+                const topIndex = targetStackNodes - 1;
+                const topX = baseOffset.x + topIndex * stackOffset;
+                const topY = baseOffset.y + topIndex * stackOffset;
+                this._cardCountLabel.setPosition(topX, topY, 0);
                 this._cardCountLabel.setSiblingIndex(this._cardCountLabel.parent.children.length - 1);
             }
         }

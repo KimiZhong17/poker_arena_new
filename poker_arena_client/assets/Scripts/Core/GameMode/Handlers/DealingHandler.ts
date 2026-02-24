@@ -666,7 +666,18 @@ export class DealingHandler {
             maxRounds = Math.max(maxRounds, entry.newCards.length);
         }
 
-        // 5. 初始化其他玩家的 stack 显示
+        // 5. 提前更新其他玩家的 handCards 数据（防止动画期间被 clearShowdownDisplay 等
+        //    外部调用 updateDisplay 时用旧牌数重建显示导致闪动）
+        for (const [playerIndex, entry] of playerDeals) {
+            if (playerIndex === 0) continue;
+            const ctrl = playerUIManager.getPlayerUINode(playerIndex);
+            const player = ctrl?.getPlayer();
+            if (player) {
+                player.setHandCards(entry.data.handCards);
+            }
+        }
+
+        // 6. 初始化其他玩家的 stack 显示（视觉上仍从旧牌数开始，逐张递增）
         for (const [playerIndex, entry] of playerDeals) {
             if (playerIndex === 0) continue;
             const ctrl = playerUIManager.getPlayerUINode(playerIndex);
@@ -677,7 +688,7 @@ export class DealingHandler {
             }
         }
 
-        // 6. 主玩家补牌：隐藏出掉的牌，获取空位，记录出牌位置索引
+        // 7. 主玩家补牌：隐藏出掉的牌，获取空位，记录出牌位置索引
         let mainPlayerTargetPositions: Vec3[] = [];
         let mainPlayerPlayedIndices: number[] = [];  // 出掉的牌在原始显示中的索引
         const mainPlayerEntry = playerDeals.get(0);
@@ -703,7 +714,7 @@ export class DealingHandler {
             }
         }
 
-        // 7. 轮流发牌循环
+        // 8. 轮流发牌循环
         const mainPlayerDealtCards: number[] = [];
         const cardCounters = new Map<number, number>();
 
@@ -774,7 +785,7 @@ export class DealingHandler {
             }
         }
 
-        // 8. 主玩家揭牌
+        // 9. 主玩家揭牌
         if (mainPlayerEntry && mainPlayerDealtCards.length > 0) {
             await this.delay(0.2);
 
@@ -871,24 +882,19 @@ export class DealingHandler {
             playerUIManager.updatePlayerHand(0);
         }
 
-        // 9. 更新所有其他玩家的手牌数据
-        for (const [playerIndex, entry] of playerDeals) {
+        // 10. 刷新所有其他玩家的手牌显示（handCards 已在步骤5提前更新）
+        for (const [playerIndex] of playerDeals) {
             if (playerIndex === 0) continue;
-            const ctrl = playerUIManager.getPlayerUINode(playerIndex);
-            const player = ctrl?.getPlayer();
-            if (player) {
-                player.setHandCards(entry.data.handCards);
-            }
             playerUIManager.updatePlayerHand(playerIndex);
         }
 
-        // 10. 更新牌堆数量
+        // 11. 更新牌堆数量
         const lastEvent = this._pendingPlayerDeals[this._pendingPlayerDeals.length - 1];
         if (lastEvent?.data.deckSize !== undefined && this.deckPile) {
             this.deckPile.updateCardCount(lastEvent.data.deckSize);
         }
 
-        // 11. 清空队列并通知完成
+        // 12. 清空队列并通知完成
         this._pendingPlayerDeals = [];
 
         if (mainPlayerEntry) {
@@ -897,17 +903,27 @@ export class DealingHandler {
     }
 
     /**
-     * 构建发牌顺序（从庄家开始顺时针）
-     * playerIndex 是相对视角：0=自己，1=右边，以此类推
-     * 所以不同玩家看到的顺序自然不同
+     * 构建发牌顺序（从庄家左边开始顺时针）
+     * 所有客户端看到的绝对座位顺序一致
      */
     private buildDealingOrder(playerCount: number): number[] {
         const dealerId = this.mode.getDealerId();
         let startIndex = 0;
+
         if (dealerId) {
             const idx = this.mode.getPlayerIndexByPlayerId(dealerId);
             if (idx !== -1) {
                 startIndex = idx;
+            }
+        } else {
+            // 初始发牌没有庄家：用 playerId 字典序最小的玩家作为固定起始点
+            // 所有客户端的 playerId 集合相同，排序结果一致，保证绝对顺序一致
+            const playerIds = Array.from(this.mode.getPlayerIdToIndexMap().keys()).sort();
+            if (playerIds.length > 0) {
+                const idx = this.mode.getPlayerIndexByPlayerId(playerIds[0]);
+                if (idx !== -1) {
+                    startIndex = idx;
+                }
             }
         }
 
