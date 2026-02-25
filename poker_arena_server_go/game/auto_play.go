@@ -62,6 +62,9 @@ func (s *AggressiveStrategy) SelectFirstDealerCard(handCards []int) int {
 }
 
 func (s *AggressiveStrategy) DealerCall(handCards []int, communityCards []int) int {
+	if len(handCards) < 3 {
+		return len(handCards)
+	}
 	return 3
 }
 
@@ -84,8 +87,14 @@ func (s *RandomStrategy) SelectFirstDealerCard(handCards []int) int {
 }
 
 func (s *RandomStrategy) DealerCall(handCards []int, communityCards []int) int {
-	options := []int{1, 2, 3}
-	return options[randIntn(3)]
+	maxCall := len(handCards)
+	if maxCall > 3 {
+		maxCall = 3
+	}
+	if maxCall < 1 {
+		return 1
+	}
+	return 1 + randIntn(maxCall)
 }
 
 func (s *RandomStrategy) PlayCards(handCards []int, cardsToPlay int) []int {

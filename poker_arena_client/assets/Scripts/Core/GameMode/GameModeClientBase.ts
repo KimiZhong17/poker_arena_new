@@ -695,4 +695,24 @@ export abstract class GameModeClientBase {
     public getPlayerIdToIndexMap(): Map<string, number> { return this.playerIdToIndexMap; }
     public getConfigRef(): GameModeConfig { return this.config; }
     public getDealerId(): string { return this.dealerId; }
+
+    /**
+     * 提前清除摊牌显示（在发牌动画更新 handCards 之前调用）
+     * 防止 showdown 定时器在动画期间触发 updateDisplay 覆盖动画状态
+     */
+    public flushShowdownCleanup(): void {
+        if (this.showdownHandler) {
+            this.showdownHandler.clearShowdownDisplay();
+        }
+    }
+
+    /**
+     * 检查发牌动画是否正在进行中
+     */
+    public isDealingInProgress(): boolean {
+        if (this.dealingHandler && 'isDealingAnimationInProgress' in this.dealingHandler) {
+            return (this.dealingHandler as any).isDealingAnimationInProgress;
+        }
+        return false;
+    }
 }

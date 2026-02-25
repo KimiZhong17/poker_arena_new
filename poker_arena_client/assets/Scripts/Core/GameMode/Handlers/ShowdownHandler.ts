@@ -192,12 +192,17 @@ export class ShowdownHandler {
         // 实际的重新布局由后续的 deal_cards 事件触发
         playerUIManager.unlockCards(0);
 
-        for (let i = 1; i < playerCount; i++) {
-            const playerUINode = playerUIManager.getPlayerUINode(i);
-            if (playerUINode) {
-                const handDisplay = playerUINode.getHandDisplay();
-                if (handDisplay) {
-                    handDisplay.updateDisplay([]);
+        // 发牌动画进行中时跳过其他玩家的 updateDisplay，
+        // 因为 handCards 已被提前更新为补牌后的完整数据，直接渲染会覆盖动画状态
+        const dealingInProgress = this.mode.isDealingInProgress();
+        if (!dealingInProgress) {
+            for (let i = 1; i < playerCount; i++) {
+                const playerUINode = playerUIManager.getPlayerUINode(i);
+                if (playerUINode) {
+                    const handDisplay = playerUINode.getHandDisplay();
+                    if (handDisplay) {
+                        handDisplay.updateDisplay([]);
+                    }
                 }
             }
         }

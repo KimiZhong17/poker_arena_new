@@ -790,34 +790,23 @@ export class TheDecreeUIController extends Component {
     private showCallButtons(): void {
         log.debug('showCallButtons() called, btnCall123Node:', !!this.btnCall123Node);
 
-        // Get player's hand card count - prefer displayed cards over player.handCards
-        // because player.handCards may not be updated yet during refill animation
+        // 获取主玩家手牌数量（服务端会验证所有玩家的手牌数量，客户端只需检查自己的）
         let handCardCount = 0;
         if (this._game && this._game.playerUIManager) {
             const playerUINode = this._game.playerUIManager.getPlayerUINode(0);
             if (playerUINode) {
-                // Try to get count from hand display first (more accurate during animations)
-                const handDisplay = playerUINode.getHandDisplay();
-                if (handDisplay && typeof handDisplay.getDisplayedCardValues === 'function') {
-                    const displayedCards = handDisplay.getDisplayedCardValues();
-                    handCardCount = displayedCards.length;
-                    log.debug('Using displayed card count:', handCardCount);
-                } else {
-                    // Fallback to player.handCards
-                    const player = playerUINode.getPlayer();
-                    if (player && player.handCards) {
-                        handCardCount = player.handCards.length;
-                        log.debug('Using player.handCards count:', handCardCount);
-                    }
+                const player = playerUINode.getPlayer();
+                if (player && player.handCards) {
+                    handCardCount = player.handCards.length;
                 }
             }
         }
 
-        // TheDecree mode always has 5 cards after refill, so default to 5 if we can't determine
         if (handCardCount === 0) {
             handCardCount = 5;
             log.debug('Defaulting to 5 cards');
         }
+        log.debug('Hand card count:', handCardCount);
 
         if (this.btnCall123Node) {
             this.btnCall123Node.active = true;
@@ -840,8 +829,6 @@ export class TheDecreeUIController extends Component {
         }
 
         // Disable buttons based on hand card count
-        // If hand cards < 2, disable call2 and call3
-        // If hand cards < 3, disable call3
         if (this.callTwoButton) {
             const shouldDisable = handCardCount < 2;
             this.callTwoButton.interactable = !shouldDisable;

@@ -257,6 +257,13 @@ func (g *TheDecreeMode) DealerCallAction(dealerID string, cardsToPlay int) bool 
 		return false
 	}
 
+	// 叫牌数不能超过庄家手牌数量（也不能超过任何玩家的手牌数量）
+	for _, p := range g.playerManager.GetAllPlayers() {
+		if len(p.HandCards) > 0 && cardsToPlay > len(p.HandCards) {
+			return false
+		}
+	}
+
 	g.updatePlayerActionTime(dealerID)
 	g.currentRound.CardsToPlay = cardsToPlay
 	g.state = StatePlayerSelection
@@ -607,6 +614,15 @@ func (g *TheDecreeMode) ExecuteAutoAction(playerID string) {
 	case StateDealerCall:
 		if g.currentRound != nil && g.currentRound.DealerID == playerID {
 			cardsToPlay := g.autoPlayStrategy.DealerCall(p.HandCards, g.communityCards)
+			// Clamp to min hand size across all players
+			for _, other := range g.playerManager.GetAllPlayers() {
+				if len(other.HandCards) > 0 && cardsToPlay > len(other.HandCards) {
+					cardsToPlay = len(other.HandCards)
+				}
+			}
+			if cardsToPlay < 1 {
+				cardsToPlay = 1
+			}
 			g.DealerCallAction(playerID, cardsToPlay)
 		}
 	case StatePlayerSelection:

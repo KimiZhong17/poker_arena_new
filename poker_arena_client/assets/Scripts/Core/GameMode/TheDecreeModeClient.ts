@@ -426,9 +426,13 @@ export class TheDecreeModeClient extends GameModeClientBase {
         if (data.roundNumber === 1) return;
 
         // 后续回合：如果本地玩家是庄家，立即显示叫牌按钮
+        // 先 flush 待处理的补牌事件，确保 handCards 是最新数据
         const localRoomStore = LocalRoomStore.getInstance();
         const currentPlayerId = localRoomStore.getMyPlayerId();
         if (currentPlayerId === data.dealerId && this.theDecreeUIController) {
+            if (this.dealingHandler instanceof DealingHandler) {
+                this.dealingHandler.flushPendingDeals();
+            }
             this.theDecreeUIController.updateCallButtonsVisibility();
         }
     }

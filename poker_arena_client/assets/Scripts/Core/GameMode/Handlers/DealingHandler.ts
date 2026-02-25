@@ -35,6 +35,9 @@ export class DealingHandler {
     // 补牌事件 debounce 定时器
     private _refillDebounceTimer: number | null = null;
 
+    // 发牌动画进行中标志（防止外部 updateDisplay 覆盖动画状态）
+    private _isDealingAnimationInProgress: boolean = false;
+
     constructor(mode: GameModeClientBase) {
         this.mode = mode;
     }
@@ -46,6 +49,8 @@ export class DealingHandler {
 
     public get initialDealAnimationComplete(): boolean { return this._initialDealAnimationComplete; }
     public set initialDealAnimationComplete(v: boolean) { this._initialDealAnimationComplete = v; }
+
+    public get isDealingAnimationInProgress(): boolean { return this._isDealingAnimationInProgress; }
 
     public getDeckPile(): DeckPile | null { return this.deckPile; }
     public getDealingAnimator(): DealingAnimator | null { return this.dealingAnimator; }
@@ -133,6 +138,7 @@ export class DealingHandler {
         this._initialDealAnimationComplete = false;
         this._pendingMessage = null;
         this._refillDebounceTimer = null;
+        this._isDealingAnimationInProgress = false;
     }
 
     // ==================== 公共牌 ====================
@@ -666,10 +672,17 @@ export class DealingHandler {
             maxRounds = Math.max(maxRounds, entry.newCards.length);
         }
 
-        // 5. 提前更新其他玩家的 handCards 数据（防止动画期间被 clearShowdownDisplay 等
-        //    外部调用 updateDisplay 时用旧牌数重建显示导致闪动）
+        // 4.5 提前清除摊牌显示（此时 handCards 还是旧数据，updateDisplay 不会显示错误数量）
+        //     防止 showdown 定时器在后续动画期间触发 updateDisplay 覆盖动画状态
+        this.mode.flushShowdownCleanup();
+
+        // 标记发牌动画进行中（防止 onDealerCalled 等外部事件触发 updateDisplay 覆盖动画）
+        this._isDealingAnimationInProgress = true;
+
+        // 5. 提前更新所有玩家的 handCards 数据
+        //    其他玩家：防止动画期间外部 updateDisplay 用旧牌数重建显示
+        //    主玩家：确保 dealer_selected 事件到达时 showCallButtons 能读到正确的手牌数
         for (const [playerIndex, entry] of playerDeals) {
-            if (playerIndex === 0) continue;
             const ctrl = playerUIManager.getPlayerUINode(playerIndex);
             const player = ctrl?.getPlayer();
             if (player) {
@@ -764,18 +777,18 @@ export class DealingHandler {
                         handPos.z
                     );
 
-                    // 先更新计数标签（在飞行动画之前，避免飞行牌遮挡数字）
-                    const ctrl = playerUIManager.getPlayerUINode(playerIndex);
-                    const handDisplay = ctrl?.getHandDisplay();
-                    if (handDisplay) {
-                        handDisplay.updateCardCountLabel(currentCount + 1);
-                    }
-
                     await this.dealingAnimator.dealSingleCardToPosition(
                         -1,
                         targetPos,
                         CardScale.dealing.otherPlayerCard
                     );
+
+                    // 飞行动画完成后再更新计数标签和堆叠厚度，避免牌还没到就已经增长
+                    const ctrl = playerUIManager.getPlayerUINode(playerIndex);
+                    const handDisplay = ctrl?.getHandDisplay();
+                    if (handDisplay) {
+                        handDisplay.updateCardCountLabel(currentCount + 1);
+                    }
                 }
 
                 cardCounters.set(playerIndex, currentCount + 1);
@@ -888,6 +901,9 @@ export class DealingHandler {
             playerUIManager.updatePlayerHand(playerIndex);
         }
 
+        // 发牌动画完成，解除保护
+        this._isDealingAnimationInProgress = false;
+
         // 11. 更新牌堆数量
         const lastEvent = this._pendingPlayerDeals[this._pendingPlayerDeals.length - 1];
         if (lastEvent?.data.deckSize !== undefined && this.deckPile) {
@@ -958,6 +974,18 @@ export class DealingHandler {
             this._refillDebounceTimer = null;
             this.processPendingPlayerDeals();
         }, 100) as unknown as number;
+    }
+
+    /**
+     * 立即处理待处理的补牌事件（取消 debounce 定时器）
+     * 在需要最新 handCards 数据时调用（如显示 call 按钮前）
+     */
+    public flushPendingDeals(): void {
+        if (this._refillDebounceTimer !== null) {
+            clearTimeout(this._refillDebounceTimer);
+            this._refillDebounceTimer = null;
+            this.processPendingPlayerDeals();
+        }
     }
 
     /**
