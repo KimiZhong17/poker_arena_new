@@ -1,6 +1,6 @@
-# 🃏 Poker Arena (扑克竞技场)
+﻿# 🃏 Poker Arena (扑克竞技场)
 
-A multiplayer online poker gaming platform built with Cocos Creator and Node.js, supporting multiple poker game modes with extensible architecture.
+A multiplayer online poker gaming platform built with Cocos Creator and Go. The client focuses on UI and input, while the Go server handles game logic and real-time state sync.
 
 ## 📋 Table of Contents
 
@@ -9,6 +9,7 @@ A multiplayer online poker gaming platform built with Cocos Creator and Node.js,
 - [Technology Stack](#-technology-stack)
 - [Project Structure](#-project-structure)
 - [Quick Start](#-quick-start)
+- [Networking & Deployment](#-networking--deployment)
 - [Architecture](#-architecture)
 - [Development](#-development)
 - [License](#-license)
@@ -17,10 +18,12 @@ A multiplayer online poker gaming platform built with Cocos Creator and Node.js,
 
 - **Multi-Game Support** - Extensible game mode system supporting multiple poker variants
 - **Real-time Multiplayer** - WebSocket-based client-server architecture for low-latency gameplay
+- **LAN Multiplayer Ready** - Simple IP-based configuration for local network sessions
 - **Responsive UI** - Adaptive layouts for 2-5 players with dynamic positioning
 - **Extensible Architecture** - Stage-based game flow with factory pattern for easy extension
 - **Card Evaluation System** - Built-in hand evaluators for different game types
-- **Player Management** - Comprehensive player state tracking and management
+- **Reconnection Support** - Graceful reconnection within timeout window to restore game state
+- **Auto-Play System** - AI strategies for disconnected players (conservative, aggressive, random)
 
 ## 🎮 Game Modes
 
@@ -70,55 +73,128 @@ A traditional Chinese poker game for 5 players.
 - **Game Engine:** Cocos Creator 3.8.7
 - **Language:** TypeScript (ES2017)
 - **UI Framework:** Cocos Creator built-in UI system
-- **Architecture:** Stage pattern, Factory pattern
+- **Architecture:** Stage pattern, Factory pattern, Event-driven
 
 ### Server
-- **Runtime:** Node.js
-- **WebSocket Library:** nodejs-websocket 1.7.2
-- **Port:** 8001
+- **Runtime:** Go 1.21
+- **Realtime:** Gorilla WebSocket
+- **Default Port:** 3000 (configurable via `poker_arena_server_go/config/config.go`)
 
 ## 📁 Project Structure
 
 ```
 poker_arena_new/
-├── poker_arena_client/              # Cocos Creator game client
+├── poker_arena_client/                  # Cocos Creator game client
 │   ├── assets/
 │   │   ├── Scripts/
-│   │   │   ├── Card/                # Card system & evaluation
-│   │   │   │   ├── Dealer.ts        # Deck creation & shuffling
-│   │   │   │   ├── CardUtils.ts     # Card utilities & comparison
-│   │   │   │   ├── HandEvaluator.ts # Guandan hand evaluation
-│   │   │   │   └── TexasHoldEmEvaluator.ts  # Hold'em hand ranking
-│   │   │   ├── Core/                # Core game logic
-│   │   │   │   ├── GameMode/        # Game mode implementations
-│   │   │   │   │   ├── GameModeBase.ts
-│   │   │   │   │   ├── TheDecreeMode.ts
-│   │   │   │   │   ├── GuandanMode.ts
-│   │   │   │   │   └── GameModeFactory.ts
-│   │   │   │   ├── Stage/           # Game stage system
-│   │   │   │   │   ├── GameStageBase.ts
-│   │   │   │   │   ├── ReadyStage.ts
-│   │   │   │   │   ├── PlayingStage.ts
-│   │   │   │   │   └── EndStage.ts
-│   │   │   │   └── Room/            # Room management
-│   │   │   ├── UI/                  # UI components
-│   │   │   │   ├── PlayerUIManager.ts
-│   │   │   │   ├── PlayerUINode.ts
-│   │   │   │   ├── PlayerHandDisplay.ts
-│   │   │   │   ├── DealerIndicator.ts
-│   │   │   │   └── UIControllers/   # Game-specific UI controllers
-│   │   │   ├── Manager/             # System managers
-│   │   │   │   ├── UserManager.ts
-│   │   │   │   ├── RoomManager.ts
-│   │   │   │   └── SceneManager.ts
-│   │   │   └── Test/                # Testing utilities
-│   │   └── resources/               # Game resources
-│   └── settings/                    # Cocos editor settings
+│   │   │   ├── Card/                    # Card system & evaluation
+│   │   │   │   ├── CardConst.ts         # Card suit/point enumerations
+│   │   │   │   ├── CardUtils.ts         # Card utilities (getSuit, getPoint, getLogicWeight)
+│   │   │   │   ├── Dealer.ts            # Deck creation & shuffling (Fisher-Yates)
+│   │   │   │   ├── HandEvaluator.ts     # Hand evaluation system
+│   │   │   │   └── GameConfig.ts        # Game configuration constants
+│   │   │   ├── Config/                  # Configuration files
+│   │   │   │   ├── NetworkConfig.ts     # Server IP/port configuration
+│   │   │   │   ├── SeatConfig.ts        # Player seat layouts (2-5 players)
+│   │   │   │   ├── CardDisplayConfig.ts # Card visual display settings
+│   │   │   │   ├── DealingAnimationConfig.ts  # Dealing animation parameters
+│   │   │   │   └── UIConfig.ts          # UI colors, fonts, sizes
+│   │   │   ├── Core/                    # Core game logic
+│   │   │   │   ├── GameController.ts    # Main game orchestration
+│   │   │   │   ├── GameMode/            # Game mode implementations
+│   │   │   │   │   ├── GameModeClientBase.ts      # Abstract base class
+│   │   │   │   │   ├── GameModeClientFactory.ts   # Factory for game modes
+│   │   │   │   │   ├── TheDecreeModeClient.ts     # The Decree mode
+│   │   │   │   │   ├── TheDecreeGameState.ts      # Game state enum
+│   │   │   │   │   └── Handlers/                  # Event handlers
+│   │   │   │   │       ├── DealingHandler.ts      # Dealing animations
+│   │   │   │   │       ├── ShowdownHandler.ts     # Showdown display
+│   │   │   │   │       └── ReconnectHandler.ts    # Reconnection restore
+│   │   │   │   └── Stage/               # Game stage system
+│   │   │   │       ├── GameStageBase.ts
+│   │   │   │       ├── StageManager.ts  # Stage transitions
+│   │   │   │       ├── ReadyStage.ts
+│   │   │   │       ├── PlayingStage.ts
+│   │   │   │       └── EndStage.ts
+│   │   │   ├── Network/                 # Network communication
+│   │   │   │   ├── NetworkClient.ts     # WebSocket client with reconnection
+│   │   │   │   ├── NetworkManager.ts    # Singleton network manager
+│   │   │   │   └── Messages.ts          # Message type definitions
+│   │   │   ├── Services/                # Service layer
+│   │   │   │   ├── AuthService.ts       # Authentication (login, guest, logout)
+│   │   │   │   ├── GameService.ts       # Game event handling
+│   │   │   │   └── RoomService.ts       # Room management (create, join, leave)
+│   │   │   ├── LocalStore/              # Local state management
+│   │   │   │   ├── LocalUserStore.ts    # User account data (persistent)
+│   │   │   │   ├── LocalRoomStore.ts    # Room state (temporary)
+│   │   │   │   ├── LocalGameStore.ts    # Game state during gameplay
+│   │   │   │   └── LocalPlayerStore.ts  # Player data structures
+│   │   │   ├── UI/                      # UI components
+│   │   │   │   ├── PlayerUIManager.ts   # Master UI coordinator
+│   │   │   │   ├── PlayerUIController.ts # Individual player UI
+│   │   │   │   ├── PlayerHandDisplay.ts # Hand cards display & selection
+│   │   │   │   ├── PlayerInfoPanel.ts   # Player info (name, score, status)
+│   │   │   │   ├── DealingAnimator.ts   # Card dealing animations
+│   │   │   │   ├── DeckPile.ts          # Visual card deck
+│   │   │   │   ├── DealerIndicator.ts   # Current dealer indicator
+│   │   │   │   ├── Poker.ts             # Individual card component
+│   │   │   │   ├── PokerFactory.ts      # Card instance factory
+│   │   │   │   ├── TheDecreeUIController.ts  # The Decree UI
+│   │   │   │   ├── GuandanUIController.ts    # Guandan UI
+│   │   │   │   ├── SceneUIController.ts # Scene-level UI (exit, settings)
+│   │   │   │   ├── CardsToPlayHint.ts   # Hint display for cards to play
+│   │   │   │   ├── MessageTip.ts        # Message notification system
+│   │   │   │   ├── LoadingUI.ts         # Loading screen
+│   │   │   │   └── Switch.ts           # Toggle switch component
+│   │   │   ├── Utils/                   # Utilities
+│   │   │   │   ├── EventCenter.ts       # Event bus for decoupled communication
+│   │   │   │   ├── Logger.ts            # Logging utility
+│   │   │   │   ├── IdGenerator.ts       # UUID generation
+│   │   │   │   └── polyfills.ts         # Browser polyfills
+│   │   │   ├── Login.ts                 # Login scene controller
+│   │   │   ├── Hall.ts                  # Game mode selection scene
+│   │   │   ├── Lobby.ts                 # Room creation/joining scene
+│   │   │   ├── Game.ts                  # Main game scene orchestrator
+│   │   │   └── SceneManager.ts          # Scene transition management
+│   │   ├── Scenes/                      # Game scenes
+│   │   │   ├── Login.scene
+│   │   │   ├── Hall.scene
+│   │   │   ├── Lobby.scene
+│   │   │   └── GameRoom.scene
+│   │   ├── Resources/                   # Game resources
+│   │   │   ├── Pokers/                  # Card sprite assets & prefabs
+│   │   │   ├── UI/                      # UI prefabs & backgrounds
+│   │   │   └── Backgrounds/             # Scene backgrounds
+│   │   └── Effects/                     # Shader effects
+│   │       └── CardGlow.effect          # Card glow shader
+│   └── settings/                        # Cocos editor settings
 │
-└── poker_arena_server/              # WebSocket game server
-    ├── app.js                       # Server entry point
-    ├── package.json
-    └── node_modules/
+└── poker_arena_server_go/               # Go WebSocket server
+    ├── main.go                          # Entry point, HTTP routes, graceful shutdown
+    ├── config/
+    │   └── config.go                    # Server configuration (port, CORS, timeouts)
+    ├── core/
+    │   ├── server.go                    # Main game server, WebSocket handling
+    │   ├── room.go                      # Game room management & lifecycle
+    │   └── session.go                   # Player session & connection
+    ├── game/
+    │   ├── the_decree.go                # The Decree game state machine
+    │   ├── evaluator.go                 # Hand evaluation & comparison
+    │   ├── player_manager.go            # Player management
+    │   ├── auto_play.go                 # AI strategies (conservative/aggressive/random)
+    │   ├── card_utils.go                # Card utilities
+    │   ├── card_const.go                # Card constants
+    │   ├── hand_type.go                 # Hand type definitions
+    │   ├── types.go                     # Type definitions
+    │   └── rand.go                      # Random utilities
+    ├── protocol/
+    │   ├── messages.go                  # Message type constants
+    │   ├── events.go                    # Event data structures
+    │   └── requests.go                  # Request data structures
+    └── util/
+        ├── logger.go                    # Structured logging (DEBUG/INFO/WARN/ERROR)
+        ├── rate_limiter.go              # Token bucket rate limiting
+        └── id_validator.go              # ID validation
 ```
 
 ## 🚀 Quick Start
@@ -126,72 +202,101 @@ poker_arena_new/
 ### Prerequisites
 
 - [Cocos Creator 3.8.7+](https://www.cocos.com/creator-download)
-- [Node.js 14+](https://nodejs.org/)
+- [Go 1.21+](https://go.dev/)
 
 ### Server Setup
 
 ```bash
-# Navigate to server directory
-cd poker_arena_server
+# Navigate to Go server directory
+cd poker_arena_server_go
 
-# Install dependencies
-npm install
+# Run directly
+go run .
 
-# Start the WebSocket server
-node app.js
+# Or build and run
+# go build -o poker-arena-server
+# ./poker-arena-server
 ```
 
-The server will start on port 8001.
+The WebSocket server runs on port **3000** by default. It will print your LAN IP after startup.
 
 ### Client Setup
 
 1. Open Cocos Creator 3.8.7+
 2. Open the `poker_arena_client` project folder
-3. Open the `Login` scene from the assets
-4. Click the Play button to run in the editor
-5. Or build for your target platform (Web, iOS, Android, etc.)
+3. (LAN) Update server IP/port in `poker_arena_client/assets/Scripts/Config/NetworkConfig.ts`
+4. Open the `Login` scene from the assets
+5. Click the Play button to run in the editor
+6. Or build for your target platform (Web, iOS, Android, etc.)
+
+## 🌐 Networking & Deployment
+
+### Configuration
+
+- **Server port**: `3000` by default (see `poker_arena_server_go/config/config.go`)
+- **WebSocket endpoint**: `ws://<server-ip>:3000/ws`
+- **Client IP/port**: `poker_arena_client/assets/Scripts/Config/NetworkConfig.ts`
+- **Runtime update**: `NetworkConfig.setServerIP('192.168.1.100')`
+
+### Health Checks
+
+- `GET /health` → server status
+- `GET /stats` → rooms/players summary
+
+### Guides
+
+- `LAN_MULTIPLAYER_GUIDE.md`
+- `CLIENT_NETWORK_GUIDE.md`
+- `MOBILE_H5_DEPLOYMENT_GUIDE.md`
 
 ## 🏗️ Architecture
 
-### Game Mode System
+### Client-Server Model
 
-The game uses an extensible architecture based on abstract base classes:
+The client is a thin UI layer — all game logic runs on the Go server. Communication is via WebSocket with JSON messages.
+
+### Game Mode System (Client)
 
 ```typescript
-GameModeBase (Abstract)
-├── TheDecreeMode
-└── GuandanMode
+GameModeClientBase (Abstract)
+├── TheDecreeModeClient
+└── (GuandanModeClient - planned)
 ```
 
-**Creating a New Game Mode:**
-1. Extend `GameModeBase`
-2. Implement required methods (start, end, getPlayerCount, etc.)
-3. Register in `GameModeFactory`
+Each game mode has dedicated Handlers for specific concerns:
+- `DealingHandler` - Card dealing animations and distribution
+- `ShowdownHandler` - Showdown display and results
+- `ReconnectHandler` - Game state restoration after reconnection
+
+### Game Mode System (Server)
+
+```go
+// Game state machine (the_decree.go)
+setup → first_dealer → dealer_call → player_selection → showdown → scoring → refill → game_over
+```
 
 ### Stage Management
 
-Games flow through three stages:
+Games flow through three stages managed by `StageManager`:
 
 ```
 ReadyStage → PlayingStage → EndStage
 ```
 
-Each stage is managed by `StageManager` and can be extended for custom behavior.
+### Service Layer
 
-### Player System
+The client uses a service-based architecture for server communication:
+- `AuthService` - Authentication (login, guest login, logout)
+- `GameService` - Game event handling and operations
+- `RoomService` - Room management (create, join, leave)
 
-```typescript
-Player (Base)
-├── TheDecreePlayer
-└── GuandanPlayer
-```
+### Local State Management
 
-Players have state tracking:
-- `WAITING` - In lobby
-- `PLAYING` - Active in game
-- `THINKING` - Deciding move
-- `PASSED` - Skipped turn
-- `FINISHED` - Completed game
+Client-side state is managed through dedicated stores:
+- `LocalUserStore` - User account data (persistent)
+- `LocalRoomStore` - Room state (temporary)
+- `LocalGameStore` - Game state during gameplay
+- `LocalPlayerStore` - Player data structures
 
 ### Card Encoding
 
@@ -222,47 +327,27 @@ All layouts use Cocos Creator's Widget system for responsive positioning.
 
 ## 🔧 Development
 
-### Project Configuration
-
-The client uses TypeScript with the following configuration:
-- Target: ES2017
-- Module: CommonJS
-- Strict type checking enabled
-- DOM libraries included
-
 ### Adding a New Game Mode
 
-1. Create a new class extending `GameModeBase`:
+1. **Server:** Add game logic in `poker_arena_server_go/game/`
+2. **Client:** Create a new class extending `GameModeClientBase`:
 
 ```typescript
-export class MyGameMode extends GameModeBase {
+export class MyGameModeClient extends GameModeClientBase {
     // Implement required methods
 }
 ```
 
-2. Register in [GameModeFactory.ts](poker_arena_client/assets/Scripts/Core/GameMode/GameModeFactory.ts):
-
-```typescript
-GameModeFactory.registerGameMode("MyGame", MyGameMode);
-```
-
-3. Create a UI controller extending your base UI needs
-
-4. Add stage implementations if custom flow is needed
-
-### Testing
-
-Test helpers are available in `poker_arena_client/assets/Scripts/Test/`:
-- Card evaluation testing
-- Game mode testing utilities
-- Mock player data
+3. Register in `GameModeClientFactory.ts`
+4. Create a UI controller (e.g., `MyGameUIController.ts`)
+5. Add Handlers for dealing, showdown, etc. if needed
 
 ### Code Style
 
 - Use TypeScript strict mode
 - Follow Cocos Creator conventions
 - Separate UI logic from game logic
-- Use managers for cross-cutting concerns
+- Use Services for server communication, LocalStores for state
 
 ## 📄 License
 
@@ -270,4 +355,4 @@ ISC
 
 ---
 
-**Developed with Cocos Creator 3.8.7**
+**Developed with Cocos Creator 3.8.7 + Go 1.21**
