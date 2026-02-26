@@ -735,6 +735,20 @@ export class DealingHandler {
             cardCounters.set(playerIndex, entry.oldHandCount);
         }
 
+        // 计算总发牌数，推算牌堆起始数量（用于逐张递减牌堆厚度）
+        let totalCardsToDeal = 0;
+        for (const [, entry] of playerDeals) {
+            totalCardsToDeal += entry.newCards.length;
+        }
+        const lastEvent = this._pendingPlayerDeals[this._pendingPlayerDeals.length - 1];
+        const finalDeckSize = lastEvent?.data.deckSize ?? 0;
+        let currentDeckSize = finalDeckSize + totalCardsToDeal;
+
+        // 先用推算的起始数量更新牌堆显示
+        if (this.deckPile) {
+            this.deckPile.updateCardCount(currentDeckSize);
+        }
+
         for (let round = 0; round < maxRounds; round++) {
             for (const playerIndex of dealingOrder) {
                 const entry = playerDeals.get(playerIndex);
@@ -742,6 +756,12 @@ export class DealingHandler {
 
                 const currentCount = cardCounters.get(playerIndex) || 0;
                 const cardValue = entry.newCards[round];
+
+                // 牌飞出前就递减牌堆，视觉上与动画同步
+                currentDeckSize--;
+                if (this.deckPile) {
+                    this.deckPile.updateCardCount(currentDeckSize);
+                }
 
                 if (playerIndex === 0) {
                     // 主玩家：始终保留飞行节点（初始发牌堆叠，补牌停留在空位等翻牌）
@@ -904,11 +924,7 @@ export class DealingHandler {
         // 发牌动画完成，解除保护
         this._isDealingAnimationInProgress = false;
 
-        // 11. 更新牌堆数量
-        const lastEvent = this._pendingPlayerDeals[this._pendingPlayerDeals.length - 1];
-        if (lastEvent?.data.deckSize !== undefined && this.deckPile) {
-            this.deckPile.updateCardCount(lastEvent.data.deckSize);
-        }
+        // 11. 牌堆数量已在发牌循环中逐张递减，无需再次更新
 
         // 12. 清空队列并通知完成
         this._pendingPlayerDeals = [];

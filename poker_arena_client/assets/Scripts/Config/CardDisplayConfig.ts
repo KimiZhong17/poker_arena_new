@@ -48,7 +48,7 @@ export const CardScale = {
 
     // 卡牌堆叠显示
     stackDisplay: {
-        maxCards: 5,            // 最多显示几张牌背
+        maxCards: 15,           // 最多显示几张牌背（15以下显示真实牌数）
         offset: 1,              // 每张牌的偏移（像素）
     },
 

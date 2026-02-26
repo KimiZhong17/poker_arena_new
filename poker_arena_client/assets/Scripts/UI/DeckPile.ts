@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Sprite, SpriteFrame, Vec3, UITransform, Widget, instantiate, tween, Prefab } from 'cc';
+import { _decorator, Component, Node, SpriteFrame, Vec3, UIOpacity, Widget, instantiate, Prefab } from 'cc';
 import { DeckPileConfig } from '../Config/DealingAnimationConfig';
 import { CardScale, CardSpriteNames } from '../Config/CardDisplayConfig';
 import { Poker } from './Poker';
@@ -145,30 +145,15 @@ export class DeckPile extends Component {
      * @returns 顶部卡牌的世界坐标
      */
     public getTopCardWorldPosition(): Vec3 {
-        if (this._cardNodes.length > 0) {
-            const topCard = this._cardNodes[this._cardNodes.length - 1];
-            const worldPos = new Vec3();
-            topCard.getWorldPosition(worldPos);
-            return worldPos;
+        // 找到最顶部可见的牌
+        for (let i = this._cardNodes.length - 1; i >= 0; i--) {
+            if (this._cardNodes[i].active) {
+                const worldPos = new Vec3();
+                this._cardNodes[i].getWorldPosition(worldPos);
+                return worldPos;
+            }
         }
         return this.getWorldPosition();
-    }
-
-    /**
-     * 播放发牌视觉反馈动画
-     * 顶部卡牌短暂缩小然后恢复
-     */
-    public playDealFeedback(): void {
-        if (this._cardNodes.length === 0) return;
-
-        const topCard = this._cardNodes[this._cardNodes.length - 1];
-        const originalScale = topCard.scale.clone();
-
-        // 短暂缩小动画
-        tween(topCard)
-            .to(0.05, { scale: new Vec3(originalScale.x * 0.9, originalScale.y * 0.9, 1) })
-            .to(0.1, { scale: originalScale })
-            .start();
     }
 
     /**
@@ -182,10 +167,18 @@ export class DeckPile extends Component {
     }
 
     /**
-     * 显示牌堆
+     * 显示牌堆（重置所有卡牌节点的可见性和状态）
      */
     public show(): void {
         this.node.active = true;
+        // 重置所有卡牌节点状态（消失动画可能修改了 scale/opacity）
+        for (const cardNode of this._cardNodes) {
+            cardNode.active = true;
+            const uiOpacity = cardNode.getComponent(UIOpacity);
+            if (uiOpacity) {
+                uiOpacity.opacity = 255;
+            }
+        }
         log.debug('Shown');
     }
 
@@ -199,6 +192,7 @@ export class DeckPile extends Component {
 
     /**
      * 更新牌堆显示的牌数量
+     * 发一张少一张，最后一张发出去时立即消失（飞行动画本身就是视觉反馈）
      * @param deckSize 实际牌堆数量
      */
     public updateCardCount(deckSize: number): void {
@@ -207,7 +201,6 @@ export class DeckPile extends Component {
 
         log.debug(`Updating card count: deckSize=${deckSize}, displayCount=${displayCount}`);
 
-        // 更新每张牌的可见性
         for (let i = 0; i < this._cardNodes.length; i++) {
             this._cardNodes[i].active = i < displayCount;
         }

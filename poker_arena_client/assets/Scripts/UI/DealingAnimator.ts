@@ -153,9 +153,6 @@ export class DealingAnimator extends Component {
             // 创建飞行卡牌（背面）
             const flyingCard = this.createFlyingCard(cardValue, false);
 
-            // 播放牌堆反馈
-            this.deckPile.playDealFeedback();
-
             // 播放飞行动画（不翻牌）
             await this.animateCardFlight(
                 flyingCard,
@@ -218,9 +215,6 @@ export class DealingAnimator extends Component {
         for (let i = 0; i < cardCount; i++) {
             // 创建飞行卡牌（背面，cardValue 用 -1 表示未知）
             const flyingCard = this.createFlyingCard(-1, false);
-
-            // 播放牌堆反馈
-            this.deckPile.playDealFeedback();
 
             // 计算堆叠偏移
             const stackOffset = i * DealingDuration.stackOffset;
@@ -291,9 +285,6 @@ export class DealingAnimator extends Component {
             // 创建飞行卡牌（背面）
             const flyingCard = this.createFlyingCard(cardValue, false);
             cardNodes.push(flyingCard);
-
-            // 播放牌堆反馈
-            this.deckPile.playDealFeedback();
 
             // 计算堆叠位置（每张牌有小偏移）
             const stackOffset = i * DealingDuration.stackOffset;
@@ -466,9 +457,6 @@ export class DealingAnimator extends Component {
             // 创建飞行卡牌（背面）
             const flyingCard = this.createFlyingCard(cardValue, false);
             cardNodes.push(flyingCard);
-
-            // 播放牌堆反馈
-            this.deckPile.playDealFeedback();
 
             // 播放飞行动画到目标位置
             await this.animateCardFlight(
@@ -643,8 +631,6 @@ export class DealingAnimator extends Component {
 
         const startPos = this.deckPile.getTopCardWorldPosition();
         const flyingCard = this.createFlyingCard(cardValue, false);
-
-        this.deckPile.playDealFeedback();
 
         await this.animateCardFlight(
             flyingCard,
