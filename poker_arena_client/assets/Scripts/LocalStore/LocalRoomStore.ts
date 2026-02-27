@@ -326,6 +326,14 @@ export class LocalRoomStore {
     }
 
     /**
+     * 公开方法：清除重连信息
+     * 用于自动重连失败时静默清理
+     */
+    public clearReconnectInfo(): void {
+        this.clearRoomFromStorage();
+    }
+
+    /**
      * 获取保存的重连信息
      * 用于判断是否需要重连
      */

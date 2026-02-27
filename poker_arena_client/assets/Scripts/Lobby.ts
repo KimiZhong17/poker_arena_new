@@ -56,6 +56,7 @@ export class Lobby extends Component {
     private maxPlayers = 4;
     private roomPanelMode: 'join' | 'create' = 'join'; // Track current mode
     private selectedPlayerCount = 4; // Store the selected player count for room creation
+    private _isWaitingAutoReconnect = false; // 标记是否正在等待自动重连结果
 
     onLoad() {
         // 在 onLoad 中初始化单例，确保它们总是可用
@@ -147,6 +148,9 @@ export class Lobby extends Component {
         // 监听 UI_NAVIGATE_TO_GAME 事件（用于重连成功后跳转）
         EventCenter.on(GameEvents.UI_NAVIGATE_TO_GAME, this.onNavigateToGame, this);
 
+        // 监听自动重连失败事件（静默清除状态）
+        EventCenter.on(GameEvents.AUTO_RECONNECT_FAILED, this.onAutoReconnectFailed, this);
+
         // 初始化网络客户端
         this.initNetworkClient();
 
@@ -207,6 +211,7 @@ export class Lobby extends Component {
     private checkAutoReconnect(): void {
         if (this.roomService.hasPendingReconnect()) {
             log.debug('Found pending reconnect, attempting to reconnect...');
+            this._isWaitingAutoReconnect = true;
             this.showStatus('正在重连到游戏...');
             this.roomService.tryAutoReconnect();
         }
@@ -589,6 +594,11 @@ export class Lobby extends Component {
      * 网络错误处理
      */
     private onNetworkError = (error: ErrorEvent) => {
+        // 自动重连期间的错误静默处理，不显示给用户
+        if (this._isWaitingAutoReconnect) {
+            return;
+        }
+
         log.error('Network error:', error);
 
         // 根据错误码显示友好提示
@@ -628,9 +638,21 @@ export class Lobby extends Component {
     }
 
     /**
+     * 处理自动重连失败（房间不存在等），静默清除状态
+     */
+    private onAutoReconnectFailed = () => {
+        log.debug('Auto-reconnect failed silently, clearing status');
+        this._isWaitingAutoReconnect = false;
+        if (this.statusLabel) {
+            this.statusLabel.string = '';
+        }
+    };
+
+    /**
      * 处理 UI_NAVIGATE_TO_GAME 事件（重连成功后跳转到游戏场景）
      */
     private onNavigateToGame = () => {
+        this._isWaitingAutoReconnect = false;
         log.debug('Navigating to game scene (reconnect or join)');
 
         // 确保 sceneManager 已初始化
@@ -657,6 +679,7 @@ export class Lobby extends Component {
     onDestroy() {
         // Clean up EventCenter listeners
         EventCenter.off(GameEvents.UI_NAVIGATE_TO_GAME, this.onNavigateToGame, this);
+        EventCenter.off(GameEvents.AUTO_RECONNECT_FAILED, this.onAutoReconnectFailed, this);
         // Clean up event listeners with null checks
         if (this.createRoomButton?.node && this.createRoomButton.isValid) {
             this.createRoomButton.node.off(Button.EventType.CLICK, this.onCreateRoomClicked, this);

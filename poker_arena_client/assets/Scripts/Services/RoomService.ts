@@ -24,6 +24,13 @@ export class RoomService {
     private localUserStore: LocalUserStore;
     private localRoomStore: LocalRoomStore;
 
+    /** 标记当前是否正在进行自动重连（区别于手动加入房间） */
+    private _isAutoReconnecting: boolean = false;
+
+    public get isAutoReconnecting(): boolean {
+        return this._isAutoReconnecting;
+    }
+
     private constructor() {
         this.localUserStore = LocalUserStore.getInstance();
         this.localRoomStore = LocalRoomStore.getInstance();
@@ -46,6 +53,7 @@ export class RoomService {
         const reconnectInfo = this.localRoomStore.getReconnectInfo();
         if (reconnectInfo) {
             log.debug('Found reconnect info, attempting to reconnect:', reconnectInfo);
+            this._isAutoReconnecting = true;
             this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
             return true;
         }
@@ -144,6 +152,18 @@ export class RoomService {
     };
 
     private onError = (data: any) => {
+        // 自动重连时，如果房间不存在，静默处理：清除重连信息，不弹窗
+        if (this._isAutoReconnecting) {
+            const errorCode = data.code || '';
+            if (errorCode === 'ROOM_NOT_FOUND' || errorCode === 'INVALID_PLAY' || errorCode === 'INTERNAL_ERROR') {
+                log.debug('Auto-reconnect failed (room unavailable), clearing reconnect info silently');
+                this.localRoomStore.clearReconnectInfo();
+                this._isAutoReconnecting = false;
+                EventCenter.emit(GameEvents.AUTO_RECONNECT_FAILED);
+                return;
+            }
+            this._isAutoReconnecting = false;
+        }
         log.error('Error from server:', data);
         alert(`服务器错误: ${data.message || data.code || '未知错误'}`);
     };
@@ -152,6 +172,7 @@ export class RoomService {
      * 重连成功处理
      */
     private onReconnectSuccess = (data: ReconnectSuccessEvent) => {
+        this._isAutoReconnecting = false;
         log.debug('Reconnect success:', data.roomId);
 
         // 1. 存入 LocalRoomStore
@@ -213,6 +234,7 @@ export class RoomService {
         const reconnectInfo = this.localRoomStore.getReconnectInfo();
         if (reconnectInfo) {
             log.debug('Socket reconnected, attempting to rejoin room:', reconnectInfo);
+            this._isAutoReconnecting = true;
             this.reconnectToRoom(reconnectInfo.roomId, reconnectInfo.myPlayerId);
         }
     }

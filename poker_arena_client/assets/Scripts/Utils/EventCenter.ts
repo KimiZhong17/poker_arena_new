@@ -46,6 +46,7 @@ export const GameEvents = {
 
     // 重连事件
     GAME_RECONNECTED: 'GAME_RECONNECTED',
+    AUTO_RECONNECT_FAILED: 'AUTO_RECONNECT_FAILED',
 
     // 托管事件
     PLAYER_AUTO_CHANGED: 'PLAYER_AUTO_CHANGED'
