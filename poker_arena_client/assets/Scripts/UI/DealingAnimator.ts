@@ -2,7 +2,7 @@ import { _decorator, Component, Node, Vec3, tween, Tween, instantiate, Prefab, S
 import { DeckPile } from './DeckPile';
 import { Poker } from './Poker';
 import { PokerFactory } from './PokerFactory';
-import { DealingDuration, DealingEasing, CommunityCardsConfig } from '../Config/DealingAnimationConfig';
+import { DealingDuration, DealingEasing, CommunityCardsConfig, FlyingCardConfig } from '../Config/DealingAnimationConfig';
 import { CardSpriteNames, CardScale } from '../Config/CardDisplayConfig';
 import { logger } from '../Utils/Logger';
 
@@ -835,11 +835,12 @@ export class DealingAnimator extends Component {
             // 设置初始位置和缩放（基于预制体原始缩放）
             cardNode.setWorldPosition(startPos);
             const startMultiplier = CardScale.dealing.deckPile;
-            cardNode.setScale(
+            const startScale = new Vec3(
                 prefabScale.x * startMultiplier,
                 prefabScale.y * startMultiplier,
                 prefabScale.z
             );
+            cardNode.setScale(startScale);
 
             // 计算结束缩放（基于预制体原始缩放）
             const endScale = new Vec3(
@@ -848,15 +849,43 @@ export class DealingAnimator extends Component {
                 prefabScale.z
             );
 
-            // 创建飞行动画
-            const flyTween = tween(cardNode)
-                .to(duration, {
-                    worldPosition: endPos,
-                    scale: endScale
-                }, {
-                    easing: easing as any
+            // 用进度对象驱动弧线飞行
+            const progress = { t: 0 };
+            const baseArcHeight = FlyingCardConfig.arcHeight;
+
+            // 根据飞行方向调整弧线高度
+            // 向上飞（发给上方玩家）：减小弧线或反转，避免飞出屏幕
+            // 向下飞（发给下方玩家）：正常弧线
+            const deltaY = endPos.y - startPos.y;
+            let arcHeight = baseArcHeight;
+            if (deltaY > 0) {
+                // 向上飞：弧线高度减半，避免超出屏幕
+                arcHeight = baseArcHeight * 0.3;
+            }
+
+            const flyTween = tween(progress)
+                .to(duration, { t: 1 }, {
+                    easing: easing as any,
+                    onUpdate: () => {
+                        const t = progress.t;
+                        // 线性插值位置 + 抛物线 Y 偏移
+                        const x = startPos.x + (endPos.x - startPos.x) * t;
+                        const y = startPos.y + (endPos.y - startPos.y) * t + arcHeight * 4 * t * (1 - t);
+                        const z = startPos.z + (endPos.z - startPos.z) * t;
+                        cardNode.setWorldPosition(x, y, z);
+
+                        // 线性插值缩放
+                        cardNode.setScale(
+                            startScale.x + (endScale.x - startScale.x) * t,
+                            startScale.y + (endScale.y - startScale.y) * t,
+                            startScale.z + (endScale.z - startScale.z) * t
+                        );
+                    }
                 })
                 .call(() => {
+                    // 确保最终位置精确
+                    cardNode.setWorldPosition(endPos);
+                    cardNode.setScale(endScale);
                     resolve();
                 });
 

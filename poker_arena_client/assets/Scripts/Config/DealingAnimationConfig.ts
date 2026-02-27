@@ -56,7 +56,8 @@ export const FlyingCardConfig = {
     endScale: 1.0,              // 结束缩放（会根据目标调整）
     playerCardScale: 1.0,       // 玩家手牌缩放
     communityCardScale: 1.0,    // 公牌缩放
-    otherPlayerCardScale: 0.5   // 其他玩家手牌缩放
+    otherPlayerCardScale: 0.5,  // 其他玩家手牌缩放
+    arcHeight: 50,              // 飞行弧线高度（像素，向上为正）
 };
 
 /**
