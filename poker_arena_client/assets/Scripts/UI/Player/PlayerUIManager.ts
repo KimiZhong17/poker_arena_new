@@ -416,6 +416,7 @@ export class PlayerUIManager extends Component {
      * 更新所有玩家手牌显示
      */
     public updateAllHands(): void {
+        if (!this._playerUINodes) return;
         log.debug('Updating all hands...');
         this._playerUINodes.forEach(node => {
             node.updateHandDisplay();
@@ -438,6 +439,7 @@ export class PlayerUIManager extends Component {
      * 更新所有玩家信息
      */
     public updateAllPlayerInfo(): void {
+        if (!this._playerUINodes) return;
         this._playerUINodes.forEach(node => node.updatePlayerInfo());
     }
 
@@ -487,6 +489,7 @@ export class PlayerUIManager extends Component {
      * 清除所有玩家的牌型显示
      */
     public clearAllHandTypes(): void {
+        if (!this._playerUINodes) return;
         for (const node of this._playerUINodes) {
             node.clearHandType();
         }
@@ -629,7 +632,7 @@ export class PlayerUIManager extends Component {
      * 获取玩家数量
      */
     public getPlayerCount(): number {
-        return this._playerUINodes.length;
+        return this._playerUINodes?.length ?? 0;
     }
 
     /**
@@ -644,7 +647,8 @@ export class PlayerUIManager extends Component {
      * 检查玩家UI是否设置
      */
     public hasPlayerUI(playerIndex: number): boolean {
-        return playerIndex >= 0 &&
+        return !!this._playerUINodes &&
+               playerIndex >= 0 &&
                playerIndex < this._playerUINodes.length &&
                this._playerUINodes[playerIndex] !== null;
     }
@@ -653,6 +657,7 @@ export class PlayerUIManager extends Component {
      * 获取所有 PlayerUIController
      */
     public getAllPlayerUINodes(): PlayerUIController[] {
+        if (!this._playerUINodes) return [];
         return [...this._playerUINodes];
     }
 
@@ -660,6 +665,7 @@ export class PlayerUIManager extends Component {
      * 清除所有玩家UI
      */
     public clearAll(): void {
+        if (!this._playerUINodes) return;
         this._playerUINodes.forEach(node => node.clearAll());
         this.hideAllDealers();
     }
@@ -668,6 +674,7 @@ export class PlayerUIManager extends Component {
      * 重置（用于新游戏）
      */
     public reset(): void {
+        if (!this._playerUINodes) return;
         this._playerUINodes.forEach(node => {
             if (node && node.node) {
                 node.node.destroy();

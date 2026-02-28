@@ -596,10 +596,12 @@ export class DealingAnimator extends Component {
      * 停止所有动画
      */
     public stopAllAnimations(): void {
-        for (const t of this._currentTweens) {
-            t.stop();
+        if (this._currentTweens) {
+            for (const t of this._currentTweens) {
+                t.stop();
+            }
+            this._currentTweens = [];
         }
-        this._currentTweens = [];
         this._isAnimating = false;
 
         // 清除动画层中的所有节点

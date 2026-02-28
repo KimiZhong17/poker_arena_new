@@ -1,7 +1,6 @@
 import { Game } from "../../Scenes/Game";
 import { SeatLayoutConfig, SeatPosition } from "../../Config/SeatConfig";
 import { Player, PlayerInfo } from "../../State/PlayerStore";
-import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
 import { LocalRoomStore } from "../../State/RoomStore";
 import { Node } from "cc";
 import { logger } from '../../Utils/Logger';
@@ -439,81 +438,6 @@ export abstract class GameModeClientBase {
         return network.send(eventName, data);
     }
 
-    // ==================== 游戏特定网络请求（The Decree 游戏）====================
-
-    /**
-     * 庄家叫牌请求
-     * @param cardsToPlay 要出的牌数（1、2或3）
-     */
-    protected sendDealerCallRequest(cardsToPlay: 1 | 2 | 3): boolean {
-        log.debug(`[${this.config.name}] sendDealerCallRequest called, cardsToPlay:`, cardsToPlay);
-
-        const network = this.getNetworkClient();
-        log.debug(`[${this.config.name}] Network client:`, !!network);
-
-        if (!network) {
-            log.error(`[${this.config.name}] No network client available`);
-            return false;
-        }
-
-        const localRoomStore = LocalRoomStore.getInstance();
-
-        const playerId = localRoomStore.getMyPlayerId();
-        const currentRoom = localRoomStore.getCurrentRoom();
-
-        log.debug(`[${this.config.name}] Player ID:`, playerId);
-        log.debug(`[${this.config.name}] Current room:`, currentRoom?.id);
-
-        if (!playerId || !currentRoom) {
-            log.error(`[${this.config.name}] Cannot send dealer call: missing player or room info`);
-            log.error(`[${this.config.name}]   playerId:`, playerId);
-            log.error(`[${this.config.name}]   currentRoom:`, currentRoom);
-            return false;
-        }
-
-        const request: DealerCallRequest = {
-            roomId: currentRoom.id,
-            playerId: playerId,
-            cardsToPlay
-        };
-
-        log.debug(`[${this.config.name}] Sending dealer call request:`, request);
-        const result = network.send(ClientMessageType.DEALER_CALL, request);
-        log.debug(`[${this.config.name}] Send result:`, result);
-
-        return result;
-    }
-
-    /**
-     * 玩家出牌请求
-     * @param cards 要出的牌
-     */
-    protected sendPlayCardsRequest(cards: number[]): boolean {
-        const network = this.getNetworkClient();
-        if (!network) {
-            return false;
-        }
-
-        const localRoomStore = LocalRoomStore.getInstance();
-
-        const playerId = localRoomStore.getMyPlayerId();
-        const currentRoom = localRoomStore.getCurrentRoom();
-
-        if (!playerId || !currentRoom) {
-            log.error(`[${this.config.name}] Cannot send play cards: missing player or room info`);
-            return false;
-        }
-
-        const request: PlayCardsRequest = {
-            roomId: currentRoom.id,
-            playerId: playerId,
-            cards
-        };
-
-        log.debug(`[${this.config.name}] Playing cards:`, cards);
-        return network.send(ClientMessageType.PLAY_CARDS, request);
-    }
-
     // ==================== 通用工具方法 ====================
 
     /**
@@ -538,23 +462,6 @@ export abstract class GameModeClientBase {
             if (playerInfo) return playerInfo.name;
         }
         return 'Unknown';
-    }
-
-    /**
-     * 根据卡牌编码获取卡牌名称
-     * Guandan 编码: A=14, 2=15, 3-13 标准
-     */
-    protected getCardName(card: number): string {
-        const suits = ['♦', '♣', '♥', '♠'];
-        const pointMap: Record<number, string> = {
-            3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
-            10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A', 15: '2',
-        };
-        const suit = (card & 0xF0) >> 4;
-        const point = card & 0x0F;
-        const suitStr = suits[suit];
-        const pointStr = pointMap[point];
-        return (suitStr && pointStr) ? suitStr + pointStr : '未知牌';
     }
 
     // ==================== 定时器管理 ====================

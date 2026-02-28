@@ -38,6 +38,9 @@ export class DealingHandler {
     // 发牌动画进行中标志（防止外部 updateDisplay 覆盖动画状态）
     private _isDealingAnimationInProgress: boolean = false;
 
+    // 当前牌堆剩余数量（用于公牌发牌时递减）
+    private _currentDeckSize: number = 0;
+
     constructor(mode: GameModeClientBase) {
         this.mode = mode;
     }
@@ -98,6 +101,7 @@ export class DealingHandler {
 
         this.deckPile = deckPileNode.getComponent(DeckPile) || deckPileNode.addComponent(DeckPile);
         this.deckPile.init(pokerSprites, pokerPrefab);
+        this._currentDeckSize = CardScale.deckPileDisplay.maxCards;
 
         // 创建发牌动画控制器
         let animatorNode = containerNode.getChildByName('DealingAnimator');
@@ -160,6 +164,11 @@ export class DealingHandler {
                 cards,
                 (index: number, cardValue: number) => {
                     this.displaySingleCommunityCard(index, cardValue, cards.length, false);
+                    // 每张公牌飞出后递减牌堆（仅在已知牌堆数量时）
+                    if (this._currentDeckSize > 0) {
+                        this._currentDeckSize--;
+                        this.deckPile!.updateCardCount(this._currentDeckSize);
+                    }
                 },
                 () => {
                     log.debug('All community cards dealt, flipping...');
@@ -351,6 +360,7 @@ export class DealingHandler {
         // 更新牌堆显示数量
         if (data.deckSize !== undefined && this.deckPile) {
             this.deckPile.updateCardCount(data.deckSize);
+            this._currentDeckSize = data.deckSize;
         }
     }
 
@@ -748,6 +758,7 @@ export class DealingHandler {
         if (this.deckPile) {
             this.deckPile.updateCardCount(currentDeckSize);
         }
+        this._currentDeckSize = currentDeckSize;
 
         for (let round = 0; round < maxRounds; round++) {
             for (const playerIndex of dealingOrder) {
@@ -759,6 +770,7 @@ export class DealingHandler {
 
                 // 牌飞出前就递减牌堆，视觉上与动画同步
                 currentDeckSize--;
+                this._currentDeckSize = currentDeckSize;
                 if (this.deckPile) {
                     this.deckPile.updateCardCount(currentDeckSize);
                 }

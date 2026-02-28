@@ -18,7 +18,9 @@ import {
     GameOverEvent,
     PlayerAutoChangedEvent,
     ClientMessageType,
-    SetAutoRequest
+    SetAutoRequest,
+    DealerCallRequest,
+    PlayCardsRequest
 } from '../../Network/Messages';
 import { LocalGameStore } from '../../State/GameStore';
 import { TheDecreeUIController } from '../../UI/GameModes/TheDecreeUIController';
@@ -686,6 +688,54 @@ export class TheDecreeModeClient extends GameModeClientBase {
 
     public isGameOver(): boolean { return false; }
     public getCurrentLevelRank(): number { return 0; }
+
+    // ==================== TheDecree 网络请求 ====================
+
+    private sendDealerCallRequest(cardsToPlay: 1 | 2 | 3): boolean {
+        const network = this.getNetworkClient();
+        if (!network) return false;
+
+        const localRoomStore = LocalRoomStore.getInstance();
+        const playerId = localRoomStore.getMyPlayerId();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!playerId || !currentRoom) {
+            log.error('Cannot send dealer call: missing player or room info');
+            return false;
+        }
+
+        const request: DealerCallRequest = {
+            roomId: currentRoom.id,
+            playerId: playerId,
+            cardsToPlay
+        };
+
+        log.debug('Sending dealer call request:', request);
+        return network.send(ClientMessageType.DEALER_CALL, request);
+    }
+
+    private sendPlayCardsRequest(cards: number[]): boolean {
+        const network = this.getNetworkClient();
+        if (!network) return false;
+
+        const localRoomStore = LocalRoomStore.getInstance();
+        const playerId = localRoomStore.getMyPlayerId();
+        const currentRoom = localRoomStore.getCurrentRoom();
+
+        if (!playerId || !currentRoom) {
+            log.error('Cannot send play cards: missing player or room info');
+            return false;
+        }
+
+        const request: PlayCardsRequest = {
+            roomId: currentRoom.id,
+            playerId: playerId,
+            cards
+        };
+
+        log.debug('Playing cards:', cards);
+        return network.send(ClientMessageType.PLAY_CARDS, request);
+    }
 
     // ==================== 公共方法供 UI 调用 ====================
 

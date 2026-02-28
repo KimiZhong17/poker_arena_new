@@ -3,7 +3,7 @@ import { GameStageBase } from './GameStageBase';
 import { Game } from '../../Scenes/Game';
 import { GameStage } from './StageManager';
 import { GameModeClientBase } from '../GameMode/GameModeClientBase';
-import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';
+import { GameModeClientFactory } from '../GameMode/GameModeClientFactory';
 import { EndStage } from './EndStage';
 import { logger } from '../../Utils/Logger';
 
@@ -142,84 +142,46 @@ export class PlayingStage extends GameStageBase {
 
     /**
      * 创建游戏模式
-     * 根据gameModeName创建对应的GameMode实例
+     * 使用 GameModeClientFactory 动态创建
      */
     private createGameMode(): void {
         log.debug(`Creating game mode: ${this.gameModeName}`);
 
-        // 动态导入并创建游戏模式
-        // 注意：这里需要根据实际的游戏模式类来实现
-        if (this.gameModeName === 'the_decree') {
-            this.currentGameMode = this.createTheDecreeMode();
-        // } else if (this.gameModeName === 'guandan') {
-        //     this.currentGameMode = this.createGuandanMode();
-        } else {
-            log.error(`Unknown game mode: ${this.gameModeName}`);
-            // 默认使用TheDecree
-            this.currentGameMode = this.createTheDecreeMode();
-        }
-
-        if (this.currentGameMode) {
-            log.debug(`Game mode created: ${this.currentGameMode.getConfig().name}`);
-        }
-    }
-
-    /**
-     * 创建The Decree游戏模式（网络版）
-     */
-    private createTheDecreeMode(): GameModeClientBase | null {
         try {
-            // 创建配置
-            const config = {
-                id: 'the_decree',
-                name: 'TheDecree',
-                displayName: '未定之数',
-                minPlayers: 2,
-                maxPlayers: 4,
-                deckCount: 1,
-                initialHandSize: 5,
-                description: 'Texas Hold\'em inspired poker game'
-            };
+            const factory = GameModeClientFactory.getInstance();
 
-            // 创建实例（网络版）
-            const mode = new TheDecreeModeClient(this.game, config);
+            // 检查模式是否已注册
+            if (!factory.hasMode(this.gameModeName)) {
+                log.error(`Game mode '${this.gameModeName}' not registered in factory`);
+                log.warn('Available modes:', factory.getRegisteredModeIds());
 
-            // 将模式引用传递给 Game（用于遗留方法）
-            this.game.theDecreeModeRef = mode;
+                // 尝试使用默认模式
+                if (factory.hasMode('the_decree')) {
+                    log.warn('Falling back to default mode: the_decree');
+                    this.currentGameMode = factory.createGameMode('the_decree', this.game);
+                } else {
+                    log.error('No fallback mode available');
+                    return;
+                }
+            } else {
+                // 使用 Factory 创建模式
+                this.currentGameMode = factory.createGameMode(this.gameModeName, this.game);
+            }
 
-            return mode;
+            if (this.currentGameMode) {
+                log.debug(`Game mode created: ${this.currentGameMode.getConfig().name}`);
+
+                // 将模式引用传递给 Game（用于遗留方法）
+                // TODO: 未来移除这个遗留引用
+                if (this.gameModeName === 'the_decree') {
+                    this.game.theDecreeModeRef = this.currentGameMode as any;
+                }
+            }
         } catch (error) {
-            log.error('Failed to create TheDecreeModeClient:', error);
-            return null;
+            log.error('Failed to create game mode:', error);
+            this.currentGameMode = null;
         }
     }
-
-    // /**
-    //  * 创建Guandan游戏模式
-    //  */
-    // private createGuandanMode(): GameModeClientBase | null {
-    //     try {
-    //         // 创建配置
-    //         const config = {
-    //             id: 'guandan',
-    //             name: 'Guandan',
-    //             displayName: '掼蛋',
-    //             minPlayers: 4,
-    //             maxPlayers: 5,
-    //             deckCount: 3,
-    //             initialHandSize: 31,
-    //             description: 'Popular Chinese card game'
-    //         };
-
-    //         // 创建实例
-    //         const mode = new GuandanMode(this.game, config);
-    //         return mode;
-    //     } catch (error) {
-    //         log.error('Failed to create GuandanMode:', error);
-    //         log.warn('GuandanMode not implemented yet, using TheDecree as fallback');
-    //         return this.createTheDecreeMode();
-    //     }
-    // }
 
     // ==================== 公共接口 ====================
 

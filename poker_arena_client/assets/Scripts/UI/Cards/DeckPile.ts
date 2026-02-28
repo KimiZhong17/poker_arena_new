@@ -16,7 +16,7 @@ const { ccclass, property } = _decorator;
  * - 提供牌堆位置供动画使用
  * - 发牌时的视觉反馈
  *
- * 复用 CardScale.stackDisplay 配置
+ * 复用 CardScale.deckPileDisplay 配置
  */
 @ccclass('DeckPile')
 export class DeckPile extends Component {
@@ -40,19 +40,19 @@ export class DeckPile extends Component {
         // 清除之前的卡牌节点
         this.clearCards();
 
-        // 创建堆叠的牌背（复用 CardScale.stackDisplay 配置）
+        // 创建堆叠的牌背（复用 CardScale.deckPileDisplay 配置）
         this.createCardStack();
 
         // 设置 Widget 定位
         this.setupWidget();
 
         this._isInitialized = true;
-        log.debug('Initialized with', CardScale.stackDisplay.maxCards, 'cards');
+        log.debug('Initialized with', CardScale.deckPileDisplay.maxCards, 'cards');
     }
 
     /**
      * 创建牌堆堆叠效果
-     * 复用 CardScale.stackDisplay 配置和 PlayerHandDisplay 的创建逻辑
+     * 复用 CardScale.deckPileDisplay 配置和 PlayerHandDisplay 的创建逻辑
      */
     private createCardStack(): void {
         if (!this._pokerPrefab) {
@@ -68,8 +68,8 @@ export class DeckPile extends Component {
             return;
         }
 
-        const maxCards = CardScale.stackDisplay.maxCards;
-        const stackOffset = CardScale.stackDisplay.offset;
+        const maxCards = CardScale.deckPileDisplay.maxCards;
+        const stackOffset = CardScale.deckPileDisplay.offset;
 
         for (let i = 0; i < maxCards; i++) {
             // 使用预制体创建卡牌节点（与 PlayerHandDisplay.createCardNode 类似）
@@ -124,8 +124,11 @@ export class DeckPile extends Component {
      * 清除所有卡牌节点
      */
     private clearCards(): void {
+        if (!this._cardNodes) return;
         for (const cardNode of this._cardNodes) {
-            cardNode.destroy();
+            if (cardNode && cardNode.isValid) {
+                cardNode.destroy();
+            }
         }
         this._cardNodes = [];
     }
@@ -146,11 +149,13 @@ export class DeckPile extends Component {
      */
     public getTopCardWorldPosition(): Vec3 {
         // 找到最顶部可见的牌
-        for (let i = this._cardNodes.length - 1; i >= 0; i--) {
-            if (this._cardNodes[i].active) {
-                const worldPos = new Vec3();
-                this._cardNodes[i].getWorldPosition(worldPos);
-                return worldPos;
+        if (this._cardNodes) {
+            for (let i = this._cardNodes.length - 1; i >= 0; i--) {
+                if (this._cardNodes[i].active) {
+                    const worldPos = new Vec3();
+                    this._cardNodes[i].getWorldPosition(worldPos);
+                    return worldPos;
+                }
             }
         }
         return this.getWorldPosition();
@@ -172,6 +177,7 @@ export class DeckPile extends Component {
     public show(): void {
         this.node.active = true;
         // 重置所有卡牌节点状态（消失动画可能修改了 scale/opacity）
+        if (!this._cardNodes) return;
         for (const cardNode of this._cardNodes) {
             cardNode.active = true;
             const uiOpacity = cardNode.getComponent(UIOpacity);
@@ -196,14 +202,60 @@ export class DeckPile extends Component {
      * @param deckSize 实际牌堆数量
      */
     public updateCardCount(deckSize: number): void {
-        const maxDisplay = CardScale.stackDisplay.maxCards;
+        if (!this._cardNodes) return;
+        const maxDisplay = CardScale.deckPileDisplay.maxCards;
         const displayCount = Math.min(deckSize, maxDisplay);
 
         log.debug(`Updating card count: deckSize=${deckSize}, displayCount=${displayCount}`);
 
+        // 如果需要显示的牌数超过当前节点数，动态创建新节点
+        if (displayCount > this._cardNodes.length) {
+            this.expandCardStack(displayCount);
+        }
+
         for (let i = 0; i < this._cardNodes.length; i++) {
             this._cardNodes[i].active = i < displayCount;
         }
+    }
+
+    /**
+     * 动态扩展牌堆节点数量
+     * @param targetCount 目标节点数量
+     */
+    private expandCardStack(targetCount: number): void {
+        if (!this._pokerPrefab) {
+            log.warn('Cannot expand card stack: no poker prefab');
+            return;
+        }
+
+        const cardBack = this._pokerSprites.get(CardSpriteNames.backWithLogo) ||
+                         this._pokerSprites.get(CardSpriteNames.back);
+        if (!cardBack) {
+            log.warn('Cannot expand card stack: no card back sprite');
+            return;
+        }
+
+        const stackOffset = CardScale.deckPileDisplay.offset;
+        const currentCount = this._cardNodes.length;
+
+        for (let i = currentCount; i < targetCount; i++) {
+            const cardNode = instantiate(this._pokerPrefab);
+            const pokerCtrl = cardNode.addComponent(Poker);
+
+            pokerCtrl.init(0, cardBack, cardBack);
+            pokerCtrl.showBack();
+
+            const offsetX = i * stackOffset;
+            const offsetY = i * stackOffset;
+            cardNode.setPosition(offsetX, offsetY, 0);
+
+            cardNode.layer = this.node.layer;
+
+            this.node.addChild(cardNode);
+            this._cardNodes.push(cardNode);
+        }
+
+        log.debug(`Expanded card stack from ${currentCount} to ${targetCount} nodes`);
     }
 
     /**
