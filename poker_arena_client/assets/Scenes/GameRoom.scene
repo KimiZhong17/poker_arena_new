@@ -196,7 +196,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 485.77494692144376,
+    "_orthoHeight": 485.2598091198303,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -2982,15 +2982,16 @@
     "_id": "222+S/+lRA2aaKIX/WNPCS"
   },
   {
-    "__type__": "c0d3dFkLIFBXKPmDqhqlUYO",
+    "__type__": "3c00d8Hfw5KxLzB/lml6ggD",
     "_name": "",
     "_objFlags": 0,
+    "__editorExtras__": {},
     "node": {
       "__id__": 74
     },
     "_enabled": true,
     "__prefab": null,
-    "_id": "75nBzOI95NgolMHuy+2kZg"
+    "_id": "e15UsICz5KU4EE1Nexw4Wf"
   },
   {
     "__type__": "58b18mNfRNJo6b3+Dm2wXq3",
