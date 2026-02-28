@@ -1,8 +1,8 @@
-import { Game } from "../../Game";
+import { Game } from "../../Scenes/Game";
 import { SeatLayoutConfig, SeatPosition } from "../../Config/SeatConfig";
-import { Player, PlayerInfo } from "../../LocalStore/LocalPlayerStore";
+import { Player, PlayerInfo } from "../../State/PlayerStore";
 import { ClientMessageType, DealerCallRequest, PlayCardsRequest } from "../../Network/Messages";
-import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
+import { LocalRoomStore } from "../../State/RoomStore";
 import { Node } from "cc";
 import { logger } from '../../Utils/Logger';
 

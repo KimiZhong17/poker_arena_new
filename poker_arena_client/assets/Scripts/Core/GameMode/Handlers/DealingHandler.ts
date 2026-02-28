@@ -1,11 +1,11 @@
 import { Node, instantiate, Vec3, UITransform } from "cc";
 import { GameModeClientBase } from "../GameModeClientBase";
 import { DealCardsEvent, CommunityCardsEvent } from "../../../Network/Messages";
-import { PokerFactory } from "../../../UI/PokerFactory";
-import { Poker } from "../../../UI/Poker";
-import { DeckPile } from "../../../UI/DeckPile";
-import { DealingAnimator } from "../../../UI/DealingAnimator";
-import { PlayerHandDisplay } from "../../../UI/PlayerHandDisplay";
+import { PokerFactory } from "../../../UI/Cards/PokerFactory";
+import { Poker } from "../../../UI/Cards/Poker";
+import { DeckPile } from "../../../UI/Cards/DeckPile";
+import { DealingAnimator } from "../../../UI/Animation/DealingAnimator";
+import { PlayerHandDisplay } from "../../../UI/Player/PlayerHandDisplay";
 import { DealingOrderConfig, DealingDuration } from "../../../Config/DealingAnimationConfig";
 import { CardScale } from "../../../Config/CardDisplayConfig";
 import { logger } from "../../../Utils/Logger";

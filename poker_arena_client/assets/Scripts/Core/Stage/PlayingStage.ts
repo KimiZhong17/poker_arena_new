@@ -1,6 +1,6 @@
 import { Node } from 'cc';
 import { GameStageBase } from './GameStageBase';
-import { Game } from '../../Game';
+import { Game } from '../../Scenes/Game';
 import { GameStage } from './StageManager';
 import { GameModeClientBase } from '../GameMode/GameModeClientBase';
 import { TheDecreeModeClient } from '../GameMode/TheDecreeModeClient';

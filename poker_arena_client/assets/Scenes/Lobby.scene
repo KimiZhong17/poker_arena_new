@@ -188,7 +188,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 670.9677419354839,
+    "_orthoHeight": 485.77494692144376,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -3641,7 +3641,7 @@
     "_id": "c5V1EV8IpMtrIvY1OE9t2u"
   },
   {
-    "__type__": "55a36ocFHdD74H8cpMrVr8J",
+    "__type__": "243e6YqY8pJIaAlJBgwfTKo",
     "_name": "",
     "_objFlags": 0,
     "__editorExtras__": {},
@@ -3663,7 +3663,7 @@
     "roomPanel": {
       "__id__": 33
     },
-    "_id": "edXYS8dbBJZ6AO20CZXRnU"
+    "_id": "9cwM5fCmhETIC7uVfBE4CL"
   },
   {
     "__type__": "cc.SceneGlobals",

@@ -1,7 +1,7 @@
 // This file is deprecated and will be replaced soon.
 // TODO: Change to GuandanModeClent
 import { _decorator, Component } from 'cc';
-import { Player, PlayerState } from '../LocalStore/LocalPlayerStore';
+import { Player, PlayerState } from '../State/PlayerStore';
 import { Dealer } from '../Card/Dealer';
 import { HandEvaluator, HandResult, HandType } from '../Card/HandEvaluator';
 import { logger } from '../Utils/Logger';

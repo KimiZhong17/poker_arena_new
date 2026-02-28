@@ -1,8 +1,8 @@
 import { PlayingStage } from "../Stage/PlayingStage";
 import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
-import { Game } from "../../Game";
-import { PlayerInfo } from "../../LocalStore/LocalPlayerStore";
-import { LocalRoomStore } from "../../LocalStore/LocalRoomStore";
+import { Game } from "../../Scenes/Game";
+import { PlayerInfo } from "../../State/PlayerStore";
+import { LocalRoomStore } from "../../State/RoomStore";
 import { Node } from "cc";
 import {
     DealCardsEvent,
@@ -20,8 +20,8 @@ import {
     ClientMessageType,
     SetAutoRequest
 } from '../../Network/Messages';
-import { LocalGameStore } from '../../LocalStore/LocalGameStore';
-import { TheDecreeUIController } from '../../UI/TheDecreeUIController';
+import { LocalGameStore } from '../../State/GameStore';
+import { TheDecreeUIController } from '../../UI/GameModes/TheDecreeUIController';
 import { TheDecreeGameState } from './TheDecreeGameState';
 import { EventCenter, GameEvents } from '../../Utils/EventCenter';
 import { logger } from '../../Utils/Logger';
