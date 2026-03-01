@@ -29,6 +29,8 @@ type GameServer struct {
 
 	cfg             *config.Config
 	heartbeatTicker *time.Ticker
+	heartbeatStop   chan struct{}
+	heartbeatOnce   sync.Once
 	connCounter     uint64
 
 	gameActionLimiter *util.RateLimiter
@@ -474,7 +476,6 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 	}
 
 	room.mu.Lock()
-	defer room.mu.Unlock()
 
 	// During game: treat as disconnect
 	if room.State == RoomPlaying {
@@ -484,13 +485,18 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 		delete(s.connections, player.ConnID)
 		delete(s.playersByID, player.ID)
 		room.HandleSetAuto(player.ID, true)
-		s.checkAndDestroyEmptyRoom(room)
+		shouldDestroy := s.shouldDestroyRoomLocked(room)
+		room.mu.Unlock()
+		if shouldDestroy {
+			s.deleteRoomLocked(room, "all players disconnected")
+		}
 		return
 	}
 
 	// Not in game: remove from room
 	removed, newHostID := room.RemovePlayer(player.ID)
 	if removed == nil {
+		room.mu.Unlock()
 		return
 	}
 
@@ -503,9 +509,10 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 		})
 	}
 
-	if room.IsEmpty() {
-		delete(s.rooms, room.ID)
-		util.Info("GameServer", "Room %s deleted (empty)", room.ID)
+	empty := room.IsEmpty()
+	room.mu.Unlock()
+	if empty {
+		s.deleteRoomLocked(room, "empty")
 	}
 
 	delete(s.connections, player.ConnID)
@@ -674,7 +681,6 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 	}
 
 	room.mu.Lock()
-	defer room.mu.Unlock()
 
 	current.IsConnected = false
 
@@ -683,7 +689,11 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 		s.disconnectedPlayers[current.ID] = current
 		delete(s.playersByID, current.ID)
 		room.HandleSetAuto(current.ID, true)
-		s.checkAndDestroyEmptyRoom(room)
+		shouldDestroy := s.shouldDestroyRoomLocked(room)
+		room.mu.Unlock()
+		if shouldDestroy {
+			s.deleteRoomLocked(room, "all players disconnected")
+		}
 	} else {
 		// Not in game: remove from room
 		removed, newHostID := room.RemovePlayer(current.ID)
@@ -696,14 +706,18 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 				})
 			}
 		}
-		if room.IsEmpty() {
-			delete(s.rooms, room.ID)
+		empty := room.IsEmpty()
+		room.mu.Unlock()
+		if empty {
+			s.deleteRoomLocked(room, "empty")
 		}
 		delete(s.playersByID, current.ID)
 	}
 }
 
-func (s *GameServer) checkAndDestroyEmptyRoom(room *GameRoom) {
+// shouldDestroyRoomLocked returns true if all players in the room are disconnected.
+// Caller must hold s.mu and room.mu.
+func (s *GameServer) shouldDestroyRoomLocked(room *GameRoom) bool {
 	allPlayers := room.GetAllPlayers()
 	hasOnline := false
 	for _, p := range allPlayers {
@@ -718,19 +732,45 @@ func (s *GameServer) checkAndDestroyEmptyRoom(room *GameRoom) {
 		for _, p := range allPlayers {
 			delete(s.disconnectedPlayers, p.ID)
 		}
-		delete(s.rooms, room.ID)
+		return true
 	}
+	return false
+}
+
+// deleteRoomLocked closes a room (stopping timers/game state) and removes it from the server.
+// Caller must hold s.mu. room.mu must NOT be held (room.Close() takes it).
+func (s *GameServer) deleteRoomLocked(room *GameRoom, reason string) {
+	room.Close()
+	delete(s.rooms, room.ID)
+	util.Info("GameServer", "Room %s deleted (%s)", room.ID, reason)
 }
 
 // ==================== Heartbeat ====================
 
 func (s *GameServer) startHeartbeat() {
+	s.heartbeatStop = make(chan struct{})
 	s.heartbeatTicker = time.NewTicker(s.cfg.HeartbeatInterval)
-	go func() {
-		for range s.heartbeatTicker.C {
-			s.heartbeatCheck()
+	go func(stop <-chan struct{}) {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-s.heartbeatTicker.C:
+				s.heartbeatCheck()
+			}
 		}
-	}()
+	}(s.heartbeatStop)
+}
+
+func (s *GameServer) stopHeartbeat() {
+	s.heartbeatOnce.Do(func() {
+		if s.heartbeatTicker != nil {
+			s.heartbeatTicker.Stop()
+		}
+		if s.heartbeatStop != nil {
+			close(s.heartbeatStop)
+		}
+	})
 }
 
 func (s *GameServer) heartbeatCheck() {
@@ -757,7 +797,11 @@ func (s *GameServer) heartbeatCheck() {
 						player.IsConnected = false
 						s.disconnectedPlayers[player.ID] = player
 						room.HandleSetAuto(player.ID, true)
-						s.checkAndDestroyEmptyRoom(room)
+						shouldDestroy := s.shouldDestroyRoomLocked(room)
+						room.mu.Unlock()
+						if shouldDestroy {
+							s.deleteRoomLocked(room, "all players disconnected")
+						}
 					} else {
 						// Not in game: remove from room
 						removed, newHostID := room.RemovePlayer(player.ID)
@@ -767,11 +811,12 @@ func (s *GameServer) heartbeatCheck() {
 								room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
 							}
 						}
-						if room.IsEmpty() {
-							delete(s.rooms, room.ID)
+						empty := room.IsEmpty()
+						room.mu.Unlock()
+						if empty {
+							s.deleteRoomLocked(room, "empty")
 						}
 					}
-					room.mu.Unlock()
 				}
 			}
 			delete(s.connections, player.ConnID)
@@ -803,17 +848,17 @@ func (s *GameServer) heartbeatCheck() {
 	}
 
 	// Check idle rooms
-	var roomsToRemove []string
-	for id, room := range s.rooms {
+	var roomsToRemove []*GameRoom
+	for _, room := range s.rooms {
 		room.mu.Lock()
 		if room.IsEmpty() || room.IsIdle(s.cfg.RoomIdleTimeout) {
-			roomsToRemove = append(roomsToRemove, id)
+			roomsToRemove = append(roomsToRemove, room)
 		}
 		room.mu.Unlock()
 	}
-	for _, id := range roomsToRemove {
-		delete(s.rooms, id)
-		util.Info("GameServer", "Room %s removed (idle/empty)", id)
+	for _, room := range roomsToRemove {
+		// Room state can't change via handlers while s.mu is held, but timers may still fire.
+		s.deleteRoomLocked(room, "idle/empty")
 	}
 
 	// Cleanup expired rate limiter entries
@@ -958,12 +1003,14 @@ func (s *GameServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // Shutdown gracefully stops the server
 func (s *GameServer) Shutdown() {
-	if s.heartbeatTicker != nil {
-		s.heartbeatTicker.Stop()
-	}
+	s.stopHeartbeat()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	for _, room := range s.rooms {
+		room.Close()
+	}
 
 	for _, session := range s.playersByID {
 		session.Close()

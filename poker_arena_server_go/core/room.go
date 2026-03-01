@@ -42,6 +42,10 @@ type GameRoom struct {
 	// Timers managed by room
 	autoPlayTimers map[string]*time.Timer
 	endGameTimer   *time.Timer
+	managedTimers  map[*time.Timer]struct{}
+
+	closed    bool
+	closeOnce sync.Once
 }
 
 func NewGameRoom(gameMode string, maxPlayers int, existingIDs map[string]bool) *GameRoom {
@@ -57,6 +61,7 @@ func NewGameRoom(gameMode string, maxPlayers int, existingIDs map[string]bool) *
 		playersWantRestart: make(map[string]bool),
 		playerAutoStates:   make(map[string]bool),
 		autoPlayTimers:     make(map[string]*time.Timer),
+		managedTimers:      make(map[*time.Timer]struct{}),
 	}
 }
 
@@ -224,6 +229,34 @@ func (r *GameRoom) updateActivity() {
 
 func (r *GameRoom) IsIdle(timeout time.Duration) bool {
 	return time.Since(r.lastActivityAt) > timeout
+}
+
+// Close stops all timers and cleans up game state. Safe to call multiple times.
+// Callers do not need to hold r.mu.
+func (r *GameRoom) Close() {
+	r.closeOnce.Do(func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		r.closed = true
+
+		if r.endGameTimer != nil {
+			r.endGameTimer.Stop()
+			r.endGameTimer = nil
+		}
+
+		r.clearAllAutoPlayTimers()
+
+		for t := range r.managedTimers {
+			t.Stop()
+			delete(r.managedTimers, t)
+		}
+
+		if r.theDecreeGame != nil {
+			r.theDecreeGame.Cleanup()
+			r.theDecreeGame = nil
+		}
+	})
 }
 
 // ==================== Game Lifecycle ====================
@@ -433,6 +466,9 @@ func (r *GameRoom) initTheDecreeGame() {
 			r.endGameTimer = time.AfterFunc(5*time.Second, func() {
 				r.mu.Lock()
 				defer r.mu.Unlock()
+				if r.closed || r.theDecreeGame == nil {
+					return
+				}
 				r.EndGame()
 			})
 		},
@@ -455,9 +491,7 @@ func (r *GameRoom) initTheDecreeGame() {
 		},
 
 		ScheduleShowdownDelay: func(callback func()) {
-			time.AfterFunc(2*time.Second, func() {
-				r.mu.Lock()
-				defer r.mu.Unlock()
+			r.scheduleManagedTimerLocked(2*time.Second, func() {
 				if r.theDecreeGame != nil {
 					callback()
 				}
@@ -465,9 +499,7 @@ func (r *GameRoom) initTheDecreeGame() {
 		},
 
 		ScheduleDealDelay: func(callback func()) {
-			time.AfterFunc(500*time.Millisecond, func() {
-				r.mu.Lock()
-				defer r.mu.Unlock()
+			r.scheduleManagedTimerLocked(500*time.Millisecond, func() {
 				if r.theDecreeGame != nil {
 					callback()
 				}
@@ -631,6 +663,29 @@ func (r *GameRoom) GetReconnectState(playerID string) *protocol.ReconnectSuccess
 
 // ==================== Timer Management ====================
 
+// scheduleManagedTimerLocked creates a timer whose callback runs with r.mu held and is stopped by Close().
+// Caller must hold r.mu.
+func (r *GameRoom) scheduleManagedTimerLocked(d time.Duration, fn func()) {
+	if r.closed {
+		return
+	}
+
+	var t *time.Timer
+	t = time.AfterFunc(d, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		delete(r.managedTimers, t)
+		if r.closed {
+			return
+		}
+
+		fn()
+	})
+
+	r.managedTimers[t] = struct{}{}
+}
+
 // RetriggerAutoPlayIfNeeded re-schedules autoplay timer after reconnection
 // if the player is still in auto mode and it's their turn.
 func (r *GameRoom) RetriggerAutoPlayIfNeeded(playerID string) {
@@ -647,11 +702,17 @@ func (r *GameRoom) RetriggerAutoPlayIfNeeded(playerID string) {
 }
 
 func (r *GameRoom) scheduleAutoAction(playerID string) {
+	if r.closed {
+		return
+	}
 	r.clearAutoPlayTimer(playerID)
 	timer := time.AfterFunc(2*time.Second, func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		delete(r.autoPlayTimers, playerID)
+		if r.closed {
+			return
+		}
 		if r.theDecreeGame != nil {
 			r.theDecreeGame.ExecuteAutoAction(playerID)
 		}

@@ -126,6 +126,8 @@ func (s *PlayerSession) ReadPump(server *GameServer) {
 	s.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	s.Conn.SetPongHandler(func(string) error {
 		s.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		// WebSocket-level pong indicates the peer is alive.
+		s.UpdateHeartbeat()
 		return nil
 	})
 
@@ -137,6 +139,9 @@ func (s *PlayerSession) ReadPump(server *GameServer) {
 			}
 			break
 		}
+
+		// Any valid message activity counts as a heartbeat, not just protocol pings.
+		s.UpdateHeartbeat()
 
 		var env protocol.Envelope
 		if err := json.Unmarshal(message, &env); err != nil {
