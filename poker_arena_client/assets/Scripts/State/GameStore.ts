@@ -1,4 +1,4 @@
-import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
+import { TheDecreeGameState } from '../Core/GameMode/TheDecree/TheDecreeGameState';
 import { ShowdownResult } from '../Network/Messages';
 import { PlayerState } from './PlayerStore';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';

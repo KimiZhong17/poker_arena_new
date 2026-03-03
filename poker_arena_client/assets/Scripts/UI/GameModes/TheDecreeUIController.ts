@@ -1,10 +1,10 @@
 import { PlayingStage } from '../../Core/Stage/PlayingStage';
-import { TheDecreeModeClient } from '../../Core/GameMode/TheDecreeModeClient';
+import { TheDecreeModeClient } from '../../Core/GameMode/TheDecree/TheDecreeModeClient';
 import { _decorator, Component, Node, Button, EventHandler } from 'cc';
 import { Game } from '../../Scenes/Game';
 import { LocalRoomStore } from '../../State/RoomStore';
 import { LocalGameStore } from '../../State/GameStore';
-import { TheDecreeGameState } from '../../Core/GameMode/TheDecreeGameState';
+import { TheDecreeGameState } from '../../Core/GameMode/TheDecree/TheDecreeGameState';
 import { ClientMessageType } from '../../Network/Messages';
 import { Switch } from '../Components/Switch';
 import { MessageTip } from '../Components/MessageTip';

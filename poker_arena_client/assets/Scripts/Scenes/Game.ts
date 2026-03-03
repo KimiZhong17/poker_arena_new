@@ -3,7 +3,7 @@ import { PokerFactory } from '../UI/Cards/PokerFactory';
 import { GameController } from '../Core/GameController';
 import { PlayerUIManager } from '../UI/Player/PlayerUIManager';
 import { SceneManager } from './SceneManager';
-import { TheDecreeModeClient } from '../Core/GameMode/TheDecreeModeClient';
+import { TheDecreeModeClient } from '../Core/GameMode/TheDecree/TheDecreeModeClient';
 import { GameStage } from '../Core/Stage/StageManager';
 import { StageManager } from '../Core/Stage/StageManager';
 import { ReadyStage } from '../Core/Stage/ReadyStage';

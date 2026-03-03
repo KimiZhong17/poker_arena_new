@@ -17,7 +17,7 @@ import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
 import { LocalGameStore } from '../State/GameStore';
 import { LocalRoomStore, RoomState } from '../State/RoomStore';
-import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
+import { TheDecreeGameState } from '../Core/GameMode/TheDecree/TheDecreeGameState';
 import { logger } from '../Utils/Logger';
 
 const log = logger('GameService');

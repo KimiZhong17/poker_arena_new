@@ -1,5 +1,5 @@
 import { GameModeClientBase } from "./GameModeClientBase";
-import { TheDecreeModeClient } from "./TheDecreeModeClient";
+import { TheDecreeModeClient } from "./TheDecree/TheDecreeModeClient";
 import { Game } from "../../Scenes/Game";
 
 /**

@@ -1,8 +1,8 @@
-import { PlayingStage } from "../Stage/PlayingStage";
-import { GameModeClientBase, GameModeConfig } from "./GameModeClientBase";
-import { Game } from "../../Scenes/Game";
-import { PlayerInfo } from "../../State/PlayerStore";
-import { LocalRoomStore } from "../../State/RoomStore";
+import { PlayingStage } from "../../Stage/PlayingStage";
+import { GameModeClientBase, GameModeConfig } from "../GameModeClientBase";
+import { Game } from "../../../Scenes/Game";
+import { PlayerInfo } from "../../../State/PlayerStore";
+import { LocalRoomStore } from "../../../State/RoomStore";
 import { Node } from "cc";
 import {
     DealCardsEvent,
@@ -21,15 +21,15 @@ import {
     SetAutoRequest,
     DealerCallRequest,
     PlayCardsRequest
-} from '../../Network/Messages';
-import { LocalGameStore } from '../../State/GameStore';
-import { TheDecreeUIController } from '../../UI/GameModes/TheDecreeUIController';
+} from '../../../Network/Messages';
+import { LocalGameStore } from '../../../State/GameStore';
+import { TheDecreeUIController } from '../../../UI/GameModes/TheDecreeUIController';
 import { TheDecreeGameState } from './TheDecreeGameState';
-import { EventCenter, GameEvents } from '../../Utils/EventCenter';
-import { logger } from '../../Utils/Logger';
-import { DealingHandler } from './Handlers/DealingHandler';
-import { ShowdownHandler } from './Handlers/ShowdownHandler';
-import { ReconnectHandler } from './Handlers/ReconnectHandler';
+import { EventCenter, GameEvents } from '../../../Utils/EventCenter';
+import { logger } from '../../../Utils/Logger';
+import { DealingHandler } from '../Handlers/DealingHandler';
+import { ShowdownHandler } from '../Handlers/ShowdownHandler';
+import { ReconnectHandler } from '../Handlers/ReconnectHandler';
 
 const log = logger('TheDecree');
 
