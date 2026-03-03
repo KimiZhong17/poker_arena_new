@@ -15,8 +15,8 @@ import {
 import { NetworkManager } from '../Network/NetworkManager';
 import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
-import { LocalGameStore } from '../LocalStore/LocalGameStore';
-import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
+import { LocalGameStore } from '../State/GameStore';
+import { LocalRoomStore, RoomState } from '../State/RoomStore';
 import { TheDecreeGameState } from '../Core/GameMode/TheDecreeGameState';
 import { logger } from '../Utils/Logger';
 

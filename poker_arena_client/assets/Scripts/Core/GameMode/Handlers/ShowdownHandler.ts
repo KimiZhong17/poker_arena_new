@@ -1,6 +1,6 @@
 import { GameModeClientBase } from "../GameModeClientBase";
 import { ShowdownResult } from "../../../Network/Messages";
-import { LocalGameStore } from "../../../LocalStore/LocalGameStore";
+import { LocalGameStore } from "../../../State/GameStore";
 import { logger } from "../../../Utils/Logger";
 
 const log = logger('ShowdownHandler');

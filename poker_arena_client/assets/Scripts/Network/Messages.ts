@@ -3,7 +3,7 @@
  * 客户端 ↔ 服务器通信协议
  */
 
-import { PlayerInfo } from '../LocalStore/LocalPlayerStore';
+import { PlayerInfo } from '../State/PlayerStore';
 export { PlayerInfo };
 
 // ==================== 客户端 → 服务器 ====================

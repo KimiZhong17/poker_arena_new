@@ -1,5 +1,5 @@
 import { GameModeClientBase } from "../GameModeClientBase";
-import { LocalGameStore } from "../../../LocalStore/LocalGameStore";
+import { LocalGameStore } from "../../../State/GameStore";
 import { logger } from "../../../Utils/Logger";
 
 const log = logger('ReconnectHandler');

@@ -1,6 +1,6 @@
 import { GameModeClientBase } from "./GameModeClientBase";
 import { TheDecreeModeClient } from "./TheDecreeModeClient";
-import { Game } from "../../Game";
+import { Game } from "../../Scenes/Game";
 
 /**
  * Client-side game mode factory - creates game mode instances

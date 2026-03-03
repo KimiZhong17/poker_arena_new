@@ -1,5 +1,5 @@
 import { NetworkClient } from '../Network/NetworkClient';
-import { LocalUserStore } from '../LocalStore/LocalUserStore';
+import { LocalUserStore } from '../State/UserStore';
 import { logger } from '../Utils/Logger';
 
 const log = logger('Auth');

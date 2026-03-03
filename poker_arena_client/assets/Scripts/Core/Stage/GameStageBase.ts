@@ -1,5 +1,5 @@
 import { Node } from 'cc';
-import { Game } from '../../Game';
+import { Game } from '../../Scenes/Game';
 import { logger } from '../../Utils/Logger';
 
 const log = logger('Stage');

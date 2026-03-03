@@ -1,6 +1,6 @@
 import { Button, Label, Node } from 'cc';
 import { GameStageBase } from './GameStageBase';
-import { Game } from '../../Game';
+import { Game } from '../../Scenes/Game';
 import { GameStage } from './StageManager';
 import { RoomService } from '../../Services/RoomService';
 import { logger } from '../../Utils/Logger';

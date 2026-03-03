@@ -1,5 +1,5 @@
 import { _decorator, Component, Node, Button, Label, UITransform, Color, Sprite, SpriteFrame } from 'cc';
-import { SceneManager } from '../SceneManager';
+import { SceneManager } from '../Scenes/SceneManager';
 import { EventCenter } from '../Utils/EventCenter';
 import { RoomService } from '../Services/RoomService';
 import { logger } from '../Utils/Logger';

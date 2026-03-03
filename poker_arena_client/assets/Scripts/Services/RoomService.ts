@@ -1,7 +1,7 @@
 import { NetworkClient } from '../Network/NetworkClient';
-import { LocalUserStore } from '../LocalStore/LocalUserStore';
-import { LocalRoomStore, RoomState } from '../LocalStore/LocalRoomStore';
-import { LocalGameStore } from '../LocalStore/LocalGameStore';
+import { LocalUserStore } from '../State/UserStore';
+import { LocalRoomStore, RoomState } from '../State/RoomStore';
+import { LocalGameStore } from '../State/GameStore';
 import {
     ClientMessageType,
     RoomJoinedEvent,

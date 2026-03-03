@@ -46,10 +46,16 @@ export const CardScale = {
         playedCards: 0.8,       // 已出牌缩放比例
     },
 
-    // 卡牌堆叠显示
+    // 卡牌堆叠显示（其他玩家手牌）
     stackDisplay: {
-        maxCards: 15,           // 最多显示几张牌背（15以下显示真实牌数）
+        maxCards: 54,           // 最多显示的牌背数量（覆盖两副牌）
         offset: 1,              // 每张牌的偏移（像素）
+    },
+
+    // 牌堆（DeckPile）堆叠显示
+    deckPileDisplay: {
+        maxCards: 54,           // 最多显示的牌背数量
+        offset: 0.3,            // 每张牌的偏移（像素，亚像素渲染）
     },
 
     // 发牌动画缩放（相对于预制体原始缩放的倍数）

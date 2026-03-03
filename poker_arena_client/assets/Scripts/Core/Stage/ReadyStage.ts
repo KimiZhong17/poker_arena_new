@@ -1,8 +1,8 @@
 import { Button, Label, Node, Color } from 'cc';
 import { GameStageBase } from './GameStageBase';
-import { Game } from '../../Game';
-import { LocalRoomStore } from '../../LocalStore/LocalRoomStore';
-import { LocalUserStore } from '../../LocalStore/LocalUserStore';
+import { Game } from '../../Scenes/Game';
+import { LocalRoomStore } from '../../State/RoomStore';
+import { LocalUserStore } from '../../State/UserStore';
 import { RoomService } from '../../Services/RoomService';
 import { GameStage } from './StageManager';
 import { EventCenter, GameEvents } from '../../Utils/EventCenter';
