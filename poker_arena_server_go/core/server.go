@@ -462,33 +462,53 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 }
 
 func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	// Phase 1: locate current player+room without holding room.mu.
+	s.mu.RLock()
 	player, ok := s.playersByID[session.ID]
 	if !ok || player.RoomID == "" {
+		s.mu.RUnlock()
+		return
+	}
+	room, ok := s.rooms[player.RoomID]
+	s.mu.RUnlock()
+	if !ok || room == nil {
 		return
 	}
 
-	room, ok := s.rooms[player.RoomID]
-	if !ok {
-		return
-	}
+	var (
+		emptyAfterLeave   bool
+		shouldDestroyRoom bool
+		destroyIDs        []string
+	)
 
 	room.mu.Lock()
+	if room.closed {
+		room.mu.Unlock()
+		return
+	}
 
 	// During game: treat as disconnect
 	if room.State == RoomPlaying {
 		util.Info("GameServer", "Player %s left during game, switching to auto mode", player.Name)
 		player.IsConnected = false
+		room.HandleSetAuto(player.ID, true)
+		shouldDestroyRoom, destroyIDs = shouldDestroyRoomLocked(room)
+		room.mu.Unlock()
+
+		// Phase 3: update server maps (no room.mu held).
+		s.mu.Lock()
 		s.disconnectedPlayers[player.ID] = player
 		delete(s.connections, player.ConnID)
 		delete(s.playersByID, player.ID)
-		room.HandleSetAuto(player.ID, true)
-		shouldDestroy := s.shouldDestroyRoomLocked(room)
-		room.mu.Unlock()
-		if shouldDestroy {
-			s.deleteRoomLocked(room, "all players disconnected")
+		if shouldDestroyRoom {
+			for _, pid := range destroyIDs {
+				delete(s.disconnectedPlayers, pid)
+			}
+		}
+		s.mu.Unlock()
+
+		if shouldDestroyRoom {
+			s.deleteRoom(room, "all players disconnected")
 		}
 		return
 	}
@@ -509,15 +529,18 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 		})
 	}
 
-	empty := room.IsEmpty()
+	emptyAfterLeave = room.IsEmpty()
 	room.mu.Unlock()
-	if empty {
-		s.deleteRoomLocked(room, "empty")
-	}
 
+	s.mu.Lock()
 	delete(s.connections, player.ConnID)
 	delete(s.playersByID, player.ID)
+	s.mu.Unlock()
+
 	util.Info("GameServer", "Player %s left room %s", player.Name, room.ID)
+	if emptyAfterLeave {
+		s.deleteRoom(room, "empty")
+	}
 }
 
 func (s *GameServer) handleReady(session *PlayerSession) {
@@ -653,96 +676,144 @@ func (s *GameServer) handlePing(session *PlayerSession) {
 func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 	util.Info("GameServer", "Client disconnected: conn=%s player=%s", session.ConnID, session.ID)
 
+	// Phase 1: update connection map + validate "current session" under s.mu.
+	var (
+		current *PlayerSession
+		room    *GameRoom
+	)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	delete(s.connections, session.ConnID)
 
 	// If this session has no playerID, nothing more to do
 	if session.ID == "" {
+		s.mu.Unlock()
 		return
 	}
 
 	// Ensure this session is still the active session for the player
-	current, ok := s.playersByID[session.ID]
+	var ok bool
+	current, ok = s.playersByID[session.ID]
 	if !ok || current != session {
+		s.mu.Unlock()
 		return
 	}
 
 	if current.RoomID == "" {
 		delete(s.playersByID, current.ID)
+		s.mu.Unlock()
 		return
 	}
 
-	room, ok := s.rooms[current.RoomID]
-	if !ok {
+	room, ok = s.rooms[current.RoomID]
+	if !ok || room == nil {
 		delete(s.playersByID, current.ID)
+		s.mu.Unlock()
 		return
 	}
+	s.mu.Unlock()
+
+	var (
+		emptyAfterLeave   bool
+		shouldDestroyRoom bool
+		destroyIDs        []string
+	)
 
 	room.mu.Lock()
+	if room.closed {
+		room.mu.Unlock()
+		// Room is already closed/deleting; just clear the player from the server map.
+		s.mu.Lock()
+		delete(s.playersByID, current.ID)
+		s.mu.Unlock()
+		return
+	}
 
 	current.IsConnected = false
 
 	if room.State == RoomPlaying {
 		util.Info("GameServer", "Player %s disconnected during game, enabling auto mode", current.Name)
+		room.HandleSetAuto(current.ID, true)
+		shouldDestroyRoom, destroyIDs = shouldDestroyRoomLocked(room)
+		room.mu.Unlock()
+
+		s.mu.Lock()
 		s.disconnectedPlayers[current.ID] = current
 		delete(s.playersByID, current.ID)
-		room.HandleSetAuto(current.ID, true)
-		shouldDestroy := s.shouldDestroyRoomLocked(room)
-		room.mu.Unlock()
-		if shouldDestroy {
-			s.deleteRoomLocked(room, "all players disconnected")
-		}
-	} else {
-		// Not in game: remove from room
-		removed, newHostID := room.RemovePlayer(current.ID)
-		if removed != nil {
-			room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: current.ID})
-			if newHostID != "" {
-				room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
-				room.Broadcast(protocol.PlayerReady, protocol.PlayerReadyEvent{
-					PlayerID: newHostID, IsReady: true,
-				})
+		if shouldDestroyRoom {
+			for _, pid := range destroyIDs {
+				delete(s.disconnectedPlayers, pid)
 			}
 		}
-		empty := room.IsEmpty()
-		room.mu.Unlock()
-		if empty {
-			s.deleteRoomLocked(room, "empty")
+		s.mu.Unlock()
+
+		if shouldDestroyRoom {
+			s.deleteRoom(room, "all players disconnected")
 		}
-		delete(s.playersByID, current.ID)
+		return
+	}
+
+	// Not in game: remove from room
+	removed, newHostID := room.RemovePlayer(current.ID)
+	if removed != nil {
+		room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: current.ID})
+		if newHostID != "" {
+			room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
+			room.Broadcast(protocol.PlayerReady, protocol.PlayerReadyEvent{
+				PlayerID: newHostID, IsReady: true,
+			})
+		}
+	}
+	emptyAfterLeave = room.IsEmpty()
+	room.mu.Unlock()
+
+	s.mu.Lock()
+	delete(s.playersByID, current.ID)
+	s.mu.Unlock()
+
+	if emptyAfterLeave {
+		s.deleteRoom(room, "empty")
 	}
 }
 
-// shouldDestroyRoomLocked returns true if all players in the room are disconnected.
-// Caller must hold s.mu and room.mu.
-func (s *GameServer) shouldDestroyRoomLocked(room *GameRoom) bool {
+// shouldDestroyRoomLocked returns whether the room should be destroyed because all players are disconnected.
+// Caller must hold room.mu. It returns the stable player IDs that should be removed from s.disconnectedPlayers.
+func shouldDestroyRoomLocked(room *GameRoom) (bool, []string) {
 	allPlayers := room.GetAllPlayers()
-	hasOnline := false
 	for _, p := range allPlayers {
 		if p.IsConnected {
-			hasOnline = true
-			break
+			return false, nil
 		}
 	}
 
-	if !hasOnline {
-		util.Info("GameServer", "All players disconnected from room %s, destroying", room.ID)
-		for _, p := range allPlayers {
-			delete(s.disconnectedPlayers, p.ID)
-		}
-		return true
+	util.Info("GameServer", "All players disconnected from room %s, destroying", room.ID)
+	ids := make([]string, 0, len(allPlayers))
+	for _, p := range allPlayers {
+		ids = append(ids, p.ID)
 	}
-	return false
+	return true, ids
 }
 
-// deleteRoomLocked closes a room (stopping timers/game state) and removes it from the server.
-// Caller must hold s.mu. room.mu must NOT be held (room.Close() takes it).
-func (s *GameServer) deleteRoomLocked(room *GameRoom, reason string) {
+// deleteRoom closes a room and removes it from the server without ever nesting s.mu and room.mu.
+// Safe to call multiple times.
+func (s *GameServer) deleteRoom(room *GameRoom, reason string) {
+	if room == nil {
+		return
+	}
+
+	// Close first (takes room.mu). We intentionally do NOT hold s.mu here.
 	room.Close()
-	delete(s.rooms, room.ID)
-	util.Info("GameServer", "Room %s deleted (%s)", room.ID, reason)
+
+	removed := false
+	s.mu.Lock()
+	if cur, ok := s.rooms[room.ID]; ok && cur == room {
+		delete(s.rooms, room.ID)
+		removed = true
+	}
+	s.mu.Unlock()
+
+	if removed {
+		util.Info("GameServer", "Room %s deleted (%s)", room.ID, reason)
+	}
 }
 
 // ==================== Heartbeat ====================
@@ -774,91 +845,63 @@ func (s *GameServer) stopHeartbeat() {
 }
 
 func (s *GameServer) heartbeatCheck() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now()
 
-	// Check player timeouts (iterate playersByID, the authoritative player map)
+	// Snapshot current maps so we never hold s.mu while taking room.mu.
+	var (
+		playersSnapshot      []*PlayerSession
+		disconnectedSnapshot []*PlayerSession
+		roomsSnapshot        []*GameRoom
+	)
+	s.mu.RLock()
+	playersSnapshot = make([]*PlayerSession, 0, len(s.playersByID))
+	for _, p := range s.playersByID {
+		playersSnapshot = append(playersSnapshot, p)
+	}
+	disconnectedSnapshot = make([]*PlayerSession, 0, len(s.disconnectedPlayers))
+	for _, p := range s.disconnectedPlayers {
+		disconnectedSnapshot = append(disconnectedSnapshot, p)
+	}
+	roomsSnapshot = make([]*GameRoom, 0, len(s.rooms))
+	for _, r := range s.rooms {
+		roomsSnapshot = append(roomsSnapshot, r)
+	}
+	s.mu.RUnlock()
+
+	// Check connected player timeouts (playersByID).
 	var toRemove []string
-	for id, player := range s.playersByID {
+	for _, player := range playersSnapshot {
 		if player.IsTimeout(s.cfg.PlayerDisconnectTimeout) {
 			util.Info("GameServer", "Player %s timeout, removing...", player.Name)
-			toRemove = append(toRemove, id)
+			toRemove = append(toRemove, player.ID)
 		}
 	}
 	for _, id := range toRemove {
-		if player, ok := s.playersByID[id]; ok {
-			if player.RoomID != "" {
-				if room, ok := s.rooms[player.RoomID]; ok {
-					room.mu.Lock()
-					if room.State == RoomPlaying {
-						// During game: switch to auto-play instead of removing
-						player.IsConnected = false
-						s.disconnectedPlayers[player.ID] = player
-						room.HandleSetAuto(player.ID, true)
-						shouldDestroy := s.shouldDestroyRoomLocked(room)
-						room.mu.Unlock()
-						if shouldDestroy {
-							s.deleteRoomLocked(room, "all players disconnected")
-						}
-					} else {
-						// Not in game: remove from room
-						removed, newHostID := room.RemovePlayer(player.ID)
-						if removed != nil {
-							room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
-							if newHostID != "" {
-								room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
-							}
-						}
-						empty := room.IsEmpty()
-						room.mu.Unlock()
-						if empty {
-							s.deleteRoomLocked(room, "empty")
-						}
-					}
-				}
-			}
-			delete(s.connections, player.ConnID)
-			delete(s.playersByID, id)
-		}
+		s.handleConnectedPlayerTimeout(id)
 	}
 
 	// Check disconnected player timeouts (5 min)
 	reconnectTimeout := 5 * time.Minute
 	var dcToRemove []string
-	for pid, player := range s.disconnectedPlayers {
-		if now.Sub(player.LastHeartbeat) > reconnectTimeout {
+	for _, player := range disconnectedSnapshot {
+		if player.IsTimeout(reconnectTimeout) {
 			util.Info("GameServer", "Disconnected player %s timeout, removing...", player.Name)
-			dcToRemove = append(dcToRemove, pid)
+			dcToRemove = append(dcToRemove, player.ID)
 		}
 	}
 	for _, pid := range dcToRemove {
-		if player, ok := s.disconnectedPlayers[pid]; ok {
-			if player.RoomID != "" {
-				if room, ok := s.rooms[player.RoomID]; ok {
-					room.mu.Lock()
-					room.RemovePlayer(pid)
-					room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: pid})
-					room.mu.Unlock()
-				}
-			}
-			delete(s.disconnectedPlayers, pid)
-		}
+		s.handleDisconnectedPlayerTimeout(pid)
 	}
 
 	// Check idle rooms
-	var roomsToRemove []*GameRoom
-	for _, room := range s.rooms {
+	for _, room := range roomsSnapshot {
 		room.mu.Lock()
-		if room.IsEmpty() || room.IsIdle(s.cfg.RoomIdleTimeout) {
-			roomsToRemove = append(roomsToRemove, room)
-		}
+		shouldRemove := !room.closed && (room.IsEmpty() || room.IsIdle(s.cfg.RoomIdleTimeout))
 		room.mu.Unlock()
-	}
-	for _, room := range roomsToRemove {
-		// Room state can't change via handlers while s.mu is held, but timers may still fire.
-		s.deleteRoomLocked(room, "idle/empty")
+		if shouldRemove {
+			// Note: this may evict rooms with players if they are idle; this matches the previous behavior.
+			s.deleteRoom(room, "idle/empty")
+		}
 	}
 
 	// Cleanup expired rate limiter entries
@@ -867,11 +910,132 @@ func (s *GameServer) heartbeatCheck() {
 	s.connectionLimiter.Cleanup()
 }
 
+// handleConnectedPlayerTimeout removes a timed-out connected player from server maps and updates the room state.
+// It never holds s.mu and room.mu at the same time.
+func (s *GameServer) handleConnectedPlayerTimeout(playerID string) {
+	// Phase 1: locate player + room under s.mu.
+	var (
+		player *PlayerSession
+		room   *GameRoom
+	)
+	s.mu.RLock()
+	player = s.playersByID[playerID]
+	if player != nil && player.RoomID != "" {
+		room = s.rooms[player.RoomID]
+	}
+	s.mu.RUnlock()
+	if player == nil {
+		return
+	}
+
+	var (
+		emptyAfterLeave   bool
+		shouldDestroyRoom bool
+		destroyIDs        []string
+	)
+
+	if room != nil {
+		room.mu.Lock()
+		if room.closed {
+			room.mu.Unlock()
+		} else if room.State == RoomPlaying {
+			// During game: switch to auto-play instead of removing.
+			player.IsConnected = false
+			room.HandleSetAuto(player.ID, true)
+			shouldDestroyRoom, destroyIDs = shouldDestroyRoomLocked(room)
+			room.mu.Unlock()
+
+			s.mu.Lock()
+			// Re-check the player is still the active connected session (may have reconnected).
+			if cur, ok := s.playersByID[playerID]; !ok || cur != player {
+				s.mu.Unlock()
+				return
+			}
+			s.disconnectedPlayers[player.ID] = player
+			delete(s.connections, player.ConnID)
+			delete(s.playersByID, player.ID)
+			if shouldDestroyRoom {
+				for _, pid := range destroyIDs {
+					delete(s.disconnectedPlayers, pid)
+				}
+			}
+			s.mu.Unlock()
+
+			if shouldDestroyRoom {
+				s.deleteRoom(room, "all players disconnected")
+			}
+			return
+		} else {
+			// Not in game: remove from room.
+			removed, newHostID := room.RemovePlayer(player.ID)
+			if removed != nil {
+				room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
+				if newHostID != "" {
+					room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
+				}
+			}
+			emptyAfterLeave = room.IsEmpty()
+			room.mu.Unlock()
+
+			s.mu.Lock()
+			if cur, ok := s.playersByID[playerID]; ok && cur == player {
+				delete(s.connections, player.ConnID)
+				delete(s.playersByID, player.ID)
+			}
+			s.mu.Unlock()
+
+			if emptyAfterLeave {
+				s.deleteRoom(room, "empty")
+			}
+			return
+		}
+	}
+
+	// No room: just remove from server maps if still current.
+	s.mu.Lock()
+	if cur, ok := s.playersByID[playerID]; ok && cur == player {
+		delete(s.connections, player.ConnID)
+		delete(s.playersByID, player.ID)
+	}
+	s.mu.Unlock()
+}
+
+// handleDisconnectedPlayerTimeout removes a timed-out disconnected player from the room (if present) and server map.
+// It never holds s.mu and room.mu at the same time.
+func (s *GameServer) handleDisconnectedPlayerTimeout(playerID string) {
+	// Phase 1: locate player + room under s.mu.
+	var (
+		player *PlayerSession
+		room   *GameRoom
+	)
+	s.mu.RLock()
+	player = s.disconnectedPlayers[playerID]
+	if player != nil && player.RoomID != "" {
+		room = s.rooms[player.RoomID]
+	}
+	s.mu.RUnlock()
+	if player == nil {
+		return
+	}
+
+	if room != nil {
+		room.mu.Lock()
+		if !room.closed {
+			room.RemovePlayer(playerID)
+			room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: playerID})
+		}
+		room.mu.Unlock()
+	}
+
+	s.mu.Lock()
+	delete(s.disconnectedPlayers, playerID)
+	s.mu.Unlock()
+}
+
 // ==================== Helpers ====================
 
 // getPlayerAndRoom looks up the player and their room, then locks room.mu
-// before releasing s.mu. This eliminates the TOCTOU gap where the room could
-// be deleted between the lookup and the caller's room.mu.Lock().
+// without nesting s.mu and room.mu. Callers must defer room.mu.Unlock() themselves.
 // Callers must defer room.mu.Unlock() themselves.
 func (s *GameServer) getPlayerAndRoom(session *PlayerSession) (*PlayerSession, *GameRoom) {
 	s.mu.RLock()
@@ -889,10 +1053,14 @@ func (s *GameServer) getPlayerAndRoom(session *PlayerSession) (*PlayerSession, *
 		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
 		return nil, nil
 	}
-
-	room.mu.Lock()
 	s.mu.RUnlock()
 
+	room.mu.Lock()
+	if room.closed {
+		room.mu.Unlock()
+		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
+		return nil, nil
+	}
 	return player, room
 }
 
@@ -973,30 +1141,44 @@ func (s *GameServer) sendError(session *PlayerSession, code, message string) {
 
 // StatsHandler returns server statistics
 func (s *GameServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	type roomDetail struct {
 		ID          string `json:"id"`
 		PlayerCount int    `json:"playerCount"`
 		State       string `json:"state"`
 	}
 
-	details := make([]roomDetail, 0, len(s.rooms))
+	// Snapshot rooms under s.mu, then lock rooms individually to avoid lock nesting.
+	var (
+		roomsCount   int
+		playersCount int
+		rooms        []*GameRoom
+	)
+	s.mu.RLock()
+	roomsCount = len(s.rooms)
+	playersCount = len(s.playersByID)
+	rooms = make([]*GameRoom, 0, len(s.rooms))
 	for _, room := range s.rooms {
+		rooms = append(rooms, room)
+	}
+	s.mu.RUnlock()
+
+	details := make([]roomDetail, 0, len(rooms))
+	for _, room := range rooms {
 		room.mu.Lock()
-		details = append(details, roomDetail{
-			ID:          room.ID,
-			PlayerCount: room.GetPlayerCount(),
-			State:       string(room.State),
-		})
+		if !room.closed {
+			details = append(details, roomDetail{
+				ID:          room.ID,
+				PlayerCount: room.GetPlayerCount(),
+				State:       string(room.State),
+			})
+		}
 		room.mu.Unlock()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"rooms":       len(s.rooms),
-		"players":     len(s.playersByID),
+		"rooms":       roomsCount,
+		"players":     playersCount,
 		"roomDetails": details,
 	})
 }
@@ -1005,21 +1187,39 @@ func (s *GameServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 func (s *GameServer) Shutdown() {
 	s.stopHeartbeat()
 
+	// Snapshot under s.mu then close outside to avoid lock nesting with room.mu/session operations.
+	var (
+		rooms    []*GameRoom
+		players  []*PlayerSession
+		conns    []*PlayerSession
+	)
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	rooms = make([]*GameRoom, 0, len(s.rooms))
 	for _, room := range s.rooms {
+		rooms = append(rooms, room)
+	}
+	players = make([]*PlayerSession, 0, len(s.playersByID))
+	for _, session := range s.playersByID {
+		players = append(players, session)
+	}
+	conns = make([]*PlayerSession, 0, len(s.connections))
+	for _, session := range s.connections {
+		conns = append(conns, session)
+	}
+	s.mu.Unlock()
+
+	for _, room := range rooms {
 		room.Close()
 	}
 
-	for _, session := range s.playersByID {
+	for _, session := range players {
 		session.Close()
 		if session.Conn != nil {
 			session.Conn.Close()
 		}
 	}
 
-	for _, session := range s.connections {
+	for _, session := range conns {
 		session.Close()
 		if session.Conn != nil {
 			session.Conn.Close()
