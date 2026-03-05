@@ -1,0 +1,16 @@
+{
+  "task_name": "room-audit",
+  "telegram_group": "user:ou_7d97af273a20f033f1c6aadb5c1914ff",
+  "callback_group": "",
+  "callback_dm": "user:ou_7d97af273a20f033f1c6aadb5c1914ff",
+  "callback_account": "default",
+  "callback_session": "",
+  "prompt": "Perform a deep concurrency audit of core/room.go. Focus on deadlocks and lock nesting with Server/Sessions. Check if room-side changes are needed for the server.go snapshot fix.",
+  "workdir": "/root/poker_arena/poker_arena_server_go",
+  "started_at": "2026-03-05T10:42:58+08:00",
+  "agent_teams": false,
+  "engine": "codex",
+  "status": "done",
+  "exit_code": 0,
+  "completed_at": "2026-03-05T10:47:07+08:00"
+}

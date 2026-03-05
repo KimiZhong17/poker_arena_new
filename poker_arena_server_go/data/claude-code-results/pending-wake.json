@@ -1,7 +1,7 @@
 {
-  "task_name": "unknown",
-  "telegram_group": "",
-  "timestamp": "2026-03-01T23:37:59+08:00",
-  "summary": " ",
+  "task_name": "room-audit",
+  "telegram_group": "user:ou_7d97af273a20f033f1c6aadb5c1914ff",
+  "timestamp": "2026-03-05T10:47:15+08:00",
+  "summary": "still hold `server.mu` while taking `room.mu` during create/join/reconnect. Those code paths then call room methods that iterate players and call `PlayerSession.Send` while the server lock is still held. Today `Send` is non‑blocking and doesn’t lock, so no deadlock; but this becomes fragile if `Send` ever takes a lock that could be held elsewhere while `room.mu` is held.     - `core/server.go:187`     - `core/server.go:232`     - `core/server.go:397`     - `core/room.go:195`  **Room-side cha",
   "processed": false
 }

@@ -1,0 +1,553 @@
+OpenAI Codex v0.104.0 (research preview)
+--------
+workdir: /root/poker_arena/poker_arena_server_go
+model: gpt-5.2-codex
+provider: codex
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: auto
+session id: 019cbbe0-9e0a-7231-9f39-0ba4370deba6
+--------
+user
+Perform a deep concurrency audit of core/room.go. Focus on deadlocks and lock nesting with Server/Sessions. Check if room-side changes are needed for the server.go snapshot fix.
+mcp startup: no servers
+
+thinking
+**Planning file reading approach**
+
+thinking
+**Clarifying command execution format**
+
+Discovered that the exec_command function requires the command as a single string, so I'll use "bash -lc" to pass the full command properly.
+exec
+/bin/bash -lc 'bash -lc ls' in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+Dockerfile
+config
+core
+data
+dispatch-callback.json
+game
+go.mod
+go.sum
+main.go
+protocol
+util
+
+thinking
+**Identifying missing file**
+
+The code requires the file room.go, which is currently missing or not located. Next, I'll locate or create this file to proceed.
+exec
+/bin/bash -lc "bash -lc 'sed -n \"1,240p\" core/room.go'" in /root/poker_arena/poker_arena_server_go succeeded in 50ms:
+package core
+
+import (
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
+	"poker-arena-server/game"
+	"poker-arena-server/protocol"
+	"poker-arena-server/util"
+)
+
+// RoomState represents the room lifecycle state
+type RoomState string
+
+const (
+	RoomWaiting RoomState = "waiting"
+	RoomPlaying RoomState = "playing"
+)
+exec
+/bin/bash -lc "bash -lc 'sed -n \"240,520p\" core/room.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+
+		r.closed = true
+
+		if r.endGameTimer != nil {
+			r.endGameTimer.Stop()
+			r.endGameTimer = nil
+		}
+
+		r.clearAllAutoPlayTimers()
+
+		for t := range r.managedTimers {
+			t.Stop()
+			delete(r.managedTimers, t)
+		}
+
+		if r.theDecreeGame != nil {
+			r.theDecreeGame.Cleanup()
+			r.theDecreeGame = nil
+		}
+	})
+exec
+/bin/bash -lc "bash -lc 'sed -n \"520,1040p\" core/room.go'" in /root/poker_arena/poker_arena_server_go succeeded in 50ms:
+				IsReady:   p.IsReady,
+				IsHost:    p.IsHost,
+			})
+		}
+	}
+
+	r.theDecreeGame.InitGame(playerInfos)
+
+	// Apply saved auto states
+	for playerID, isAuto := range r.playerAutoStates {
+		if isAuto {
+			r.theDecreeGame.SetPlayerAuto(playerID, true, "manual")
+		}
+	}
+
+	// Start game
+	r.theDecreeGame.StartGame()
+
+	// Broadcast game start
+	r.Broadcast(protocol.GameStart, protocol.GameStartEvent{
+
+thinking
+**Planning concurrency audit**
+
+I'm preparing to inspect server and session locking by reviewing core/server.go and running searches for related terms to understand concurrency controls.
+exec
+/bin/bash -lc "bash -lc 'ls core'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+room.go
+server.go
+session.go
+
+thinking
+**Checking lock ordering in server.go**
+exec
+/bin/bash -lc "bash -lc 'sed -n \"1,260p\" core/server.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+package core
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"poker-arena-server/config"
+	"poker-arena-server/protocol"
+	"poker-arena-server/util"
+)
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+exec
+/bin/bash -lc "bash -lc 'sed -n \"260,520p\" core/server.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+	if room.IsFull() {
+		s.sendError(session, protocol.ErrRoomFull, "Room is full")
+		return
+	}
+
+	session.Name = name
+	session.GuestID = req.GuestID
+	s.playersByID[session.ID] = session
+
+	room.AddPlayer(session)
+
+	session.Send(protocol.RoomJoined, protocol.RoomJoinedEvent{
+		RoomID:           room.ID,
+		PlayerID:         session.ID,
+		MyPlayerIDInRoom: session.ID,
+		HostID:           room.GetHostID(),
+		Players:          room.GetPlayersInfo(),
+		MaxPlayers:       room.MaxPlayers,
+	})
+
+exec
+/bin/bash -lc "bash -lc 'sed -n \"520,1040p\" core/server.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+		return
+	}
+
+	room.Broadcast(protocol.PlayerLeft, protocol.PlayerLeftEvent{PlayerID: player.ID})
+
+	if newHostID != "" {
+		room.Broadcast(protocol.HostChanged, protocol.HostChangedEvent{NewHostID: newHostID})
+		room.Broadcast(protocol.PlayerReady, protocol.PlayerReadyEvent{
+			PlayerID: newHostID, IsReady: true,
+		})
+	}
+
+	emptyAfterLeave = room.IsEmpty()
+	room.mu.Unlock()
+
+	s.mu.Lock()
+	delete(s.connections, player.ConnID)
+	delete(s.playersByID, player.ID)
+	s.mu.Unlock()
+
+exec
+/bin/bash -lc "bash -lc 'sed -n \"1040,1560p\" core/server.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+func (s *GameServer) getPlayerAndRoom(session *PlayerSession) (*PlayerSession, *GameRoom) {
+	s.mu.RLock()
+
+	player, ok := s.playersByID[session.ID]
+	if !ok || player.RoomID == "" {
+		s.mu.RUnlock()
+		s.sendError(session, protocol.ErrGameNotStarted, "Not in a game")
+		return nil, nil
+	}
+
+	room, ok := s.rooms[player.RoomID]
+	if !ok {
+		s.mu.RUnlock()
+		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
+		return nil, nil
+	}
+	s.mu.RUnlock()
+
+	room.mu.Lock()
+	if room.closed {
+
+thinking
+**Questioning lock placement in session.go**
+exec
+/bin/bash -lc "bash -lc 'sed -n \"1,260p\" core/session.go'" in /root/poker_arena/poker_arena_server_go succeeded in 50ms:
+package core
+
+import (
+	"encoding/json"
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"poker-arena-server/protocol"
+	"poker-arena-server/util"
+)
+
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+	maxMsgSize = 4096
+	sendBufSize = 64
+)
+
+
+thinking
+**Auditing room.go lock usage against server snapshot**
+
+I'm analyzing room.go for deadlocks and lock nesting, focusing on consistent usage of room.mu while checking if server.go's snapshot reliance in the heartbeat requires room-side changes. Some room methods access shared data without explicit locking, relying on callers to hold room.mu, but this contract isn't uniformly documented or enforced. I'm verifying if game callbacks invoking locking-sensitive functions respect this, especially scheduleManagedTimerLocked, which requires room.mu held, but might be called without it from game callbacks. Next, I'll inspect the game package, especially TheDecreeMode, to understand locking guarantees during these callbacks.
+exec
+/bin/bash -lc "bash -lc 'rg -n \"type TheDecreeMode|func \\(.*TheDecreeMode\" -S game'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+game/the_decree.go:55:type TheDecreeMode struct {
+game/the_decree.go:80:func (g *TheDecreeMode) InitGame(playerInfos []PlayerInfo) {
+game/the_decree.go:91:func (g *TheDecreeMode) StartGame() {
+game/the_decree.go:106:func (g *TheDecreeMode) DealCards() {
+game/the_decree.go:132:func (g *TheDecreeMode) requestFirstDealerSelection() {
+game/the_decree.go:145:func (g *TheDecreeMode) SelectFirstDealerCard(playerID string, card int) bool {
+game/the_decree.go:184:func (g *TheDecreeMode) revealFirstDealer() {
+game/the_decree.go:197:func (g *TheDecreeMode) selectFirstDealer(selections map[string]int) string {
+game/the_decree.go:209:func (g *TheDecreeMode) compareCards(card1, card2 int) int {
+game/the_decree.go:219:func (g *TheDecreeMode) StartNewRound(dealerID string) {
+game/the_decree.go:249:func (g *TheDecreeMode) DealerCallAction(dealerID string, cardsToPlay int) bool {
+game/the_decree.go:282:func (g *TheDecreeMode) IsValidPlay(cards []int, playerID string) bool {
+game/the_decree.go:297:func (g *TheDecreeMode) PlayCardsAction(cards []int, playerID string) bool {
+game/the_decree.go:321:func (g *TheDecreeMode) allPlayersPlayed() bool {
+game/the_decree.go:328:func (g *TheDecreeMode) processShowdown() {
+game/the_decree.go:385:func (g *TheDecreeMode) calculateScores(results map[string]*HandResult) {
+game/the_decree.go:417:func (g *TheDecreeMode) ProceedToRefill() {
+game/the_decree.go:422:func (g *TheDecreeMode) refillHands() {
+game/the_decree.go:484:func (g *TheDecreeMode) IsGameOver() bool {
+game/the_decree.go:493:func (g *TheDecreeMode) handleGameOver() {
+exec
+/bin/bash -lc "bash -lc 'sed -n \"1,220p\" game/the_decree.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+package game
+
+import (
+	"math/rand"
+	"poker-arena-server/util"
+	"time"
+)
+
+// TheDecreeGameState enumeration
+const (
+	StateSetup                = "setup"
+	StateFirstDealerSelection = "first_dealer"
+	StateDealerCall           = "dealer_call"
+	StatePlayerSelection      = "player_selection"
+	StateShowdown             = "showdown"
+	StateScoring              = "scoring"
+	StateRefill               = "refill"
+	StateGameOver             = "game_over"
+)
+
+exec
+/bin/bash -lc "bash -lc 'sed -n \"220,520p\" game/the_decree.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+	roundNum := 1
+	if g.currentRound != nil {
+		roundNum = g.currentRound.RoundNumber + 1
+	}
+
+	g.currentRound = &RoundState{
+		RoundNumber: roundNum,
+		DealerID:    dealerID,
+		CardsToPlay: 0,
+		PlayerPlays: make(map[string][]int),
+	}
+
+	// Reset player round states
+	for _, p := range g.playerManager.GetAllPlayers() {
+		p.ResetRound()
+	}
+
+	g.state = StateDealerCall
+
+	if g.callbacks != nil && g.callbacks.OnNewRound != nil {
+exec
+/bin/bash -lc "bash -lc 'sed -n \"520,760p\" game/the_decree.go'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+	g.deck = g.deck[:0]
+	suits := []int{SuitSpade, SuitHeart, SuitClub, SuitDiamond}
+	points := []int{PointA, Point2, Point3, Point4, Point5, Point6, Point7,
+		Point8, Point9, Point10, PointJ, PointQ, PointK}
+
+	for _, suit := range suits {
+		for _, point := range points {
+			g.deck = append(g.deck, suit|point)
+		}
+	}
+	g.shuffleDeck()
+}
+
+func (g *TheDecreeMode) shuffleDeck() {
+	rand.Shuffle(len(g.deck), func(i, j int) {
+		g.deck[i], g.deck[j] = g.deck[j], g.deck[i]
+	})
+}
+
+func (g *TheDecreeMode) drawCard() int {
+
+
+
+thinking
+**Confirming locking assumptions in callbacks**
+
+The server holds the room lock during game callbacks, ensuring room state access is safe; PlayerSession sends use non-blocking channel operations without locks, avoiding deadlocks despite the held room lock.
+thinking
+**Completing deep concurrency audit with timer and lock order insights**
+
+Timers always acquire room lock before invoking callbacks, preventing races despite reentrant calls, and server consistently locks session then room to avoid deadlocks; room methods mostly assume room lock held when accessing shared maps, though some undocumented lock assumptions exist. Potential data races on session fields are guarded by room or server locks, and room.Close properly handles timer cleanup holding the lock, avoiding deadlocks with server lock ordering; no immediate room-side changes appear needed for server snapshot fix.
+thinking
+**Reviewing lock assumptions for auto-play timer methods**
+
+scheduleAutoAction and related timer map operations lack explicit locking but appear consistently called only while holding the room lock, indicating implicit lock discipline though no explicit enforcement or documentation exists.
+exec
+/bin/bash -lc "bash -lc 'rg -n \"scheduleAutoAction\" -S'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+core/room.go:486:			r.scheduleAutoAction(playerID)
+core/room.go:700:	r.scheduleAutoAction(playerID)
+core/room.go:704:func (r *GameRoom) scheduleAutoAction(playerID string) {
+data/claude-code-results/task-output.txt:340:scheduleAutoAction and related timer map operations lack explicit locking but appear consistently called only while holding the room lock, indicating implicit lock discipline though no explicit enforcement or documentation exists.
+
+
+thinking
+**Reviewing timer locking and activity updates**
+
+Confirmed all calls to the timer-setting function occur under the required lock, ensuring thread safety. Noted that some game actions don't update room activity timestamps, which could cause the room to appear idle despite ongoing play, potentially affecting idle checks during server snapshots.
+thinking
+**Auditing room lock interactions and deadlock risks**
+
+Analyzed lock usage between room.mu, session.mu, and server locks, confirming no current deadlocks despite complex interactions and timer callbacks holding room.mu. Identified potential race if future code calls room callbacks without r.mu held and noted some map accesses occurring without locking if invoked improperly. Highlighted that server snapshot fix likely requires no room-side changes but recommends documenting lock assumptions and long lock holds during broadcasts. Preparing to provide a detailed concurrency audit with line references for room.go.
+exec
+/bin/bash -lc "bash -lc 'nl -ba core/room.go | sed -n \"1,260p\"'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+     1	package core
+     2	
+     3	import (
+     4		"fmt"
+     5		"math/rand"
+     6		"sync"
+     7		"time"
+     8	
+     9		"poker-arena-server/game"
+    10		"poker-arena-server/protocol"
+    11		"poker-arena-server/util"
+    12	)
+    13	
+    14	// RoomState represents the room lifecycle state
+    15	type RoomState string
+    16	
+    17	const (
+    18		RoomWaiting RoomState = "waiting"
+    19		RoomPlaying RoomState = "playing"
+    20	)
+
+thinking
+**Noting need for line numbers in room.go**
+exec
+/bin/bash -lc "bash -lc 'nl -ba core/room.go | sed -n \"260,640p\"'" in /root/poker_arena/poker_arena_server_go succeeded in 50ms:
+   260	}
+   261	
+   262	// ==================== Game Lifecycle ====================
+   263	
+   264	// StartGame starts the game. Must be called with mu held.
+   265	func (r *GameRoom) StartGame() bool {
+   266		if r.State != RoomWaiting {
+   267			return false
+   268		}
+   269		if !r.IsAllPlayersReady() {
+   270			return false
+   271		}
+   272	
+   273		r.State = RoomPlaying
+   274		util.Info("GameRoom", "[Room %s] Game started with %d players", r.ID, len(r.players))
+   275	
+   276		if r.GameMode == "the_decree" {
+   277			r.initTheDecreeGame()
+   278		}
+   279		return true
+exec
+/bin/bash -lc "bash -lc 'nl -ba core/room.go | sed -n \"640,1040p\"'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+   640		communityCards := r.theDecreeGame.GetCommunityCards()
+   641		if communityCards == nil {
+   642			communityCards = []int{}
+   643		}
+   644	
+   645		return &protocol.ReconnectSuccessEvent{
+   646			RoomID:           r.ID,
+   647			PlayerID:         playerID,
+   648			MyPlayerIDInRoom: playerID,
+   649			HostID:           r.hostID,
+   650			Players:          r.GetPlayersInfo(),
+   651			MaxPlayers:       r.MaxPlayers,
+   652			GameState:        r.theDecreeGame.GetState(),
+   653			RoundNumber:      roundNumber,
+   654			DealerID:         dealerID,
+   655			CardsToPlay:      cardsToPlay,
+   656			DeckSize:         r.theDecreeGame.GetDeckSize(),
+   657			HandCards:        handCards,
+   658			CommunityCards:   communityCards,
+   659			Scores:           scores,
+
+
+thinking
+**Analyzing concurrency and lock usage risks**
+
+The room uses a single mutex protecting all state, and the server avoids nested session and room locks, preventing known deadlocks. However, some room methods implicitly require the room lock without documenting it, creating concurrency hazards. Callbacks from game to room hold the room lock during potentially heavy JSON encoding for session sends, risking prolonged lock holding that could stall server operations without deadlocking. No direct session mutex use occurs in room.go.
+thinking
+**Detailing concurrency audit with severity and references**
+
+No deadlocks are found between room and server locks due to the snapshot fix preventing nested s.mu and r.mu. Key risks include undocumented implicit lock requirements for several room methods (e.g., Broadcast, SendToPlayer) that access shared data without explicit locking, posing medium concurrency hazards. Timer-related functions manipulate timer maps assuming caller holds r.mu but lack asserts, risking data races if used improperly. Callbacks hold room.mu during potentially heavy session.Send calls, which may delay but not deadlock server operations. Some room methods call game code under locks, reinforcing the fragile assumption that game callbacks run only with room.mu held; asynchronous usage could introduce races or deadlocks. The audit should list findings ordered by severity with concrete line references from core/room.go and context from core/server.go, emphasizing no room-side changes are strictly needed for the server snapshot fix but recommending documentation and possible guards for lock assumptions.
+exec
+/bin/bash -lc "bash -lc 'nl -ba core/server.go | sed -n \"1,220p\"'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+     1	package core
+     2	
+     3	import (
+     4		"encoding/json"
+     5		"fmt"
+     6		"net/http"
+     7		"sync"
+     8		"time"
+     9	
+    10		"github.com/gorilla/websocket"
+    11		"poker-arena-server/config"
+    12		"poker-arena-server/protocol"
+    13		"poker-arena-server/util"
+    14	)
+    15	
+    16	var upgrader = websocket.Upgrader{
+    17		ReadBufferSize:  1024,
+    18		WriteBufferSize: 1024,
+    19		CheckOrigin:     func(r *http.Request) bool { return true },
+    20	}
+
+thinking
+**Continuing code inspection around join handler**
+exec
+/bin/bash -lc "bash -lc 'nl -ba core/server.go | sed -n \"220,520p\"'" in /root/poker_arena/poker_arena_server_go succeeded in 51ms:
+   220		s.rooms[room.ID] = room
+   221	
+   222		session.Send(protocol.RoomCreated, protocol.RoomCreatedEvent{
+   223			RoomID:     room.ID,
+   224			PlayerID:   session.ID,
+   225			PlayerName: session.Name,
+   226			MaxPlayers: room.MaxPlayers,
+   227		})
+   228	
+   229		util.Info("GameServer", "Room created: %s by %s (playerID=%s)", room.ID, name, session.ID)
+   230	}
+   231	
+   232	func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRoomRequest) {
+   233		name := s.validateAndSanitizeName(session, req.PlayerName)
+   234		if name == "" {
+   235			return
+   236		}
+   237	
+   238		s.mu.Lock()
+   239		defer s.mu.Unlock()
+
+
+thinking
+**Reviewing lock nesting and concurrency nuances**
+
+Noted that key server handlers lock the server mutex before the room mutex, with room methods safely manipulating players under room.mu. PlayerSession.Send involves no locking that risks deadlock, though it uses CPU-bound json.Marshal. The room.Close method calls game cleanup without full concurrency protection, hinting at a potential subtle race after releasing the room lock.
+thinking
+**Summarizing lock and deadlock findings**
+
+No immediate deadlocks are found; lock order consistently holds s.mu before room.mu in server handlers, and room methods require room.mu held but rarely acquire server locks. Timer callbacks hold room.mu only and safely check game state before executing. Potential concurrency risks stem from undocumented assumptions that room methods must be called with room.mu held and from some timers and callbacks relying on external locking without enforced assertions. The snapshot fix introduces no needed changes to room locking but suggests caution to avoid holding s.mu while calling room methods to reduce deadlock risk if session locking changes. Notably, room.Close safely releases locks, and server functions like handleJoinRoom hold s.mu then room.mu in proper order.
+codex
+**Findings**
+
+- No direct deadlocks in `core/room.go` under the current lock discipline; room code only ever takes `room.mu` and never reaches back into `server.mu` or `session.mu`. Timer callbacks lock `room.mu` only. This stays compatible with the server snapshot approach (rooms are locked after releasing `server.mu`).  
+- Medium risk: several room methods that touch shared state do not document or enforce the “caller holds `room.mu`” contract, even though that’s required for safety. If any new caller (e.g., post‑snapshot code) calls them without `room.mu`, you’ll get races and potentially future deadlocks if you later add locking inside these methods. Examples: `Broadcast`, `SendToPlayer`, `GetPlayersInfo`, `GetReconnectState`, `EndGame`, `RestartGame`, `PlayerWantsRestart`, `HandleSetAuto`, `IsIdle`, and timers (`scheduleAutoAction` / `clearAutoPlayTimer`) all read/write shared room fields without locking.  
+  - `core/room.go:195`  
+  - `core/room.go:209`  
+  - `core/room.go:216`  
+  - `core/room.go:230`  
+  - `core/room.go:282`  
+  - `core/room.go:306`  
+  - `core/room.go:327`  
+  - `core/room.go:585`  
+  - `core/room.go:606`  
+  - `core/room.go:704`
+- Low risk / lock nesting caution: server paths still hold `server.mu` while taking `room.mu` during create/join/reconnect. Those code paths then call room methods that iterate players and call `PlayerSession.Send` while the server lock is still held. Today `Send` is non‑blocking and doesn’t lock, so no deadlock; but this becomes fragile if `Send` ever takes a lock that could be held elsewhere while `room.mu` is held.  
+  - `core/server.go:187`  
+  - `core/server.go:232`  
+  - `core/server.go:397`  
+  - `core/room.go:195`
+
+**Room-side changes needed for the server.go snapshot fix**
+
+No changes are required in `core/room.go` for the snapshot fix itself; room code doesn’t take `server.mu`, and the snapshot approach already avoids `server.mu`→`room.mu` nesting in the heartbeat paths. The only action I’d recommend is tightening the room’s lock contract (comments or a small debug assert helper) on the methods listed above to prevent future misuses in new “snapshot‑style” callers.
+
+If you want, I can add explicit “must hold room.mu” comments (or a lightweight debug assert) to the risky methods without changing behavior.
+
+Suggestions if you want follow‑up work:
+1) Add lock‑discipline comments/asserts to room methods noted above.  
+2) Refactor server create/join/reconnect to avoid holding `server.mu` while calling room methods (purely defensive; not required for the snapshot fix).
+tokens used
+106,410
+**Findings**
+
+- No direct deadlocks in `core/room.go` under the current lock discipline; room code only ever takes `room.mu` and never reaches back into `server.mu` or `session.mu`. Timer callbacks lock `room.mu` only. This stays compatible with the server snapshot approach (rooms are locked after releasing `server.mu`).  
+- Medium risk: several room methods that touch shared state do not document or enforce the “caller holds `room.mu`” contract, even though that’s required for safety. If any new caller (e.g., post‑snapshot code) calls them without `room.mu`, you’ll get races and potentially future deadlocks if you later add locking inside these methods. Examples: `Broadcast`, `SendToPlayer`, `GetPlayersInfo`, `GetReconnectState`, `EndGame`, `RestartGame`, `PlayerWantsRestart`, `HandleSetAuto`, `IsIdle`, and timers (`scheduleAutoAction` / `clearAutoPlayTimer`) all read/write shared room fields without locking.  
+  - `core/room.go:195`  
+  - `core/room.go:209`  
+  - `core/room.go:216`  
+  - `core/room.go:230`  
+  - `core/room.go:282`  
+  - `core/room.go:306`  
+  - `core/room.go:327`  
+  - `core/room.go:585`  
+  - `core/room.go:606`  
+  - `core/room.go:704`
+- Low risk / lock nesting caution: server paths still hold `server.mu` while taking `room.mu` during create/join/reconnect. Those code paths then call room methods that iterate players and call `PlayerSession.Send` while the server lock is still held. Today `Send` is non‑blocking and doesn’t lock, so no deadlock; but this becomes fragile if `Send` ever takes a lock that could be held elsewhere while `room.mu` is held.  
+  - `core/server.go:187`  
+  - `core/server.go:232`  
+  - `core/server.go:397`  
+  - `core/room.go:195`
+
+**Room-side changes needed for the server.go snapshot fix**
+
+No changes are required in `core/room.go` for the snapshot fix itself; room code doesn’t take `server.mu`, and the snapshot approach already avoids `server.mu`→`room.mu` nesting in the heartbeat paths. The only action I’d recommend is tightening the room’s lock contract (comments or a small debug assert helper) on the methods listed above to prevent future misuses in new “snapshot‑style” callers.
+
+If you want, I can add explicit “must hold room.mu” comments (or a lightweight debug assert) to the risky methods without changing behavior.
+
+Suggestions if you want follow‑up work:
+1) Add lock‑discipline comments/asserts to room methods noted above.  
+2) Refactor server create/join/reconnect to avoid holding `server.mu` while calling room methods (purely defensive; not required for the snapshot fix).
