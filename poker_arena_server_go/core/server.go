@@ -190,34 +190,66 @@ func (s *GameServer) handleCreateRoom(session *PlayerSession, req *protocol.Crea
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(s.rooms) >= s.cfg.MaxRooms {
-		s.sendError(session, protocol.ErrInternal, "Server is full")
-		return
-	}
-
 	if req.MaxPlayers < 2 || req.MaxPlayers > 4 {
 		s.sendError(session, protocol.ErrInternal, "Max players must be 2-4")
 		return
 	}
 
-	existingIDs := make(map[string]bool, len(s.rooms))
+	// Snapshot existing room IDs without holding s.mu during room operations.
+	var existingIDs map[string]bool
+	s.mu.RLock()
+	roomsCount := len(s.rooms)
+	existingIDs = make(map[string]bool, len(s.rooms))
 	for id := range s.rooms {
 		existingIDs[id] = true
 	}
+	s.mu.RUnlock()
+
+	if roomsCount >= s.cfg.MaxRooms {
+		s.sendError(session, protocol.ErrInternal, "Server is full")
+		return
+	}
+
 	room := NewGameRoom(req.GameMode, req.MaxPlayers, existingIDs)
 
 	session.Name = name
 	session.GuestID = req.GuestID
-	s.playersByID[session.ID] = session
 
 	room.mu.Lock()
-	room.AddPlayer(session)
+	added := room.AddPlayer(session)
 	room.mu.Unlock()
 
+	if !added {
+		s.sendError(session, protocol.ErrInternal, "Failed to join room")
+		return
+	}
+
+	// Finalize maps under s.mu (no room.mu held).
+	s.mu.Lock()
+	if len(s.rooms) >= s.cfg.MaxRooms {
+		s.mu.Unlock()
+		room.mu.Lock()
+		room.RemovePlayer(session.ID)
+		room.mu.Unlock()
+		s.sendError(session, protocol.ErrInternal, "Server is full")
+		return
+	}
+	if _, exists := s.rooms[room.ID]; exists {
+		existingIDs := make(map[string]bool, len(s.rooms))
+		for id := range s.rooms {
+			existingIDs[id] = true
+		}
+		newID := generateUniqueRoomID(existingIDs)
+		room.mu.Lock()
+		room.ID = newID
+		for _, p := range room.players {
+			p.RoomID = newID
+		}
+		room.mu.Unlock()
+	}
 	s.rooms[room.ID] = room
+	s.playersByID[session.ID] = session
+	s.mu.Unlock()
 
 	session.Send(protocol.RoomCreated, protocol.RoomCreatedEvent{
 		RoomID:     room.ID,
@@ -235,147 +267,139 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	var (
+		room         *GameRoom
+		disconnected *PlayerSession
+		existing     *PlayerSession
+	)
 
-	room, ok := s.rooms[req.RoomID]
-	if !ok {
+	// Snapshot room + possible reconnection candidates under s.mu.
+	s.mu.RLock()
+	room = s.rooms[req.RoomID]
+	if room != nil && req.GuestID != "" {
+		for _, p := range s.disconnectedPlayers {
+			if p.GuestID == req.GuestID && p.RoomID == room.ID {
+				disconnected = p
+				break
+			}
+		}
+		if disconnected == nil {
+			for _, p := range s.playersByID {
+				if p.GuestID == req.GuestID && p.RoomID == room.ID {
+					existing = p
+					break
+				}
+			}
+		}
+	}
+	s.mu.RUnlock()
+
+	if room == nil {
 		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
-		return
-	}
-
-	room.mu.Lock()
-	defer room.mu.Unlock()
-
-	// Check reconnection by GuestID during game
-	if req.GuestID != "" && room.State == RoomPlaying {
-		if s.tryReconnectDisconnected(session, req.GuestID, room, name) {
-			return
-		}
-		if s.tryReconnectOnlinePlayer(session, req.GuestID, room, name) {
-			return
-		}
-	}
-
-	if room.IsFull() {
-		s.sendError(session, protocol.ErrRoomFull, "Room is full")
 		return
 	}
 
 	session.Name = name
 	session.GuestID = req.GuestID
-	s.playersByID[session.ID] = session
 
-	room.AddPlayer(session)
-
-	session.Send(protocol.RoomJoined, protocol.RoomJoinedEvent{
-		RoomID:           room.ID,
-		PlayerID:         session.ID,
-		MyPlayerIDInRoom: session.ID,
-		HostID:           room.GetHostID(),
-		Players:          room.GetPlayersInfo(),
-		MaxPlayers:       room.MaxPlayers,
-	})
-
-	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
-		Player: session.GetInfo(),
-	}, session.ID)
-
-	util.Info("GameServer", "Player %s joined room %s (playerID=%s)", name, room.ID, session.ID)
-}
-
-// tryReconnectDisconnected reconnects a disconnected player by matching GuestID.
-// Since player ID is stable, we just swap the connection -- no ID updates needed.
-func (s *GameServer) tryReconnectDisconnected(session *PlayerSession, guestID string, room *GameRoom, playerName string) bool {
-	// Find disconnected player with matching GuestID in this room
-	var disconnected *PlayerSession
-	for _, p := range s.disconnectedPlayers {
-		if p.GuestID == guestID && p.RoomID == room.ID {
-			disconnected = p
-			break
-		}
-	}
-
-	if disconnected == nil {
-		return false
-	}
-
-	if room.GetPlayer(disconnected.ID) == nil {
-		return false
-	}
-
-	s.adoptSessionForPlayer(room, disconnected, session)
-
-	reconnectState := room.GetReconnectState(session.ID)
-	if reconnectState != nil {
-		session.Send(protocol.ReconnectSuccess, reconnectState)
-	}
-
-	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
-		Player: session.GetInfo(),
-	}, session.ID)
-
-	room.RetriggerAutoPlayIfNeeded(session.ID)
-
-	util.Info("GameServer", "Player %s reconnected (disconnected) to room %s", playerName, room.ID)
-	return true
-}
-
-// tryReconnectOnlinePlayer handles the case where the player is still "online"
-// (connection not yet timed out) but connecting from a new socket.
-func (s *GameServer) tryReconnectOnlinePlayer(session *PlayerSession, guestID string, room *GameRoom, playerName string) bool {
-	var existing *PlayerSession
-	for _, p := range s.playersByID {
-		if p.GuestID == guestID && p.RoomID == room.ID {
-			existing = p
-			break
-		}
-	}
-	if existing == nil || existing.RoomID != room.ID {
-		return false
-	}
-
-	if room.GetPlayer(existing.ID) == nil {
-		return false
-	}
-
-	s.adoptSessionForPlayer(room, existing, session)
-
-	reconnectState := room.GetReconnectState(session.ID)
-	if reconnectState != nil {
-		session.Send(protocol.ReconnectSuccess, reconnectState)
-	}
-
-	room.RetriggerAutoPlayIfNeeded(session.ID)
-
-	util.Info("GameServer", "Player %s reconnected (socket replaced) to room %s", playerName, room.ID)
-	return true
-}
-
-// adoptSessionForPlayer replaces an existing player session with the current connection session.
-// Caller must hold s.mu and room.mu (if room is not nil).
-func (s *GameServer) adoptSessionForPlayer(room *GameRoom, old *PlayerSession, session *PlayerSession) {
-	if old == session {
-		session.IsConnected = true
-		session.UpdateHeartbeat()
-		s.playersByID[session.ID] = session
-		s.connections[session.ConnID] = session
-		delete(s.disconnectedPlayers, session.ID)
-		if room != nil {
-			room.players[session.ID] = session
-		}
+	room.mu.Lock()
+	if room.closed {
+		room.mu.Unlock()
+		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
 		return
 	}
 
-	// Close old connection and stop its writer
+	// Check reconnection by GuestID during game
+	if req.GuestID != "" && room.State == RoomPlaying {
+		if disconnected != nil && room.GetPlayer(disconnected.ID) != nil {
+			adopt := s.adoptSessionInRoomLocked(room, disconnected, session)
+			reconnectState := room.GetReconnectState(session.ID)
+			if reconnectState != nil {
+				session.Send(protocol.ReconnectSuccess, reconnectState)
+			}
+			room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
+				Player: session.GetInfo(),
+			}, session.ID)
+			room.RetriggerAutoPlayIfNeeded(session.ID)
+			room.mu.Unlock()
+
+			s.finalizeAdoptSession(session, adopt)
+			util.Info("GameServer", "Player %s reconnected (disconnected) to room %s", name, room.ID)
+			return
+		}
+		if existing != nil && room.GetPlayer(existing.ID) != nil {
+			adopt := s.adoptSessionInRoomLocked(room, existing, session)
+			reconnectState := room.GetReconnectState(session.ID)
+			if reconnectState != nil {
+				session.Send(protocol.ReconnectSuccess, reconnectState)
+			}
+			room.RetriggerAutoPlayIfNeeded(session.ID)
+			room.mu.Unlock()
+
+			s.finalizeAdoptSession(session, adopt)
+			util.Info("GameServer", "Player %s reconnected (socket replaced) to room %s", name, room.ID)
+			return
+		}
+	}
+
+	if room.IsFull() {
+		room.mu.Unlock()
+		s.sendError(session, protocol.ErrRoomFull, "Room is full")
+		return
+	}
+
+	room.AddPlayer(session)
+
+	roomID := room.ID
+	hostID := room.GetHostID()
+	players := room.GetPlayersInfo()
+	maxPlayers := room.MaxPlayers
+
+	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
+		Player: session.GetInfo(),
+	}, session.ID)
+	room.mu.Unlock()
+
+	s.mu.Lock()
+	s.playersByID[session.ID] = session
+	s.mu.Unlock()
+
+	session.Send(protocol.RoomJoined, protocol.RoomJoinedEvent{
+		RoomID:           roomID,
+		PlayerID:         session.ID,
+		MyPlayerIDInRoom: session.ID,
+		HostID:           hostID,
+		Players:          players,
+		MaxPlayers:       maxPlayers,
+	})
+
+	util.Info("GameServer", "Player %s joined room %s (playerID=%s)", name, roomID, session.ID)
+}
+
+type adoptResult struct {
+	sameSession bool
+	oldConnID   string
+}
+
+// adoptSessionInRoomLocked replaces an existing player session with the current connection session.
+// Caller must hold room.mu.
+func (s *GameServer) adoptSessionInRoomLocked(room *GameRoom, old *PlayerSession, session *PlayerSession) adoptResult {
+	if old == session {
+		session.IsConnected = true
+		session.UpdateHeartbeat()
+		if room != nil {
+			room.players[session.ID] = session
+		}
+		return adoptResult{sameSession: true}
+	}
+
+	// Close old connection and stop its writer.
 	old.StopWritePump()
 	if old.Conn != nil {
 		old.Conn.Close()
 	}
-	delete(s.connections, old.ConnID)
-	delete(s.disconnectedPlayers, old.ID)
 
-	// Copy stable player state onto the new session
+	// Copy stable player state onto the new session.
 	session.ID = old.ID
 	session.GuestID = old.GuestID
 	session.Name = old.Name
@@ -386,12 +410,23 @@ func (s *GameServer) adoptSessionForPlayer(room *GameRoom, old *PlayerSession, s
 	session.IsConnected = true
 	session.LastHeartbeat = time.Now()
 
-	// Update player maps to point to the new session
-	s.playersByID[session.ID] = session
-	s.connections[session.ConnID] = session
 	if room != nil {
 		room.players[session.ID] = session
 	}
+
+	return adoptResult{oldConnID: old.ConnID}
+}
+
+// finalizeAdoptSession updates server maps without holding room.mu.
+func (s *GameServer) finalizeAdoptSession(session *PlayerSession, res adoptResult) {
+	s.mu.Lock()
+	if !res.sameSession {
+		delete(s.connections, res.oldConnID)
+	}
+	delete(s.disconnectedPlayers, session.ID)
+	s.playersByID[session.ID] = session
+	s.connections[session.ConnID] = session
+	s.mu.Unlock()
 }
 
 func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.ReconnectRequest) {
@@ -400,32 +435,17 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	var (
+		room         *GameRoom
+		disconnected *PlayerSession
+	)
 
-	room, ok := s.rooms[req.RoomID]
-	if !ok {
-		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
-		return
-	}
-
-	room.mu.Lock()
-	defer room.mu.Unlock()
-
-	if room.State != RoomPlaying {
-		s.sendError(session, protocol.ErrInvalidPlay, "Room is not in playing state")
-		return
-	}
-
-	// Find disconnected player by GuestID or PlayerID
-	var disconnected *PlayerSession
-
+	// Snapshot room + disconnected player under s.mu.
+	s.mu.RLock()
+	room = s.rooms[req.RoomID]
 	if req.PlayerID != "" {
-		if p, ok := s.disconnectedPlayers[req.PlayerID]; ok {
-			disconnected = p
-		}
+		disconnected = s.disconnectedPlayers[req.PlayerID]
 	}
-
 	if disconnected == nil && req.GuestID != "" {
 		for _, p := range s.disconnectedPlayers {
 			if p.GuestID == req.GuestID {
@@ -434,18 +454,33 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 			}
 		}
 	}
+	s.mu.RUnlock()
+
+	if room == nil {
+		s.sendError(session, protocol.ErrRoomNotFound, "Room not found")
+		return
+	}
+
+	room.mu.Lock()
+	if room.State != RoomPlaying {
+		room.mu.Unlock()
+		s.sendError(session, protocol.ErrInvalidPlay, "Room is not in playing state")
+		return
+	}
 
 	if disconnected == nil {
+		room.mu.Unlock()
 		s.sendError(session, protocol.ErrInternal, "Player session not found")
 		return
 	}
 
 	if room.GetPlayer(disconnected.ID) == nil {
+		room.mu.Unlock()
 		s.sendError(session, protocol.ErrInternal, "Player not in room")
 		return
 	}
 
-	s.adoptSessionForPlayer(room, disconnected, session)
+	adopt := s.adoptSessionInRoomLocked(room, disconnected, session)
 
 	reconnectState := room.GetReconnectState(session.ID)
 	if reconnectState != nil {
@@ -457,6 +492,9 @@ func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.Recon
 	}, session.ID)
 
 	room.RetriggerAutoPlayIfNeeded(session.ID)
+	room.mu.Unlock()
+
+	s.finalizeAdoptSession(session, adopt)
 
 	util.Info("GameServer", "Player %s reconnected to room %s", req.PlayerName, room.ID)
 }

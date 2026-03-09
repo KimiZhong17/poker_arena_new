@@ -48,6 +48,14 @@ type GameRoom struct {
 	closeOnce sync.Once
 }
 
+// assertLocked panics if r.mu appears to be unlocked. Best-effort debug check.
+func (r *GameRoom) assertLocked() {
+	if r.mu.TryLock() {
+		r.mu.Unlock()
+		panic("room.mu must be held")
+	}
+}
+
 func NewGameRoom(gameMode string, maxPlayers int, existingIDs map[string]bool) *GameRoom {
 	return &GameRoom{
 		ID:                 generateUniqueRoomID(existingIDs),
@@ -192,8 +200,10 @@ func (r *GameRoom) IsAllPlayersReady() bool {
 	return true
 }
 
-// Broadcast sends a message to all players in the room (optionally excluding one)
+// Broadcast sends a message to all players in the room (optionally excluding one).
+// must hold room.mu
 func (r *GameRoom) Broadcast(msgType string, data interface{}, excludeID ...string) {
+	r.assertLocked()
 	exclude := ""
 	if len(excludeID) > 0 {
 		exclude = excludeID[0]
@@ -206,14 +216,18 @@ func (r *GameRoom) Broadcast(msgType string, data interface{}, excludeID ...stri
 	}
 }
 
-// SendToPlayer sends a message to a specific player
+// SendToPlayer sends a message to a specific player.
+// must hold room.mu
 func (r *GameRoom) SendToPlayer(playerID, msgType string, data interface{}) {
+	r.assertLocked()
 	if p, ok := r.players[playerID]; ok {
 		p.Send(msgType, data)
 	}
 }
 
+// must hold room.mu
 func (r *GameRoom) GetPlayersInfo() []protocol.PlayerInfo {
+	r.assertLocked()
 	infos := make([]protocol.PlayerInfo, 0, len(r.playerOrder))
 	for _, id := range r.playerOrder {
 		if p, ok := r.players[id]; ok {
@@ -227,7 +241,9 @@ func (r *GameRoom) updateActivity() {
 	r.lastActivityAt = time.Now()
 }
 
+// must hold room.mu
 func (r *GameRoom) IsIdle(timeout time.Duration) bool {
+	r.assertLocked()
 	return time.Since(r.lastActivityAt) > timeout
 }
 
@@ -279,7 +295,9 @@ func (r *GameRoom) StartGame() bool {
 	return true
 }
 
+// must hold room.mu
 func (r *GameRoom) EndGame() {
+	r.assertLocked()
 	util.Info("GameRoom", "[Room %s] Game ended", r.ID)
 
 	r.endGameTimer = nil
@@ -303,7 +321,9 @@ func (r *GameRoom) EndGame() {
 	}
 }
 
+// must hold room.mu
 func (r *GameRoom) RestartGame() bool {
+	r.assertLocked()
 	util.Info("GameRoom", "[Room %s] Cleaning up game state for restart...", r.ID)
 
 	if r.endGameTimer != nil {
@@ -324,7 +344,9 @@ func (r *GameRoom) RestartGame() bool {
 	return true
 }
 
+// must hold room.mu
 func (r *GameRoom) PlayerWantsRestart(playerID string) bool {
+	r.assertLocked()
 	r.playersWantRestart[playerID] = true
 	return len(r.playersWantRestart) >= len(r.players)
 }
@@ -582,7 +604,9 @@ func (r *GameRoom) HandlePlayCards(playerID string, cards []int) bool {
 	return success
 }
 
+// must hold room.mu
 func (r *GameRoom) HandleSetAuto(playerID string, isAuto bool) bool {
+	r.assertLocked()
 	_, ok := r.players[playerID]
 	if !ok {
 		return false
@@ -603,7 +627,9 @@ func (r *GameRoom) HandleSetAuto(playerID string, isAuto bool) bool {
 }
 
 // GetReconnectState builds the full game state for reconnection
+// must hold room.mu
 func (r *GameRoom) GetReconnectState(playerID string) *protocol.ReconnectSuccessEvent {
+	r.assertLocked()
 	if r.theDecreeGame == nil {
 		return nil
 	}
@@ -664,8 +690,9 @@ func (r *GameRoom) GetReconnectState(playerID string) *protocol.ReconnectSuccess
 // ==================== Timer Management ====================
 
 // scheduleManagedTimerLocked creates a timer whose callback runs with r.mu held and is stopped by Close().
-// Caller must hold r.mu.
+// must hold room.mu
 func (r *GameRoom) scheduleManagedTimerLocked(d time.Duration, fn func()) {
+	r.assertLocked()
 	if r.closed {
 		return
 	}
@@ -688,7 +715,9 @@ func (r *GameRoom) scheduleManagedTimerLocked(d time.Duration, fn func()) {
 
 // RetriggerAutoPlayIfNeeded re-schedules autoplay timer after reconnection
 // if the player is still in auto mode and it's their turn.
+// must hold room.mu
 func (r *GameRoom) RetriggerAutoPlayIfNeeded(playerID string) {
+	r.assertLocked()
 	if r.theDecreeGame == nil {
 		return
 	}
@@ -701,7 +730,9 @@ func (r *GameRoom) RetriggerAutoPlayIfNeeded(playerID string) {
 	util.Info("GameRoom", "[Room %s] Re-triggered autoplay for reconnected player %s", r.ID, playerID)
 }
 
+// must hold room.mu
 func (r *GameRoom) scheduleAutoAction(playerID string) {
+	r.assertLocked()
 	if r.closed {
 		return
 	}
@@ -720,14 +751,18 @@ func (r *GameRoom) scheduleAutoAction(playerID string) {
 	r.autoPlayTimers[playerID] = timer
 }
 
+// must hold room.mu
 func (r *GameRoom) clearAutoPlayTimer(playerID string) {
+	r.assertLocked()
 	if timer, ok := r.autoPlayTimers[playerID]; ok {
 		timer.Stop()
 		delete(r.autoPlayTimers, playerID)
 	}
 }
 
+// must hold room.mu
 func (r *GameRoom) clearAllAutoPlayTimers() {
+	r.assertLocked()
 	for id, timer := range r.autoPlayTimers {
 		timer.Stop()
 		delete(r.autoPlayTimers, id)
