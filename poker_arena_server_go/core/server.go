@@ -385,7 +385,7 @@ type adoptResult struct {
 // Caller must hold room.mu.
 func (s *GameServer) adoptSessionInRoomLocked(room *GameRoom, old *PlayerSession, session *PlayerSession) adoptResult {
 	if old == session {
-		session.IsConnected = true
+		session.SetConnected(true)
 		session.UpdateHeartbeat()
 		if room != nil {
 			room.players[session.ID] = session
@@ -407,8 +407,8 @@ func (s *GameServer) adoptSessionInRoomLocked(room *GameRoom, old *PlayerSession
 	session.SeatIndex = old.SeatIndex
 	session.IsReady = old.IsReady
 	session.IsHost = old.IsHost
-	session.IsConnected = true
-	session.LastHeartbeat = time.Now()
+	session.SetConnected(true)
+	session.UpdateHeartbeat()
 
 	if room != nil {
 		room.players[session.ID] = session
@@ -420,13 +420,20 @@ func (s *GameServer) adoptSessionInRoomLocked(room *GameRoom, old *PlayerSession
 // finalizeAdoptSession updates server maps without holding room.mu.
 func (s *GameServer) finalizeAdoptSession(session *PlayerSession, res adoptResult) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if !res.sameSession {
 		delete(s.connections, res.oldConnID)
 	}
+
+	if !session.IsConnectionActive() {
+		util.Warn("GameServer", "Skipping adopt finalization for disconnected session: player=%s conn=%s", session.ID, session.ConnID)
+		return
+	}
+
 	delete(s.disconnectedPlayers, session.ID)
 	s.playersByID[session.ID] = session
 	s.connections[session.ConnID] = session
-	s.mu.Unlock()
 }
 
 func (s *GameServer) handleReconnect(session *PlayerSession, req *protocol.ReconnectRequest) {
@@ -528,7 +535,7 @@ func (s *GameServer) handleLeaveRoom(session *PlayerSession) {
 	// During game: treat as disconnect
 	if room.State == RoomPlaying {
 		util.Info("GameServer", "Player %s left during game, switching to auto mode", player.Name)
-		player.IsConnected = false
+		player.SetConnected(false)
 		room.HandleSetAuto(player.ID, true)
 		shouldDestroyRoom, destroyIDs = shouldDestroyRoomLocked(room)
 		room.mu.Unlock()
@@ -712,6 +719,7 @@ func (s *GameServer) handlePing(session *PlayerSession) {
 
 // HandleDisconnect is called when a WebSocket connection closes
 func (s *GameServer) HandleDisconnect(session *PlayerSession) {
+	session.SetConnected(false)
 	util.Info("GameServer", "Client disconnected: conn=%s player=%s", session.ConnID, session.ID)
 
 	// Phase 1: update connection map + validate "current session" under s.mu.
@@ -757,16 +765,23 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 	)
 
 	room.mu.Lock()
+	if room.GetPlayer(current.ID) != current {
+		room.mu.Unlock()
+		return
+	}
+
 	if room.closed {
 		room.mu.Unlock()
 		// Room is already closed/deleting; just clear the player from the server map.
 		s.mu.Lock()
-		delete(s.playersByID, current.ID)
+		if cur, ok := s.playersByID[current.ID]; ok && cur == current {
+			delete(s.playersByID, current.ID)
+		}
 		s.mu.Unlock()
 		return
 	}
 
-	current.IsConnected = false
+	current.SetConnected(false)
 
 	if room.State == RoomPlaying {
 		util.Info("GameServer", "Player %s disconnected during game, enabling auto mode", current.Name)
@@ -775,6 +790,10 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 		room.mu.Unlock()
 
 		s.mu.Lock()
+		if cur, ok := s.playersByID[current.ID]; !ok || cur != current {
+			s.mu.Unlock()
+			return
+		}
 		s.disconnectedPlayers[current.ID] = current
 		delete(s.playersByID, current.ID)
 		if shouldDestroyRoom {
@@ -805,7 +824,9 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 	room.mu.Unlock()
 
 	s.mu.Lock()
-	delete(s.playersByID, current.ID)
+	if cur, ok := s.playersByID[current.ID]; ok && cur == current {
+		delete(s.playersByID, current.ID)
+	}
 	s.mu.Unlock()
 
 	if emptyAfterLeave {
@@ -818,7 +839,7 @@ func (s *GameServer) HandleDisconnect(session *PlayerSession) {
 func shouldDestroyRoomLocked(room *GameRoom) (bool, []string) {
 	allPlayers := room.GetAllPlayers()
 	for _, p := range allPlayers {
-		if p.IsConnected {
+		if p.IsConnectionActive() {
 			return false, nil
 		}
 	}
@@ -978,7 +999,7 @@ func (s *GameServer) handleConnectedPlayerTimeout(playerID string) {
 			room.mu.Unlock()
 		} else if room.State == RoomPlaying {
 			// During game: switch to auto-play instead of removing.
-			player.IsConnected = false
+			player.SetConnected(false)
 			room.HandleSetAuto(player.ID, true)
 			shouldDestroyRoom, destroyIDs = shouldDestroyRoomLocked(room)
 			room.mu.Unlock()

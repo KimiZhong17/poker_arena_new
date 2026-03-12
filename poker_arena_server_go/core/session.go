@@ -193,16 +193,18 @@ func (s *PlayerSession) StopWritePump() {
 	})
 }
 
-// ResetForReconnect prepares the session for a new connection by creating fresh
-// send/done channels and resetting closeOnce. Must be called after StopWritePump
-// and before starting a new WritePump.
-func (s *PlayerSession) ResetForReconnect(conn *websocket.Conn) {
-	s.Conn = conn
-	s.IsConnected = true
-	s.UpdateHeartbeat()
-	s.send = make(chan []byte, sendBufSize)
-	s.done = make(chan struct{})
-	s.closeOnce = sync.Once{}
+// SetConnected updates the connection state in a concurrency-safe way.
+func (s *PlayerSession) SetConnected(connected bool) {
+	s.mu.Lock()
+	s.IsConnected = connected
+	s.mu.Unlock()
+}
+
+// IsConnectionActive returns whether the session is currently marked connected.
+func (s *PlayerSession) IsConnectionActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.IsConnected
 }
 
 // Close shuts down the session's send channel and done channel

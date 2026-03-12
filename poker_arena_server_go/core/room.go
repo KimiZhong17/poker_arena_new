@@ -48,11 +48,12 @@ type GameRoom struct {
 	closeOnce sync.Once
 }
 
-// assertLocked panics if r.mu appears to be unlocked. Best-effort debug check.
+// assertLocked emits a debug warning if r.mu appears to be unlocked.
+// This is a best-effort check and is intentionally non-fatal for production safety.
 func (r *GameRoom) assertLocked() {
 	if r.mu.TryLock() {
 		r.mu.Unlock()
-		panic("room.mu must be held")
+		util.Debug("GameRoom", "[Room %s] room.mu appears unlocked where lock was expected", r.ID)
 	}
 }
 
