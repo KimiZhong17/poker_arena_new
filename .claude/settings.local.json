@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(grep * poker_arena_client/assets/Scripts/*)",
+      "Bash(find poker_arena_client/assets/Scripts/*)",
       "Bash(find poker_arena_client/assets/Scripts -name \"*.ts\" -type f -exec wc -l {} +)",
       "Bash(grep -rn \"const.*=.*{.*x.*y\" poker_arena_client/assets/Scripts/UI/*.ts)",
       "Bash(grep -rn \"return.*{.*x.*y\" poker_arena_client/assets/Scripts/UI/*.ts)",
@@ -12,7 +14,15 @@
       "Bash(grep -rn \"private.*=.*\\\\[\" poker_arena_client/assets/Scripts/UI/*.ts)",
       "Bash(grep -rn \"const.*=.*\\\\[\" poker_arena_client/assets/Scripts/UI/*.ts)",
       "Bash(find poker_arena_client/assets/Scripts -name \"*.ts\" -type f -exec grep -l \"position\\\\|offset\\\\|spacing\\\\|width\\\\|height\\\\|color\\\\|size\" {} ;)",
-      "Bash(grep -rn --include=\"*.ts\" \"*\" poker_arena_client/assets/Scripts/)"
+      "Bash(grep -rn --include=\"*.ts\" \"*\" poker_arena_client/assets/Scripts/)",
+      "Bash(find /f/KimiProjects/poker_arena_new/poker_arena_client -name \"*.ts\" -type f -exec wc -l {} +)",
+      "Read(//f/KimiProjects/poker_arena_new/**)",
+      "Bash(xargs -I {} bash -c 'lines=$\\(wc -l < \"\"{}\"\"\\); if [ $lines -gt 600 ]; then echo \"\"{}\"\"; fi')",
+      "Bash(xargs -I {} bash -c 'lines=$\\(wc -l < \"\"{}\"\"\\); echo \"\"$lines {}\"\"')",
+      "Bash(xargs grep -l \"private.*=.*\\\\[\\\\]\")",
+      "Bash(xargs -I {} bash -c 'echo \"\"=== {} ===\"\" && grep \"\"private.*=.*\\\\[\\\\]\"\" \"\"{}\"\" | head -10')",
+      "Bash(xargs -I {} bash -c 'count=$\\(grep -c \"\"private.*=.*\\\\[\\\\]\"\" \"\"{}\"\"\\); if [ $count -gt 3 ]; then echo \"\"$count {}\"\" ; fi')",
+      "Bash(xargs -I {} bash -c 'count=$\\(grep -c \"\"private.*=.*null\\\\|private.*=.*undefined\"\" \"\"{}\"\"\\); if [ $count -gt 5 ]; then echo \"\"$count {}\"\" ; fi')"
     ]
   }
 }

@@ -904,8 +904,6 @@ func (s *GameServer) stopHeartbeat() {
 }
 
 func (s *GameServer) heartbeatCheck() {
-	now := time.Now()
-
 	// Snapshot current maps so we never hold s.mu while taking room.mu.
 	var (
 		playersSnapshot      []*PlayerSession
