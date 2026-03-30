@@ -71,7 +71,7 @@ func NewTheDecreeMode(callbacks *GameCallbacks) *TheDecreeMode {
 		communityCards:        []int{},
 		deck:                  []int{},
 		firstDealerSelections: make(map[string]int),
-		autoPlayStrategy:      &ConservativeStrategy{},
+		autoPlayStrategy:      &SmartStrategy{},
 		callbacks:             callbacks,
 	}
 }
@@ -627,7 +627,7 @@ func (g *TheDecreeMode) ExecuteAutoAction(playerID string) {
 		}
 	case StatePlayerSelection:
 		if !p.HasPlayed && g.currentRound != nil && g.currentRound.CardsToPlay > 0 {
-			cards := g.autoPlayStrategy.PlayCards(p.HandCards, g.currentRound.CardsToPlay)
+			cards := g.autoPlayStrategy.PlayCards(p.HandCards, g.currentRound.CardsToPlay, g.communityCards)
 			g.PlayCardsAction(cards, playerID)
 		}
 	}

@@ -3,8 +3,8 @@ package game
 // AutoPlayStrategy defines AI decision logic
 type AutoPlayStrategy interface {
 	SelectFirstDealerCard(handCards []int) int
-	DealerCall(handCards []int, communityCards []int) int // returns 1, 2, or 3
-	PlayCards(handCards []int, cardsToPlay int) []int
+	DealerCall(handCards []int, communityCards []int) int        // returns 1, 2, or 3
+	PlayCards(handCards []int, cardsToPlay int, communityCards []int) []int
 }
 
 // compareByRankAsc compares two cards by Texas rank (ascending), then by suit
@@ -37,7 +37,7 @@ func (s *ConservativeStrategy) DealerCall(handCards []int, communityCards []int)
 	return 1
 }
 
-func (s *ConservativeStrategy) PlayCards(handCards []int, cardsToPlay int) []int {
+func (s *ConservativeStrategy) PlayCards(handCards []int, cardsToPlay int, communityCards []int) []int {
 	if len(handCards) < cardsToPlay {
 		return handCards
 	}
@@ -68,7 +68,7 @@ func (s *AggressiveStrategy) DealerCall(handCards []int, communityCards []int) i
 	return 3
 }
 
-func (s *AggressiveStrategy) PlayCards(handCards []int, cardsToPlay int) []int {
+func (s *AggressiveStrategy) PlayCards(handCards []int, cardsToPlay int, communityCards []int) []int {
 	if len(handCards) < cardsToPlay {
 		return handCards
 	}
@@ -97,7 +97,7 @@ func (s *RandomStrategy) DealerCall(handCards []int, communityCards []int) int {
 	return 1 + randIntn(maxCall)
 }
 
-func (s *RandomStrategy) PlayCards(handCards []int, cardsToPlay int) []int {
+func (s *RandomStrategy) PlayCards(handCards []int, cardsToPlay int, communityCards []int) []int {
 	if len(handCards) < cardsToPlay {
 		return handCards
 	}

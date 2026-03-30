@@ -61,7 +61,7 @@ func sortByRankAndSuit(cards []int) []int {
 }
 
 func findBestHand(cards []int) HandResult {
-	combos := combinations(cards, 5)
+	combos := Combinations(cards, 5)
 	var best *HandResult
 	for _, combo := range combos {
 		h := evaluateFive(combo)
@@ -72,7 +72,8 @@ func findBestHand(cards []int) HandResult {
 	return *best
 }
 
-func combinations(arr []int, k int) [][]int {
+// Combinations generates all k-element subsets of arr
+func Combinations(arr []int, k int) [][]int {
 	if k == 1 {
 		result := make([][]int, len(arr))
 		for i, v := range arr {
@@ -88,7 +89,7 @@ func combinations(arr []int, k int) [][]int {
 	var result [][]int
 	for i := 0; i <= len(arr)-k; i++ {
 		rest := arr[i+1:]
-		combos := combinations(rest, k-1)
+		combos := Combinations(rest, k-1)
 		for _, combo := range combos {
 			entry := make([]int, 0, k)
 			entry = append(entry, arr[i])
