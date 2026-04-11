@@ -138,35 +138,20 @@ func (s *GameServer) HandleMessage(session *PlayerSession, env *protocol.Envelop
 		}
 		s.handleRestartGame(session)
 	case protocol.DealerCall:
-		var req protocol.DealerCallRequest
-		if err := json.Unmarshal(env.Data, &req); err != nil {
-			util.Warn("GameServer", "Failed to unmarshal DealerCall: %v", err)
-			return
-		}
 		if !s.checkRateLimit(session, "game") {
 			return
 		}
-		s.handleDealerCall(session, &req)
+		s.handleGameAction(session, protocol.DealerCall, env.Data)
 	case protocol.SelectFirstDealerCard:
-		var req protocol.SelectFirstDealerCardRequest
-		if err := json.Unmarshal(env.Data, &req); err != nil {
-			util.Warn("GameServer", "Failed to unmarshal SelectFirstDealerCard: %v", err)
-			return
-		}
 		if !s.checkRateLimit(session, "game") {
 			return
 		}
-		s.handleSelectFirstDealerCard(session, &req)
+		s.handleGameAction(session, protocol.SelectFirstDealerCard, env.Data)
 	case protocol.PlayCards:
-		var req protocol.PlayCardsRequest
-		if err := json.Unmarshal(env.Data, &req); err != nil {
-			util.Warn("GameServer", "Failed to unmarshal PlayCards: %v", err)
-			return
-		}
 		if !s.checkRateLimit(session, "game") {
 			return
 		}
-		s.handlePlayCards(session, &req)
+		s.handleGameAction(session, protocol.PlayCards, env.Data)
 	case protocol.SetAuto:
 		var req protocol.SetAutoRequest
 		if err := json.Unmarshal(env.Data, &req); err != nil {
@@ -177,6 +162,15 @@ func (s *GameServer) HandleMessage(session *PlayerSession, env *protocol.Envelop
 			return
 		}
 		s.handleSetAuto(session, &req)
+
+	// Cipher Trace actions — all routed through generic handler
+	case protocol.CTPickSignal, protocol.CTPlay, protocol.CTPass,
+		protocol.CTTributeGive, protocol.CTTributeReturn:
+		if !s.checkRateLimit(session, "game") {
+			return
+		}
+		s.handleGameAction(session, env.Type, env.Data)
+
 	case protocol.Ping:
 		s.handlePing(session)
 	}
@@ -190,8 +184,8 @@ func (s *GameServer) handleCreateRoom(session *PlayerSession, req *protocol.Crea
 		return
 	}
 
-	if req.MaxPlayers < 2 || req.MaxPlayers > 4 {
-		s.sendError(session, protocol.ErrInternal, "Max players must be 2-4")
+	if !isValidPlayerCount(req.GameMode, req.MaxPlayers) {
+		s.sendError(session, protocol.ErrInternal, "Invalid player count for game mode")
 		return
 	}
 
@@ -650,53 +644,14 @@ func (s *GameServer) handleRestartGame(session *PlayerSession) {
 
 // ==================== Game Actions ====================
 
-func (s *GameServer) handleSelectFirstDealerCard(session *PlayerSession, req *protocol.SelectFirstDealerCardRequest) {
+func (s *GameServer) handleGameAction(session *PlayerSession, actionType string, data json.RawMessage) {
 	player, room := s.getPlayerAndRoom(session)
 	if player == nil {
 		return
 	}
 	defer room.mu.Unlock()
 
-	if req.PlayerID != player.ID {
-		s.sendError(session, protocol.ErrInvalidPlay, "Player ID mismatch")
-		return
-	}
-
-	room.HandleSelectFirstDealerCard(player.ID, req.Card)
-}
-
-func (s *GameServer) handleDealerCall(session *PlayerSession, req *protocol.DealerCallRequest) {
-	player, room := s.getPlayerAndRoom(session)
-	if player == nil {
-		return
-	}
-	defer room.mu.Unlock()
-
-	if req.PlayerID != player.ID {
-		s.sendError(session, protocol.ErrInvalidPlay, "Player ID mismatch")
-		return
-	}
-
-	room.HandleDealerCall(player.ID, req.CardsToPlay)
-}
-
-func (s *GameServer) handlePlayCards(session *PlayerSession, req *protocol.PlayCardsRequest) {
-	player, room := s.getPlayerAndRoom(session)
-	if player == nil {
-		return
-	}
-	defer room.mu.Unlock()
-
-	if req.PlayerID != player.ID {
-		s.sendError(session, protocol.ErrInvalidPlay, "Player ID mismatch")
-		return
-	}
-
-	if !s.validateCards(session, req.Cards) {
-		return
-	}
-
-	room.HandlePlayCards(player.ID, req.Cards)
+	room.HandleGameAction(actionType, player.ID, data)
 }
 
 func (s *GameServer) handleSetAuto(session *PlayerSession, req *protocol.SetAutoRequest) {
@@ -1129,46 +1084,15 @@ func (s *GameServer) validateAndSanitizeName(session *PlayerSession, name string
 	return util.SanitizePlayerName(name)
 }
 
-func (s *GameServer) validateCards(session *PlayerSession, cards []int) bool {
-	if len(cards) == 0 {
-		s.sendError(session, protocol.ErrInvalidPlay, "No cards provided")
+func isValidPlayerCount(gameMode string, maxPlayers int) bool {
+	switch gameMode {
+	case "the_decree":
+		return maxPlayers >= 2 && maxPlayers <= 4
+	case "cipher_trace":
+		return maxPlayers >= 5 && maxPlayers <= 8
+	default:
 		return false
 	}
-	if len(cards) > 3 {
-		s.sendError(session, protocol.ErrInvalidPlay, "Too many cards")
-		return false
-	}
-	seen := make(map[int]bool)
-	for _, card := range cards {
-		if !isValidCardValue(card) {
-			s.sendError(session, protocol.ErrInvalidPlay, "Invalid card value")
-			return false
-		}
-		if seen[card] {
-			s.sendError(session, protocol.ErrInvalidPlay, "Duplicate cards")
-			return false
-		}
-		seen[card] = true
-	}
-	return true
-}
-
-func isValidCardValue(card int) bool {
-	if card < 0 || card > 0xFF {
-		return false
-	}
-	suit := card & 0xF0
-	point := card & 0x0F
-
-	// Jokers
-	if suit == 0x40 {
-		return point == 0x01 || point == 0x02
-	}
-	// Normal cards
-	if suit <= 0x30 {
-		return point >= 3 && point <= 15
-	}
-	return false
 }
 
 func (s *GameServer) checkRateLimit(session *PlayerSession, limitType string) bool {

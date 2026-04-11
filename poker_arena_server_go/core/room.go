@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -36,8 +37,8 @@ type GameRoom struct {
 	playersWantRestart map[string]bool
 	playerAutoStates   map[string]bool
 
-	// Game instance
-	theDecreeGame *game.TheDecreeMode
+	// Game instance (implements game.GameMode)
+	gameInstance game.GameMode
 
 	// Timers managed by room
 	autoPlayTimers map[string]*time.Timer
@@ -269,9 +270,9 @@ func (r *GameRoom) Close() {
 			delete(r.managedTimers, t)
 		}
 
-		if r.theDecreeGame != nil {
-			r.theDecreeGame.Cleanup()
-			r.theDecreeGame = nil
+		if r.gameInstance != nil {
+			r.gameInstance.Cleanup()
+			r.gameInstance = nil
 		}
 	})
 }
@@ -290,8 +291,11 @@ func (r *GameRoom) StartGame() bool {
 	r.State = RoomPlaying
 	util.Info("GameRoom", "[Room %s] Game started with %d players", r.ID, len(r.players))
 
-	if r.GameMode == "the_decree" {
+	switch r.GameMode {
+	case "the_decree":
 		r.initTheDecreeGame()
+	case "cipher_trace":
+		r.initCipherTraceGame()
 	}
 	return true
 }
@@ -303,9 +307,9 @@ func (r *GameRoom) EndGame() {
 
 	r.endGameTimer = nil
 
-	if r.theDecreeGame != nil {
-		r.theDecreeGame.Cleanup()
-		r.theDecreeGame = nil
+	if r.gameInstance != nil {
+		r.gameInstance.Cleanup()
+		r.gameInstance = nil
 	}
 
 	r.clearAllAutoPlayTimers()
@@ -332,9 +336,9 @@ func (r *GameRoom) RestartGame() bool {
 		r.endGameTimer = nil
 	}
 
-	if r.theDecreeGame != nil {
-		r.theDecreeGame.Cleanup()
-		r.theDecreeGame = nil
+	if r.gameInstance != nil {
+		r.gameInstance.Cleanup()
+		r.gameInstance = nil
 	}
 
 	r.clearAllAutoPlayTimers()
@@ -355,6 +359,9 @@ func (r *GameRoom) PlayerWantsRestart(playerID string) bool {
 // ==================== TheDecree Game Integration ====================
 
 func (r *GameRoom) initTheDecreeGame() {
+	// Local reference for closures that need TheDecree-specific methods
+	var theDecree *game.TheDecreeMode
+
 	callbacks := &game.GameCallbacks{
 		OnGameStarted: func(communityCards []int, gameState string) {
 			util.Info("GameRoom", "[Room %s] Broadcasting COMMUNITY_CARDS", r.ID)
@@ -366,8 +373,8 @@ func (r *GameRoom) initTheDecreeGame() {
 
 		OnPlayerDealt: func(playerID string, cards []int) {
 			deckSize := 0
-			if r.theDecreeGame != nil {
-				deckSize = r.theDecreeGame.GetDeckSize()
+			if r.gameInstance != nil {
+				deckSize = r.gameInstance.GetDeckSize()
 			}
 			r.SendToPlayer(playerID, protocol.DealCardsEvent, protocol.DealCardsEventData{
 				PlayerID:  playerID,
@@ -426,13 +433,13 @@ func (r *GameRoom) initTheDecreeGame() {
 		OnShowdown: func(results map[string]*game.HandResult, gameState string) {
 			showdownResults := make([]protocol.ShowdownResult, 0, len(results))
 			for playerID, result := range results {
-				p := r.theDecreeGame.GetPlayer(playerID)
+				p := theDecree.GetPlayer(playerID)
 				var cards []int
 				if p != nil {
 					cards = p.PlayedCards
 				}
 				isWinner := false
-				if round := r.theDecreeGame.GetCurrentRound(); round != nil {
+				if round := theDecree.GetCurrentRound(); round != nil {
 					isWinner = playerID == round.RoundWinnerID
 				}
 				showdownResults = append(showdownResults, protocol.ShowdownResult{
@@ -460,10 +467,10 @@ func (r *GameRoom) initTheDecreeGame() {
 		},
 
 		OnHandsRefilled: func(deckSize int) {
-			if r.theDecreeGame == nil {
+			if theDecree == nil {
 				return
 			}
-			allPlayers := r.theDecreeGame.GetAllPlayers()
+			allPlayers := theDecree.GetAllPlayers()
 			handCounts := make(map[string]int)
 			for _, p := range allPlayers {
 				handCounts[p.ID] = len(p.HandCards)
@@ -489,7 +496,7 @@ func (r *GameRoom) initTheDecreeGame() {
 			r.endGameTimer = time.AfterFunc(5*time.Second, func() {
 				r.mu.Lock()
 				defer r.mu.Unlock()
-				if r.closed || r.theDecreeGame == nil {
+				if r.closed || r.gameInstance == nil {
 					return
 				}
 				r.EndGame()
@@ -515,7 +522,7 @@ func (r *GameRoom) initTheDecreeGame() {
 
 		ScheduleShowdownDelay: func(callback func()) {
 			r.scheduleManagedTimerLocked(2*time.Second, func() {
-				if r.theDecreeGame != nil {
+				if r.gameInstance != nil {
 					callback()
 				}
 			})
@@ -523,16 +530,40 @@ func (r *GameRoom) initTheDecreeGame() {
 
 		ScheduleDealDelay: func(callback func()) {
 			r.scheduleManagedTimerLocked(500*time.Millisecond, func() {
-				if r.theDecreeGame != nil {
+				if r.gameInstance != nil {
 					callback()
 				}
 			})
 		},
 	}
 
-	r.theDecreeGame = game.NewTheDecreeMode(callbacks)
+	theDecree = game.NewTheDecreeMode(callbacks)
+	r.gameInstance = theDecree
 
 	// Convert PlayerSession info to game.PlayerInfo
+	playerInfos := r.buildPlayerInfos()
+
+	r.gameInstance.InitGame(playerInfos)
+
+	// Apply saved auto states
+	for playerID, isAuto := range r.playerAutoStates {
+		if isAuto {
+			r.gameInstance.SetPlayerAuto(playerID, true, "manual")
+		}
+	}
+
+	// Start game
+	r.gameInstance.StartGame()
+
+	// Broadcast game start
+	r.Broadcast(protocol.GameStart, protocol.GameStartEvent{
+		Players: r.GetPlayersInfo(),
+	})
+}
+
+// buildPlayerInfos converts PlayerSession list to game.PlayerInfo slice.
+// must hold room.mu
+func (r *GameRoom) buildPlayerInfos() []game.PlayerInfo {
 	playerInfos := make([]game.PlayerInfo, 0, len(r.playerOrder))
 	for _, id := range r.playerOrder {
 		if p, ok := r.players[id]; ok {
@@ -545,61 +576,74 @@ func (r *GameRoom) initTheDecreeGame() {
 			})
 		}
 	}
+	return playerInfos
+}
 
-	r.theDecreeGame.InitGame(playerInfos)
+// ==================== Cipher Trace Game Integration ====================
+
+func (r *GameRoom) initCipherTraceGame() {
+	bridge := &roomBridge{room: r}
+	ct := game.NewCipherTraceMode(bridge)
+	r.gameInstance = ct
+
+	playerInfos := r.buildPlayerInfos()
+	r.gameInstance.InitGame(playerInfos)
 
 	// Apply saved auto states
 	for playerID, isAuto := range r.playerAutoStates {
 		if isAuto {
-			r.theDecreeGame.SetPlayerAuto(playerID, true, "manual")
+			r.gameInstance.SetPlayerAuto(playerID, true, "manual")
 		}
 	}
 
-	// Start game
-	r.theDecreeGame.StartGame()
+	r.gameInstance.StartGame()
 
-	// Broadcast game start
 	r.Broadcast(protocol.GameStart, protocol.GameStartEvent{
 		Players: r.GetPlayersInfo(),
 	})
 }
 
+// roomBridge implements game.RoomBridge, delegating to GameRoom methods.
+type roomBridge struct {
+	room *GameRoom
+}
+
+func (b *roomBridge) Broadcast(msgType string, data interface{}) {
+	b.room.Broadcast(msgType, data)
+}
+
+func (b *roomBridge) SendToPlayer(playerID string, msgType string, data interface{}) {
+	b.room.SendToPlayer(playerID, msgType, data)
+}
+
+func (b *roomBridge) ScheduleTimer(d time.Duration, callback func()) {
+	b.room.scheduleManagedTimerLocked(d, func() {
+		if b.room.gameInstance != nil {
+			callback()
+		}
+	})
+}
+
+func (b *roomBridge) ScheduleAutoAction(playerID string) {
+	b.room.scheduleAutoAction(playerID)
+}
+
+func (b *roomBridge) ClearAutoPlayTimer(playerID string) {
+	b.room.clearAutoPlayTimer(playerID)
+}
+
 // ==================== Game Action Handlers ====================
 
-func (r *GameRoom) HandleSelectFirstDealerCard(playerID string, card int) bool {
-	if r.theDecreeGame == nil {
+// HandleGameAction dispatches a game action through the GameMode interface.
+// must hold room.mu
+func (r *GameRoom) HandleGameAction(actionType string, playerID string, data json.RawMessage) bool {
+	if r.gameInstance == nil {
 		return false
 	}
-	success := r.theDecreeGame.SelectFirstDealerCard(playerID, card)
-	if !success {
+	success, errMsg := r.gameInstance.HandleAction(actionType, playerID, data)
+	if !success && errMsg != "" {
 		r.SendToPlayer(playerID, protocol.Error, protocol.ErrorEvent{
-			Code: "INVALID_ACTION", Message: "Invalid card selection",
-		})
-	}
-	return success
-}
-
-func (r *GameRoom) HandleDealerCall(playerID string, cardsToPlay int) bool {
-	if r.theDecreeGame == nil {
-		return false
-	}
-	success := r.theDecreeGame.DealerCallAction(playerID, cardsToPlay)
-	if !success {
-		r.SendToPlayer(playerID, protocol.Error, protocol.ErrorEvent{
-			Code: "INVALID_ACTION", Message: "Invalid dealer call",
-		})
-	}
-	return success
-}
-
-func (r *GameRoom) HandlePlayCards(playerID string, cards []int) bool {
-	if r.theDecreeGame == nil {
-		return false
-	}
-	success := r.theDecreeGame.PlayCardsAction(cards, playerID)
-	if !success {
-		r.SendToPlayer(playerID, protocol.Error, protocol.ErrorEvent{
-			Code: protocol.ErrInvalidPlay, Message: "Invalid card play",
+			Code: "INVALID_ACTION", Message: errMsg,
 		})
 	}
 	return success
@@ -613,8 +657,8 @@ func (r *GameRoom) HandleSetAuto(playerID string, isAuto bool) bool {
 		return false
 	}
 
-	if r.theDecreeGame != nil {
-		r.theDecreeGame.SetPlayerAuto(playerID, isAuto, "manual")
+	if r.gameInstance != nil {
+		r.gameInstance.SetPlayerAuto(playerID, isAuto, "manual")
 	} else {
 		r.playerAutoStates[playerID] = isAuto
 		// Broadcast during ready phase so clients can sync the toggle state
@@ -631,42 +675,15 @@ func (r *GameRoom) HandleSetAuto(playerID string, isAuto bool) bool {
 // must hold room.mu
 func (r *GameRoom) GetReconnectState(playerID string) *protocol.ReconnectSuccessEvent {
 	r.assertLocked()
-	if r.theDecreeGame == nil {
+	if r.gameInstance == nil {
 		return nil
 	}
 
-	round := r.theDecreeGame.GetCurrentRound()
-	allPlayers := r.theDecreeGame.GetAllPlayers()
-	scores := r.theDecreeGame.GetScores()
-
-	playerGameStates := make([]protocol.PlayerGameState, 0, len(allPlayers))
-	for _, p := range allPlayers {
-		playerGameStates = append(playerGameStates, protocol.PlayerGameState{
-			PlayerID:        p.ID,
-			HandCardCount:   len(p.HandCards),
-			HasPlayed:       p.HasPlayed,
-			PlayedCardCount: len(p.PlayedCards),
-			IsAuto:          p.IsAuto,
-		})
-	}
-
-	roundNumber := 0
-	dealerID := ""
-	cardsToPlay := 0
-	if round != nil {
-		roundNumber = round.RoundNumber
-		dealerID = round.DealerID
-		cardsToPlay = round.CardsToPlay
-	}
-
-	handCards := r.theDecreeGame.GetPlayerHandCards(playerID)
-	if handCards == nil {
-		handCards = []int{}
-	}
-
-	communityCards := r.theDecreeGame.GetCommunityCards()
-	if communityCards == nil {
-		communityCards = []int{}
+	payload := r.gameInstance.GetReconnectPayload(playerID)
+	gameStateJSON, err := json.Marshal(payload)
+	if err != nil {
+		util.Error("GameRoom", "[Room %s] Failed to marshal reconnect payload: %v", r.ID, err)
+		return nil
 	}
 
 	return &protocol.ReconnectSuccessEvent{
@@ -676,15 +693,8 @@ func (r *GameRoom) GetReconnectState(playerID string) *protocol.ReconnectSuccess
 		HostID:           r.hostID,
 		Players:          r.GetPlayersInfo(),
 		MaxPlayers:       r.MaxPlayers,
-		GameState:        r.theDecreeGame.GetState(),
-		RoundNumber:      roundNumber,
-		DealerID:         dealerID,
-		CardsToPlay:      cardsToPlay,
-		DeckSize:         r.theDecreeGame.GetDeckSize(),
-		HandCards:        handCards,
-		CommunityCards:   communityCards,
-		Scores:           scores,
-		PlayerGameStates: playerGameStates,
+		GameMode:         r.GameMode,
+		GameState:        gameStateJSON,
 	}
 }
 
@@ -719,11 +729,10 @@ func (r *GameRoom) scheduleManagedTimerLocked(d time.Duration, fn func()) {
 // must hold room.mu
 func (r *GameRoom) RetriggerAutoPlayIfNeeded(playerID string) {
 	r.assertLocked()
-	if r.theDecreeGame == nil {
+	if r.gameInstance == nil {
 		return
 	}
-	p := r.theDecreeGame.GetPlayer(playerID)
-	if p == nil || !p.IsAuto {
+	if !r.gameInstance.IsPlayerAuto(playerID) {
 		return
 	}
 	// Player is in auto mode, re-schedule the timer
@@ -745,8 +754,8 @@ func (r *GameRoom) scheduleAutoAction(playerID string) {
 		if r.closed {
 			return
 		}
-		if r.theDecreeGame != nil {
-			r.theDecreeGame.ExecuteAutoAction(playerID)
+		if r.gameInstance != nil {
+			r.gameInstance.ExecuteAutoAction(playerID)
 		}
 	})
 	r.autoPlayTimers[playerID] = timer

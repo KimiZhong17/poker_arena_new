@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"math/rand"
 	"poker-arena-server/util"
 	"time"
@@ -686,6 +687,127 @@ func (g *TheDecreeMode) GetScores() map[string]int {
 		scores[p.ID] = p.Score
 	}
 	return scores
+}
+
+// ==================== GameMode Interface ====================
+
+// IsPlayerAuto returns whether a player is in auto-play mode
+func (g *TheDecreeMode) IsPlayerAuto(playerID string) bool {
+	p := g.playerManager.GetPlayer(playerID)
+	return p != nil && p.IsAuto
+}
+
+// HandleAction dispatches a game action by type
+func (g *TheDecreeMode) HandleAction(actionType string, playerID string, data json.RawMessage) (bool, string) {
+	switch actionType {
+	case "select_first_dealer_card":
+		var req struct {
+			Card int `json:"card"`
+		}
+		if err := json.Unmarshal(data, &req); err != nil {
+			return false, "Invalid request data"
+		}
+		if !g.SelectFirstDealerCard(playerID, req.Card) {
+			return false, "Invalid card selection"
+		}
+		return true, ""
+
+	case "dealer_call":
+		var req struct {
+			CardsToPlay int `json:"cardsToPlay"`
+		}
+		if err := json.Unmarshal(data, &req); err != nil {
+			return false, "Invalid request data"
+		}
+		if !g.DealerCallAction(playerID, req.CardsToPlay) {
+			return false, "Invalid dealer call"
+		}
+		return true, ""
+
+	case "play_cards":
+		var req struct {
+			Cards []int `json:"cards"`
+		}
+		if err := json.Unmarshal(data, &req); err != nil {
+			return false, "Invalid request data"
+		}
+		if !g.PlayCardsAction(req.Cards, playerID) {
+			return false, "Invalid card play"
+		}
+		return true, ""
+
+	default:
+		return false, "Unknown action type"
+	}
+}
+
+// TheDecreeReconnectState holds TheDecree-specific reconnect data
+type TheDecreeReconnectState struct {
+	GameState        string                    `json:"gameState"`
+	RoundNumber      int                       `json:"roundNumber"`
+	DealerID         string                    `json:"dealerId,omitempty"`
+	CardsToPlay      int                       `json:"cardsToPlay,omitempty"`
+	DeckSize         int                       `json:"deckSize"`
+	HandCards        []int                     `json:"handCards"`
+	CommunityCards   []int                     `json:"communityCards"`
+	Scores           map[string]int            `json:"scores"`
+	PlayerGameStates []TheDecreePlayerGameState `json:"playerGameStates"`
+}
+
+// TheDecreePlayerGameState holds per-player state for reconnect
+type TheDecreePlayerGameState struct {
+	PlayerID        string `json:"playerId"`
+	HandCardCount   int    `json:"handCardCount"`
+	HasPlayed       bool   `json:"hasPlayed"`
+	PlayedCardCount int    `json:"playedCardCount"`
+	IsAuto          bool   `json:"isAuto"`
+}
+
+// GetReconnectPayload builds the TheDecree-specific reconnect state
+func (g *TheDecreeMode) GetReconnectPayload(playerID string) interface{} {
+	round := g.GetCurrentRound()
+	allPlayers := g.GetAllPlayers()
+
+	playerStates := make([]TheDecreePlayerGameState, 0, len(allPlayers))
+	for _, p := range allPlayers {
+		playerStates = append(playerStates, TheDecreePlayerGameState{
+			PlayerID:        p.ID,
+			HandCardCount:   len(p.HandCards),
+			HasPlayed:       p.HasPlayed,
+			PlayedCardCount: len(p.PlayedCards),
+			IsAuto:          p.IsAuto,
+		})
+	}
+
+	roundNumber := 0
+	dealerID := ""
+	cardsToPlay := 0
+	if round != nil {
+		roundNumber = round.RoundNumber
+		dealerID = round.DealerID
+		cardsToPlay = round.CardsToPlay
+	}
+
+	handCards := g.GetPlayerHandCards(playerID)
+	if handCards == nil {
+		handCards = []int{}
+	}
+	communityCards := g.GetCommunityCards()
+	if communityCards == nil {
+		communityCards = []int{}
+	}
+
+	return &TheDecreeReconnectState{
+		GameState:        g.GetState(),
+		RoundNumber:      roundNumber,
+		DealerID:         dealerID,
+		CardsToPlay:      cardsToPlay,
+		DeckSize:         g.GetDeckSize(),
+		HandCards:        handCards,
+		CommunityCards:   communityCards,
+		Scores:           g.GetScores(),
+		PlayerGameStates: playerStates,
+	}
 }
 
 // Cleanup releases resources

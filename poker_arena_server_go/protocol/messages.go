@@ -22,6 +22,13 @@ const (
 	SelectFirstDealerCard = "select_first_dealer_card"
 	SetAuto              = "set_auto"
 	Ping                 = "ping"
+
+	// Cipher Trace client actions
+	CTPickSignal    = "ct_pick_signal"
+	CTPlay          = "ct_play"
+	CTPass          = "ct_pass"
+	CTTributeGive   = "ct_tribute_give"
+	CTTributeReturn = "ct_tribute_return"
 )
 
 // Server -> Client message types

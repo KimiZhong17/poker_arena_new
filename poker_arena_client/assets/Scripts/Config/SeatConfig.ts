@@ -218,13 +218,17 @@ const TheDecreeSeatOrder: Record<number, SeatKey[]> = {
 };
 
 /**
- * Guandan 模式座位顺序（5-6人）
+ * Guandan 模式座位顺序（5-8人）
  * 5人: 底、左下、左上、右上、右下
  * 6人: 底、左下、左上、顶、右上、右下
+ * 7人: 底、左下、左、左上、右上、右、右下
+ * 8人: 底、左下、左、左上、顶、右上、右、右下
  */
 const GuandanSeatOrder: Record<number, SeatKey[]> = {
     5: ['bottom', 'bottomLeft', 'topLeft', 'topRight', 'bottomRight'],
     6: ['bottom', 'bottomLeft', 'topLeft', 'top', 'topRight', 'bottomRight'],
+    7: ['bottom', 'bottomLeft', 'left', 'topLeft', 'topRight', 'right', 'bottomRight'],
+    8: ['bottom', 'bottomLeft', 'left', 'topLeft', 'top', 'topRight', 'right', 'bottomRight'],
 };
 
 // ==================== 布局配置类 ====================
@@ -239,7 +243,7 @@ export class SeatLayoutConfig {
     public static getLayout(playerCount: number): SeatPosition[] {
         if (playerCount >= 2 && playerCount <= 4) {
             return this.getTheDecreeLayout(playerCount);
-        } else if (playerCount >= 5 && playerCount <= 6) {
+        } else if (playerCount >= 5 && playerCount <= 8) {
             return this.getGuandanLayout(playerCount);
         } else {
             log.warn(`Unsupported player count: ${playerCount}, using 4-player layout`);
@@ -287,7 +291,9 @@ export class SeatLayoutConfig {
             3: 'triangle',
             4: 'diamond',
             5: 'pentagon',
-            6: 'hexagon'
+            6: 'hexagon',
+            7: 'heptagon',
+            8: 'octagon'
         };
         return layoutNames[playerCount] || 'custom';
     }

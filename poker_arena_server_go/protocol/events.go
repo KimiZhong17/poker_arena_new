@@ -1,5 +1,7 @@
 package protocol
 
+import "encoding/json"
+
 // PlayerInfo - 玩家信息
 type PlayerInfo struct {
 	ID        string `json:"id"`
@@ -157,18 +159,11 @@ type ReconnectSuccessEvent struct {
 	HostID           string            `json:"hostId"`
 	Players          []PlayerInfo      `json:"players"`
 	MaxPlayers       int               `json:"maxPlayers"`
-	GameState        string            `json:"gameState"`
-	RoundNumber      int               `json:"roundNumber"`
-	DealerID         string            `json:"dealerId,omitempty"`
-	CardsToPlay      int               `json:"cardsToPlay,omitempty"`
-	DeckSize         int               `json:"deckSize"`
-	HandCards        []int             `json:"handCards"`
-	CommunityCards   []int             `json:"communityCards"`
-	Scores           map[string]int    `json:"scores"`
-	PlayerGameStates []PlayerGameState `json:"playerGameStates"`
+	GameMode         string            `json:"gameMode"`
+	GameState        json.RawMessage   `json:"gameState"`
 }
 
-// PlayerGameState - 玩家游戏状态（重连用）
+// PlayerGameState - 玩家游戏状态（重连用，保留供客户端兼容）
 type PlayerGameState struct {
 	PlayerID        string `json:"playerId"`
 	HandCardCount   int    `json:"handCardCount"`
