@@ -141,6 +141,9 @@ export class DealingHandler {
         this._pendingPlayerDeals = [];
         this._initialDealAnimationComplete = false;
         this._pendingMessage = null;
+        if (this._refillDebounceTimer !== null) {
+            clearTimeout(this._refillDebounceTimer);
+        }
         this._refillDebounceTimer = null;
         this._isDealingAnimationInProgress = false;
     }

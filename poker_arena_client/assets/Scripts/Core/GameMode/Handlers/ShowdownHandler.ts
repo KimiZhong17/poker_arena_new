@@ -41,6 +41,7 @@ export class ShowdownHandler {
         const playerUIManager = game.playerUIManager;
         if (!playerUIManager) {
             log.error('PlayerUIManager not found');
+            this._isShowdownInProgress = false;
             return;
         }
 
@@ -132,7 +133,10 @@ export class ShowdownHandler {
 
         const game = this.mode.getGame();
         const playerUIManager = game.playerUIManager;
-        if (!playerUIManager) return;
+        if (!playerUIManager) {
+            this.onShowdownAnimationComplete();
+            return;
+        }
 
         const scoreText = result.isWinner
             ? `${result.handTypeName} +${result.score}+1`

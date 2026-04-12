@@ -609,6 +609,11 @@ export class TheDecreeModeClient extends GameModeClientBase {
             log.debug('========== Restoring Reconnect State ==========');
             this.refreshPlayerIdMapping();
 
+            // 重置 UI 状态标记，防止重连后按钮失效
+            if (this.theDecreeUIController) {
+                this.theDecreeUIController.resetForReconnect();
+            }
+
             // 恢复游戏状态
             const savedGameState = gameStore.getGameState();
             if (savedGameState) {

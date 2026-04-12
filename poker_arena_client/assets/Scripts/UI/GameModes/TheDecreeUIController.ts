@@ -929,6 +929,15 @@ export class TheDecreeUIController extends Component {
     }
 
     /**
+     * Reset UI flags for reconnect (lighter than resetForRestart)
+     */
+    public resetForReconnect(): void {
+        log.debug('resetForReconnect() called');
+        this._hasSubmittedFirstDealerSelection = false;
+        this._selectedCardIndices = [];
+    }
+
+    /**
      * Reset UI state for game restart
      * Call this when returning to ReadyStage
      */

@@ -90,6 +90,10 @@ func (g *TheDecreeMode) InitGame(playerInfos []PlayerInfo) {
 
 // StartGame begins the game (called externally, schedules delayed dealing)
 func (g *TheDecreeMode) StartGame() {
+	if g.isActive {
+		util.Warn("TheDecree", "StartGame called but game is already active, ignoring")
+		return
+	}
 	util.Info("TheDecree", "Starting game")
 	g.isActive = true
 
@@ -258,9 +262,9 @@ func (g *TheDecreeMode) DealerCallAction(dealerID string, cardsToPlay int) bool 
 		return false
 	}
 
-	// 叫牌数不能超过庄家手牌数量（也不能超过任何玩家的手牌数量）
+	// 叫牌数不能超过任何玩家的手牌数量（包括手牌为0的玩家）
 	for _, p := range g.playerManager.GetAllPlayers() {
-		if len(p.HandCards) > 0 && cardsToPlay > len(p.HandCards) {
+		if cardsToPlay > len(p.HandCards) {
 			return false
 		}
 	}
@@ -539,8 +543,8 @@ func (g *TheDecreeMode) shuffleDeck() {
 
 func (g *TheDecreeMode) drawCard() int {
 	if len(g.deck) == 0 {
-		util.Error("TheDecree", "Deck is empty!")
-		return 0
+		util.Error("TheDecree", "Deck is empty! Returning -1")
+		return -1
 	}
 	card := g.deck[len(g.deck)-1]
 	g.deck = g.deck[:len(g.deck)-1]
