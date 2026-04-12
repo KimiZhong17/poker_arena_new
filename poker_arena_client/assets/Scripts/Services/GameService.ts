@@ -17,7 +17,6 @@ import { NetworkConfig } from '../Config/NetworkConfig';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
 import { LocalGameStore } from '../State/GameStore';
 import { LocalRoomStore, RoomState } from '../State/RoomStore';
-import { TheDecreeGameState } from '../Core/GameMode/TheDecree/TheDecreeGameState';
 import { logger } from '../Utils/Logger';
 
 const log = logger('GameService');
@@ -92,7 +91,7 @@ export class GameService {
         const gameStore = LocalGameStore.getInstance();
         gameStore.resetGame();
         gameStore.setGameActive(true);
-        gameStore.setGameState(TheDecreeGameState.SETUP);
+        gameStore.setGameState('setup');
 
         // 初始化玩家数据
         const roomStore = LocalRoomStore.getInstance();
@@ -138,7 +137,7 @@ export class GameService {
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
         gameStore.setCommunityCards(data.cards);
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
 
         EventCenter.emit(GameEvents.GAME_COMMUNITY_CARDS, data);
     };
@@ -153,7 +152,7 @@ export class GameService {
         const gameStore = LocalGameStore.getInstance();
         gameStore.setDealerId(data.dealerId);
         gameStore.setCurrentRound(data.roundNumber);
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
         gameStore.setPlayerIsDealer(data.dealerId, true);
 
         EventCenter.emit(GameEvents.GAME_DEALER_SELECTED, data);
@@ -168,7 +167,7 @@ export class GameService {
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
         gameStore.setCardsToPlay(data.cardsToPlay);
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
 
         EventCenter.emit(GameEvents.GAME_DEALER_CALLED, data);
     };
@@ -194,7 +193,7 @@ export class GameService {
 
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
 
         EventCenter.emit(GameEvents.GAME_SHOWDOWN, data);
     };
@@ -208,7 +207,7 @@ export class GameService {
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
         gameStore.setScores(data.scores);
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
 
         // 添加回合历史记录
         const currentRound = gameStore.getCurrentRound();
@@ -235,7 +234,7 @@ export class GameService {
         // 存储到 LocalGameStore
         const gameStore = LocalGameStore.getInstance();
         gameStore.setScores(data.scores);
-        gameStore.setGameState(data.gameState as TheDecreeGameState);
+        gameStore.setGameState(data.gameState);
         gameStore.setGameActive(false);
 
         EventCenter.emit(GameEvents.GAME_OVER, data);

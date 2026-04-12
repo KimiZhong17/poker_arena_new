@@ -27,6 +27,7 @@ type RoomJoinedEvent struct {
 	HostID         string       `json:"hostId"`
 	Players        []PlayerInfo `json:"players"`
 	MaxPlayers     int          `json:"maxPlayers"`
+	GameMode       string       `json:"gameMode,omitempty"`
 }
 
 // PlayerJoinedEvent - 玩家加入

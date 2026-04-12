@@ -109,11 +109,11 @@ export class RoomService {
         this.localRoomStore.setCurrentRoom({
             id: data.roomId,
             name: `Room ${data.roomId}`,
-            gameModeId: 'the_decree',
+            gameModeId: data.gameMode || 'the_decree',
             state: RoomState.WAITING,
             players: data.players,
             hostId: data.hostId,
-            maxPlayers: 4,
+            maxPlayers: data.maxPlayers,
             isPrivate: false,
             createdAt: Date.now()
         });
@@ -179,7 +179,7 @@ export class RoomService {
         this.localRoomStore.setCurrentRoom({
             id: data.roomId,
             name: `Room ${data.roomId}`,
-            gameModeId: 'the_decree',
+            gameModeId: data.gameMode || 'the_decree',
             state: RoomState.PLAYING,  // 重连时房间一定是游戏中
             players: data.players,
             hostId: data.hostId,
@@ -199,30 +199,51 @@ export class RoomService {
             data.players.map(player => player.id),
             data.myPlayerIdInRoom
         );
-        gameStore.setHandCards(data.handCards);
-        gameStore.setCommunityCards(data.communityCards);
-        gameStore.setGameState(data.gameState);
-        gameStore.setRoundNumber(data.roundNumber);
-        gameStore.setDeckSize(data.deckSize);
-        if (data.dealerId) {
-            gameStore.setDealerId(data.dealerId);
-        }
-        if (data.cardsToPlay) {
-            gameStore.setCardsToPlay(data.cardsToPlay);
-        }
-        gameStore.setScores(data.scores);
 
-        // 4. 恢复各玩家游戏状态
-        for (const playerState of data.playerGameStates) {
-            gameStore.setPlayerGameState(playerState.playerId, {
-                handCardCount: playerState.handCardCount,
-                hasPlayed: playerState.hasPlayed,
-                playedCardCount: playerState.playedCardCount,
-                isAuto: playerState.isAuto
-            });
+        // 4. 存储模式特有状态（各 ModeClient 在 checkAndRestoreReconnectState 中自行解析）
+        const modeState = data.gameState;
+        gameStore.setModeState(modeState);
+
+        // 5. 兼容 TheDecree：从 modeState 中提取通用字段写入 store
+        if (modeState) {
+            if (modeState.gameState) {
+                gameStore.setGameState(modeState.gameState);
+            }
+            if (modeState.handCards) {
+                gameStore.setHandCards(modeState.handCards);
+            }
+            if (modeState.communityCards) {
+                gameStore.setCommunityCards(modeState.communityCards);
+            }
+            if (modeState.roundNumber != null) {
+                gameStore.setRoundNumber(modeState.roundNumber);
+            }
+            if (modeState.deckSize != null) {
+                gameStore.setDeckSize(modeState.deckSize);
+            }
+            if (modeState.dealerId) {
+                gameStore.setDealerId(modeState.dealerId);
+            }
+            if (modeState.cardsToPlay) {
+                gameStore.setCardsToPlay(modeState.cardsToPlay);
+            }
+            if (modeState.scores) {
+                gameStore.setScores(modeState.scores);
+            }
+            // TheDecree playerGameStates
+            if (modeState.playerGameStates) {
+                for (const playerState of modeState.playerGameStates) {
+                    gameStore.setPlayerGameState(playerState.playerId, {
+                        handCardCount: playerState.handCardCount,
+                        hasPlayed: playerState.hasPlayed,
+                        playedCardCount: playerState.playedCardCount,
+                        isAuto: playerState.isAuto
+                    });
+                }
+            }
         }
 
-        // 5. 发出事件通知 UI 刷新
+        // 6. 发出事件通知 UI 刷新
         EventCenter.emit(GameEvents.UI_NAVIGATE_TO_GAME);
         EventCenter.emit(GameEvents.GAME_RECONNECTED, data);
     };
@@ -266,7 +287,7 @@ export class RoomService {
         if (client) client.send(ClientMessageType.CREATE_ROOM, {
             playerName: playerName,
             guestId: guestId || undefined,
-            gameMode: gameMode as 'the_decree',
+            gameMode: gameMode,
             maxPlayers
         });
     }

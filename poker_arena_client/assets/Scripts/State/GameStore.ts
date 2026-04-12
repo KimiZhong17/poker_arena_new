@@ -1,4 +1,3 @@
-import { TheDecreeGameState } from '../Core/GameMode/TheDecree/TheDecreeGameState';
 import { ShowdownResult } from '../Network/Messages';
 import { PlayerState } from './PlayerStore';
 import { EventCenter, GameEvents } from '../Utils/EventCenter';
@@ -71,7 +70,7 @@ export class LocalGameStore {
     private static instance: LocalGameStore;
 
     // ==================== 游戏基础状态 ====================
-    private gameState: TheDecreeGameState = TheDecreeGameState.SETUP;
+    private gameState: string = 'setup';
     private currentRound: number = 0;
     private isGameActive: boolean = false;
 
@@ -93,6 +92,9 @@ export class LocalGameStore {
     private roundHistory: RoundHistory[] = [];       // 历史回合结果
     private lastPlayedCards: number[] = [];          // 桌面上最后出的牌
     private lastPlayerId: string = '';               // 最后出牌的玩家ID
+
+    // ==================== 模式特有状态（重连用）====================
+    private modeState: any = null;                    // 模式特有的重连状态快照
 
     private constructor() {}
 
@@ -431,20 +433,30 @@ export class LocalGameStore {
     /**
      * 设置游戏状态
      */
-    public setGameState(state: TheDecreeGameState | string): void {
-        if (typeof state === 'string') {
-            this.gameState = state as TheDecreeGameState;
-        } else {
-            this.gameState = state;
-        }
+    public setGameState(state: string): void {
+        this.gameState = state;
         log.debug(`Game state updated: ${this.gameState}`);
     }
 
     /**
      * 获取游戏状态
      */
-    public getGameState(): TheDecreeGameState {
+    public getGameState(): string {
         return this.gameState;
+    }
+
+    /**
+     * 设置模式特有状态（重连时由 RoomService 存入，各 ModeClient 自行解析）
+     */
+    public setModeState(state: any): void {
+        this.modeState = state;
+    }
+
+    /**
+     * 获取模式特有状态
+     */
+    public getModeState(): any {
+        return this.modeState;
     }
 
     /**
@@ -698,7 +710,7 @@ export class LocalGameStore {
     public resetGame(): void {
         log.debug('Resetting game state...');
 
-        this.gameState = TheDecreeGameState.SETUP;
+        this.gameState = 'setup';
         this.currentRound = 0;
         this.isGameActive = false;
 

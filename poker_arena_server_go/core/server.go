@@ -348,6 +348,7 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 	hostID := room.GetHostID()
 	players := room.GetPlayersInfo()
 	maxPlayers := room.MaxPlayers
+	gameMode := room.GameMode
 
 	room.Broadcast(protocol.PlayerJoined, protocol.PlayerJoinedEvent{
 		Player: session.GetInfo(),
@@ -365,6 +366,7 @@ func (s *GameServer) handleJoinRoom(session *PlayerSession, req *protocol.JoinRo
 		HostID:           hostID,
 		Players:          players,
 		MaxPlayers:       maxPlayers,
+		GameMode:         gameMode,
 	})
 
 	util.Info("GameServer", "Player %s joined room %s (playerID=%s)", name, roomID, session.ID)

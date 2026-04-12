@@ -612,7 +612,7 @@ export class TheDecreeModeClient extends GameModeClientBase {
             // 恢复游戏状态
             const savedGameState = gameStore.getGameState();
             if (savedGameState) {
-                this.gameState = savedGameState;
+                this.gameState = savedGameState as TheDecreeGameState;
             }
 
             // 恢复庄家信息

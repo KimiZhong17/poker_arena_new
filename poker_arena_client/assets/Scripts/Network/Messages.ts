@@ -21,10 +21,17 @@ export enum ClientMessageType {
     RESTART_GAME = 'restart_game',
     RECONNECT = 'reconnect',  // 重连到房间
 
-    // 游戏操作
+    // TheDecree 游戏操作
     DEALER_CALL = 'dealer_call',
     PLAY_CARDS = 'play_cards',
     SELECT_FIRST_DEALER_CARD = 'select_first_dealer_card',
+
+    // Cipher Trace 游戏操作
+    CT_PICK_SIGNAL = 'ct_pick_signal',
+    CT_PLAY = 'ct_play',
+    CT_PASS = 'ct_pass',
+    CT_TRIBUTE_GIVE = 'ct_tribute_give',
+    CT_TRIBUTE_RETURN = 'ct_tribute_return',
 
     // 托管
     SET_AUTO = 'set_auto',
@@ -39,7 +46,7 @@ export enum ClientMessageType {
 export interface CreateRoomRequest {
     playerName: string;
     guestId?: string;  // 客户端持久化的游客ID，用于识别同一用户
-    gameMode: 'the_decree';
+    gameMode: string;
     maxPlayers: number;
 }
 
@@ -137,6 +144,28 @@ export enum ServerMessageType {
     // 游戏结束
     GAME_OVER = 'game_over',
 
+    // Cipher Trace 事件
+    CT_DEALT = 'ct_dealt',
+    CT_LUCKY_MOMENT = 'ct_lucky_moment',
+    CT_REQUEST_SIGNAL_PICK = 'ct_request_signal_pick',
+    CT_SIGNAL_PICKED = 'ct_signal_picked',
+    CT_KITTY_DRAWN = 'ct_kitty_drawn',
+    CT_KITTY_REVEALED = 'ct_kitty_revealed',
+    CT_TRIBUTE_PHASE = 'ct_tribute_phase',
+    CT_REQUEST_TRIBUTE_GIVE = 'ct_request_tribute_give',
+    CT_TRIBUTE_GIVEN = 'ct_tribute_given',
+    CT_REQUEST_TRIBUTE_RETURN = 'ct_request_tribute_return',
+    CT_TRIBUTE_COMPLETE = 'ct_tribute_complete',
+    CT_HAND_UPDATED = 'ct_hand_updated',
+    CT_TURN_START = 'ct_turn_start',
+    CT_CARDS_PLAYED = 'ct_cards_played',
+    CT_PLAYER_PASSED = 'ct_player_passed',
+    CT_TRICK_WON = 'ct_trick_won',
+    CT_PLAYER_FINISHED = 'ct_player_finished',
+    CT_ROUND_RESULT = 'ct_round_result',
+    CT_IDENTITY_REVEALED = 'ct_identity_revealed',
+    CT_GAME_OVER = 'ct_game_over',
+
     // 重连
     RECONNECT_SUCCESS = 'reconnect_success',
 
@@ -167,6 +196,7 @@ export interface RoomJoinedEvent {
     hostId: string;            // 房主ID
     players: PlayerInfo[];
     maxPlayers: number;
+    gameMode?: string;         // 游戏模式（后端新增）
 }
 
 /**
@@ -368,30 +398,9 @@ export interface ReconnectSuccessEvent {
     players: PlayerInfo[];
     maxPlayers: number;
 
-    // 游戏状态
-    gameState: string;  // TheDecreeGameState
-    roundNumber: number;
-    dealerId?: string;
-    cardsToPlay?: number;
-    deckSize: number;
-
-    // 玩家自己的手牌
-    handCards: number[];
-
-    // 公共牌
-    communityCards: number[];
-
-    // 各玩家分数
-    scores: { [playerId: string]: number };
-
-    // 各玩家游戏状态
-    playerGameStates: {
-        playerId: string;
-        handCardCount: number;
-        hasPlayed: boolean;
-        playedCardCount: number;
-        isAuto: boolean;
-    }[];
+    // 游戏模式与状态（泛化）
+    gameMode: string;
+    gameState: any;  // 模式特有状态（JSON 对象，由各 ModeClient 解析）
 }
 
 // ==================== 错误码 ====================
